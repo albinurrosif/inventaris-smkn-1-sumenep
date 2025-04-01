@@ -42,13 +42,16 @@ Sistem Manajemen Inventaris ini dikembangkan menggunakan Laravel untuk membantu 
 6. Jalankan aplikasi:
    php artisan serve
 
-🚀 Deployment
+## 🚀 Deployment
+
 Proyek dapat di-deploy ke VPS, Shared Hosting (menggunakan Laravel Shared Hosting Guide), atau layanan seperti Laravel Forge/Vercel.
 
 Pastikan konfigurasi .env sudah sesuai dengan server produksi.
 
-📌 Kontribusi
+## 📌 Kontribusi
+
 Jika ingin berkontribusi, fork repository ini dan buat Pull Request dengan perubahan yang jelas.
 
-📜 Lisensi
+## 📜 Lisensi
+
 Proyek ini dikembangkan untuk kebutuhan internal SMKN 1 Sumenep. Lisensi akan disesuaikan jika diperlukan.
