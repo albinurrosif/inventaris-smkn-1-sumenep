@@ -15,7 +15,7 @@ class User extends Authenticatable
     protected $table = 'users';
     protected $primaryKey = 'id';
     public $incrementing = true;
-    protected $keyType = 'bigint';
+    protected $keyType = 'int';
     public $timestamps = true;
 
     // ENUM Role Constants
