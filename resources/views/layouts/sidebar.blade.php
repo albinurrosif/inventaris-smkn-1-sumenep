@@ -14,6 +14,13 @@
                 </li>
 
                 <li>
+                    <a href="{{ route('barang.index') }}">
+                        <i data-feather="box"></i>
+                        <span data-key="t-forms">Barang</span>
+                    </a>
+                </li>
+
+                <li>
                     <a href="javascript: void(0);" class="has-arrow">
                         <i data-feather="grid"></i>
                         <span data-key="t-apps">Apps</span>

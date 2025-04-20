@@ -2,47 +2,61 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Ruangan;
+use App\Models\User;
 use Illuminate\Http\Request;
 
 class RuanganController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
-        //
+        $ruangan = Ruangan::with('barang')->get();
+        return view('ruangan.index', compact('ruangan'));
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
+    public function create()
+    {
+        $operators = User::where('role', 'operator')->get(); // asumsikan user punya role
+        return view('ruangan.create', compact('operators'));
+    }
+
     public function store(Request $request)
     {
-        //
+        $request->validate([
+            'nama_ruangan' => 'required|string|max:100',
+            'id_operator' => 'nullable|exists:users,id',
+        ]);
+
+        Ruangan::create($request->all());
+
+        return redirect()->route('ruangan.index')->with('success', 'Ruangan berhasil ditambahkan');
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
+    public function edit($id)
     {
-        //
+        $ruangan = Ruangan::findOrFail($id);
+        $operators = User::where('role', 'operator')->get();
+        return view('ruangan.edit', compact('ruangan', 'operators'));
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, string $id)
+    public function update(Request $request, $id)
     {
-        //
+        $request->validate([
+            'nama_ruangan' => 'required|string|max:100',
+            'id_operator' => 'nullable|exists:users,id',
+        ]);
+
+        $ruangan = Ruangan::findOrFail($id);
+        $ruangan->update($request->all());
+
+        return redirect()->route('ruangan.index')->with('success', 'Ruangan berhasil diupdate');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(string $id)
+    public function destroy($id)
     {
-        //
+        $ruangan = Ruangan::findOrFail($id);
+        $ruangan->delete();
+
+        return redirect()->route('ruangan.index')->with('success', 'Ruangan berhasil dihapus');
     }
 }

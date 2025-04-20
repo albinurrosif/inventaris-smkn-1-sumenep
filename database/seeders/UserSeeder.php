@@ -10,25 +10,31 @@ class UserSeeder extends Seeder
 {
     public function run(): void
     {
-        User::create([
+        User::firstOrCreate(
+        ['email' => 'admin@smkn1sumenep.sch.id'],
+        [
             'name' => 'Admin SMKN 1',
-            'email' => 'admin@smkn1sumenep.sch.id',
-            'password' => Hash::make('password'), // Ganti saat produksi
-            'role' => User::ROLE_ADMIN,
-        ]);
+            'password' => Hash::make('password'), // sesuaikan
+            'role' => 'Admin',
+        ]
+    );
 
-        User::create([
-            'name' => 'Operator Ruangan',
-            'email' => 'operator@smkn1sumenep.sch.id',
-            'password' => Hash::make('password'),
-            'role' => User::ROLE_OPERATOR,
-        ]);
+        User::firstOrCreate(
+        ['email' => 'admin@smkn1sumenep.sch.id'],
+        [
+            'name' => 'Admin SMKN 1',
+            'password' => Hash::make('password'), // sesuaikan
+            'role' => 'Admin',
+        ]
+    );
 
-        User::create([
-            'name' => 'Guru Pengguna',
-            'email' => 'guru@smkn1sumenep.sch.id',
-            'password' => Hash::make('password'),
-            'role' => User::ROLE_GURU,
-        ]);
+        User::firstOrCreate(
+        ['email' => 'admin@smkn1sumenep.sch.id'],
+        [
+            'name' => 'Admin SMKN 1',
+            'password' => Hash::make('password'), // sesuaikan
+            'role' => 'Admin',
+        ]
+    );
     }
 }

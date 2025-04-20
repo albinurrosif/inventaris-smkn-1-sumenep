@@ -1,7 +1,7 @@
-@extends('layouts.auth') {{-- atau layout khusus auth jika kamu punya --}}
+@extends('layouts.auth')
 
 @section('title')
-    Login
+    Log Out
 @endsection
 
 @section('content')
@@ -13,85 +13,45 @@
                         <div class="w-100">
                             <div class="d-flex flex-column h-100">
                                 <div class="mb-4 mb-md-5 text-center">
-                                    <a href="{{ route('dashboard') }}" class="d-block auth-logo">
+                                    <a href="{{ url('/') }}" class="d-block auth-logo">
                                         <img src="{{ asset('assets/images/logo-sm.svg') }}" alt="" height="28">
                                         <span class="logo-txt">Minia</span>
                                     </a>
                                 </div>
                                 <div class="auth-content my-auto">
                                     <div class="text-center">
-                                        <h5 class="mb-0">Welcome Back!</h5>
-                                        <p class="text-muted mt-2">Sign in to continue</p>
-                                    </div>
-                                    <form class="mt-4 pt-2" method="POST" action="{{ route('login') }}">
-                                        @csrf
-                                        <div class="mb-3">
-                                            <label for="email" class="form-label">Email</label>
-                                            <input type="email" name="email"
-                                                class="form-control @error('email') is-invalid @enderror"
-                                                value="{{ old('email') }}" required autofocus>
-                                            @error('email')
-                                                <span class="text-danger small">{{ $message }}</span>
-                                            @enderror
-                                        </div>
-
-                                        <div class="mb-3">
-                                            <div class="d-flex align-items-start">
-                                                <div class="flex-grow-1">
-                                                    <label for="password" class="form-label">Password</label>
-                                                </div>
-                                                <div class="flex-shrink-0">
-                                                    <a href="{{ route('password.request') }}" class="text-muted">Forgot
-                                                        password?</a>
-                                                </div>
-                                            </div>
-                                            <div class="input-group auth-pass-inputgroup">
-                                                <input type="password" name="password"
-                                                    class="form-control @error('password') is-invalid @enderror" required>
-                                                <button class="btn btn-light shadow-none ms-0" type="button"
-                                                    id="password-addon"><i class="mdi mdi-eye-outline"></i></button>
-                                            </div>
-                                            @error('password')
-                                                <span class="text-danger small">{{ $message }}</span>
-                                            @enderror
-                                        </div>
-
-                                        <div class="row mb-4">
-                                            <div class="col">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" name="remember"
-                                                        id="remember-check" {{ old('remember') ? 'checked' : '' }}>
-                                                    <label class="form-check-label" for="remember-check">
-                                                        Remember me
-                                                    </label>
-                                                </div>
+                                        <div class="avatar-xl mx-auto">
+                                            <div class="avatar-title bg-light-subtle text-primary h1 rounded-circle">
+                                                <i class="bx bxs-user"></i>
                                             </div>
                                         </div>
 
-                                        <div class="mb-3">
-                                            <button class="btn btn-primary w-100 waves-effect waves-light"
-                                                type="submit">Log In</button>
+                                        <div class="mt-4 pt-2">
+                                            <h5>You are Logged Out</h5>
+                                            <p class="text-muted font-size-15">Thank you for using <span
+                                                    class="fw-semibold text-dark">{{ config('app.name', 'Minia') }}</span>
+                                            </p>
+                                            <div class="mt-4">
+                                                <a href="{{ route('login') }}"
+                                                    class="btn btn-primary w-100 waves-effect waves-light">Sign In</a>
+                                            </div>
                                         </div>
-                                    </form>
-
-                                    <div class="mt-4 pt-2 text-center">
-                                        <h5 class="font-size-14 mb-3 text-muted fw-medium">- Sign in with -</h5>
-                                        <!-- Tambahkan social login jika perlu -->
                                     </div>
 
                                     <div class="mt-5 text-center">
-                                        <p class="text-muted mb-0">Don't have an account? <a href="{{ route('register') }}"
-                                                class="text-primary fw-semibold">Signup now</a></p>
+                                        <p class="text-muted mb-0">Don't have an account ? <a href="{{ route('register') }}"
+                                                class="text-primary fw-semibold"> Signup</a> </p>
                                     </div>
                                 </div>
-
                                 <div class="mt-4 mt-md-5 text-center">
-                                    <p class="mb-0">© {{ date('Y') }} Minia. Crafted with <i
-                                            class="mdi mdi-heart text-danger"></i> by Themesbrand</p>
+                                    <p class="mb-0">© {{ date('Y') }} {{ config('app.name', 'Minia') }}. Crafted with
+                                        <i class="mdi mdi-heart text-danger"></i> by Themesbrand
+                                    </p>
                                 </div>
                             </div>
                         </div>
                     </div>
+                    <!-- end auth full page content -->
                 </div>
                 <!-- end col -->
                 <div class="col-xxl-9 col-lg-8 col-md-7">
@@ -132,7 +92,8 @@
 
                                                     <h4 class="mt-4 fw-medium lh-base text-white">
                                                         Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do
-                                                        eiusmod tempor incididunt ut labore et dolore magna aliqua.
+                                                        eiusmod
+                                                        tempor incididunt ut labore et dolore magna aliqua.
                                                     </h4>
                                                     <div class="mt-4 pt-3 pb-5">
                                                         <div class="d-flex align-items-start">
@@ -156,7 +117,8 @@
 
                                                     <h4 class="mt-4 fw-medium lh-base text-white">
                                                         Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris
-                                                        nisi ut aliquip ex ea commodo consequat.
+                                                        nisi ut
+                                                        aliquip ex ea commodo consequat.
                                                     </h4>
                                                     <div class="mt-4 pt-3 pb-5">
                                                         <div class="d-flex align-items-start">
@@ -180,7 +142,8 @@
 
                                                     <h4 class="mt-4 fw-medium lh-base text-white">
                                                         Duis aute irure dolor in reprehenderit in voluptate velit esse
-                                                        cillum dolore eu fugiat nulla pariatur.
+                                                        cillum dolore
+                                                        eu fugiat nulla pariatur.
                                                     </h4>
                                                     <div class="mt-4 pt-3 pb-5">
                                                         <div class="d-flex align-items-start">
@@ -203,6 +166,8 @@
                 </div>
                 <!-- end col -->
             </div>
+            <!-- end row -->
         </div>
+        <!-- end container fluid -->
     </div>
 @endsection
