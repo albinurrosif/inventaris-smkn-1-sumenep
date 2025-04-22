@@ -27,7 +27,7 @@
     @stack('styles')
 </head>
 
-<body data-sidebar="dark">
+<body data-sidebar="brand">
 
     <!-- Begin page -->
     <div id="layout-wrapper">
@@ -107,6 +107,10 @@
                 responsive: true
             });
         });
+    </script>
+
+    <script>
+        feather.replace();
     </script>
 
     @stack('scripts')

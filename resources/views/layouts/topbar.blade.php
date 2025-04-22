@@ -8,7 +8,7 @@
                         <img src="assets/images/logo-sm.svg" alt="" height="24" />
                     </span>
                     <span class="logo-lg"> <img src="assets/images/logo-sm.svg" alt="" height="24" /> <span
-                            class="logo-txt">Minia</span> </span>
+                            class="logo-txt">SMKN 1 Sumenep</span> </span>
                 </a>
 
                 <a href="index.html" class="logo logo-light">
@@ -16,7 +16,7 @@
                         <img src="assets/images/logo-sm.svg" alt="" height="24" />
                     </span>
                     <span class="logo-lg"> <img src="assets/images/logo-sm.svg" alt="" height="24" /> <span
-                            class="logo-txt">Minia</span> </span>
+                            class="logo-txt">SMKN 1 Sumenep</span> </span>
                 </a>
             </div>
 
@@ -25,13 +25,13 @@
             </button>
 
             <!-- App Search-->
-            <form class="app-search d-none d-lg-block">
+            {{-- <form class="app-search d-none d-lg-block">
                 <div class="position-relative">
                     <input type="text" class="form-control" placeholder="Search..." />
                     <button class="btn btn-primary" type="button"><i
                             class="bx bx-search-alt align-middle"></i></button>
                 </div>
-            </form>
+            </form> --}}
         </div>
 
         <div class="d-flex">

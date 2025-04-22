@@ -24,4 +24,10 @@ class Ruangan extends Model
     {
         return $this->hasMany(Barang::class, 'id_ruangan', 'id');
     }
+
+    public function operator()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'id_operator');
+    }
+
 }

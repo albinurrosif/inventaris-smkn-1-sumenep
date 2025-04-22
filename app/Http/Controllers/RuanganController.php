@@ -10,9 +10,11 @@ class RuanganController extends Controller
 {
     public function index()
     {
-        $ruangan = Ruangan::with('barang')->get();
-        return view('ruangan.index', compact('ruangan'));
+        $ruangan = Ruangan::with('operator')->get();
+        $operators = \App\Models\User::where('role', 'operator')->get(); // tambahkan ini
+        return view('ruangan.index', compact('ruangan', 'operators'));
     }
+
 
     public function create()
     {
@@ -59,4 +61,5 @@ class RuanganController extends Controller
 
         return redirect()->route('ruangan.index')->with('success', 'Ruangan berhasil dihapus');
     }
+    
 }

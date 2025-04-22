@@ -6,6 +6,16 @@ use Illuminate\Support\Facades\Log;
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\BarangController;
+//use App\Http\Controllers\BarangQrCodeController;
+use App\Http\Controllers\BarangStatusController;
+use App\Http\Controllers\LaporanController;
+use App\Http\Controllers\PemeliharaanController;
+use App\Http\Controllers\RekapStokController;
+use App\Http\Controllers\PeminjamanController;
+use App\Http\Controllers\PengaturanController;
+use App\Http\Controllers\RuanganController;
+use App\Http\Controllers\StokOpnameController;
+use App\Http\Controllers\UserController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 
 /*
@@ -55,6 +65,34 @@ Route::middleware('auth')->group(function () {
 
     // Barang (CRUD)
     Route::resource('barang', BarangController::class);
+
+    // Ruangan
+    Route::resource('ruangan', RuanganController::class);
+
+    // Peminjaman
+    Route::resource('peminjaman', PeminjamanController::class);
+
+    // Pemeliharaan
+    Route::resource('pemeliharaan', PemeliharaanController::class);
+
+    // Barang Rusak / Status Barang
+    Route::resource('barang-status', BarangStatusController::class);
+
+    // Stok Opname
+    Route::resource('stok-opname', StokOpnameController::class);
+
+    // Rekap Stok
+    Route::resource('rekap-stok', RekapStokController::class);
+
+    // Laporan
+    Route::get('/laporan', [LaporanController::class, 'index'])->name('laporan.index');
+
+    // Pengaturan Aplikasi
+    Route::get('/pengaturan', [PengaturanController::class, 'index'])->name('pengaturan.index');
+    Route::post('/pengaturan/update', [PengaturanController::class, 'update'])->name('pengaturan.update');
+
+    // Manajemen User (admin-only)
+    Route::resource('users', UserController::class);
 });
 
 // Rute otentikasi (login, register, lupa password, dll) hanya untuk tamu

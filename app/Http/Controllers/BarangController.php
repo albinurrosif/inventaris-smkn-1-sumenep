@@ -17,7 +17,7 @@ class BarangController extends Controller
     public function index(Request $request)
     {
         $ruanganId = $request->get('ruangan_id');
-
+        $ruangan = Ruangan::all();
         $ruanganList = Ruangan::all();
 
         $barang = Barang::with('ruangan')
@@ -26,7 +26,10 @@ class BarangController extends Controller
             })
             ->get();
 
-        return view('barang.index', compact('barang', 'ruanganList', 'ruanganId'));
+            // Tambahkan $ruangan untuk modal
+        
+
+        return view('barang.index', compact('barang', 'ruanganList', 'ruanganId', 'ruangan'));
     }
 
     public function create()
