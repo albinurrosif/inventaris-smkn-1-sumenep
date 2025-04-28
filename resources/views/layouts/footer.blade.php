@@ -8,8 +8,8 @@
                 © Minia.
             </div>
             <div class="col-sm-6">
-                <div class="text-sm-end d-none d-sm-block">Design & Develop by <a href="#!"
-                        class="text-decoration-underline">Themesbrand</a></div>
+                <div class="text-sm-end d-none d-sm-block">Develop by <a href="#!"
+                        class="text-decoration-underline">Bee</a></div>
             </div>
         </div>
     </div>

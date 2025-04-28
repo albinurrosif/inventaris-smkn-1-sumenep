@@ -11,7 +11,7 @@
     <th>Harga</th>
     <th>Sumber</th>
     <th>Ruangan</th>
-    <th>Keadaan</th>
-    <th>Mutasi</th>
+    <th>Keadaan Barang</th>
+    <th>Keterangan Mutasi Dll.</th>
     <th>Aksi</th>
 </tr>

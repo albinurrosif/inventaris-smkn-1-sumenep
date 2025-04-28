@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
 class Peminjaman extends Model
 {
@@ -55,5 +56,13 @@ class Peminjaman extends Model
     public function detailPeminjaman()
     {
         return $this->hasMany(DetailPeminjaman::class, 'id_peminjaman');
+    }
+
+    /**
+     * Relasi ke tabel Pengembalian (Pengembalian barang yang dipinjam).
+     */
+    public function getTerlambatAttribute()
+    {
+        return $this->status === 'dipinjam' && Carbon::now()->gt($this->tanggal_kembali);
     }
 }

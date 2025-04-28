@@ -32,6 +32,16 @@
         </script>
     @endif
 
+    @if (session('failures'))
+        <div class="alert alert-danger"> <strong>Import gagal!</strong>
+            <ul>
+                @foreach (session('failures') as $failure)
+                    <li>Baris {{ $failure->row() }}: {{ implode(', ', $failure->errors()) }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     <div class="container-fluid">
         <!-- start page title -->
         <div class="row">
@@ -39,7 +49,7 @@
                 <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                     <div class="page-title-right">
                         <ol class="breadcrumb m-0">
-                            <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Dashboard</a></li>
+                            <li class="breadcrumb-item"><a href="{{ route('redirect-dashboard') }}">Dashboard</a></li>
                             <li class="breadcrumb-item active">Daftar Barang</li>
                         </ol>
                     </div>
@@ -97,19 +107,24 @@
                                     @endforeach
                                 </select>
                             </div>
+                            <div class="col-auto ms-auto">
+                                <label for="globalSearch" class="visually-hidden">Cari</label>
+                                <input type="text" id="globalSearch" class="form-control form-control-sm"
+                                    placeholder="Cari di semua kolom...">
+                            </div>
                         </form>
 
                         {{-- Tabel --}}
                         <div class="table-responsive">
                             <table id="barangTable" class="table table-bordered dt-responsive nowrap w-100">
                                 <thead class="table-light">
-                                    @include('barang.partials.thead')
+                                    @include('admin.barang.partials.thead')
                                 </thead>
                                 <tfoot>
-                                    @include('barang.partials.tfoot')
+                                    @include('admin.barang.partials.tfoot')
                                 </tfoot>
                                 <tbody>
-                                    @include('barang.partials.tbody', ['barang' => $barang])
+                                    @include('admin.barang.partials.tbody', ['barang' => $barang])
                                 </tbody>
                             </table>
                         </div>
@@ -121,9 +136,10 @@
     </div>
 
     {{-- Modal Tambah Barang --}}
-    @include('barang.partials.modal-create', ['ruanganList' => $ruanganList])
+    @include('admin.barang.partials.modal-create', ['ruanganList' => $ruanganList])
     {{-- Modal Edit Barang --}}
-    @include('barang.partials.modal-edit', ['ruanganList' => $ruanganList])
+    @include('admin.barang.partials.modal-edit', ['ruanganList' => $ruanganList])
+    @include('admin.barang.partials.modal-create', ['ruangan' => $ruangan])
 
 @endsection
 
@@ -156,6 +172,10 @@
                         });
                     });
                 }
+            });
+            // Hubungkan input global ke pencarian DataTables
+            $('#globalSearch').on('keyup', function() {
+                table.search(this.value).draw();
             });
         });
 

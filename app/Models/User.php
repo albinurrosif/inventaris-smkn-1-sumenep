@@ -67,6 +67,15 @@ class User extends Authenticatable
     }
 
     /**
+     * Relasi ke tabel Ruangan (Satu User bisa memiliki banyak Ruangan).
+     */
+    public function ruangan()
+    {
+        return $this->hasMany(Ruangan::class, 'id_operator');
+    }
+
+
+    /**
      * Scope Query untuk memfilter berdasarkan role.
      */
     public function scopeAdmin($query)

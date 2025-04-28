@@ -11,30 +11,48 @@ class UserSeeder extends Seeder
     public function run(): void
     {
         User::firstOrCreate(
-        ['email' => 'admin@smkn1sumenep.sch.id'],
-        [
-            'name' => 'Admin SMKN 1',
-            'password' => Hash::make('password'), // sesuaikan
-            'role' => 'Admin',
-        ]
-    );
+            ['email' => 'admin@smkn1sumenep.sch.id'],
+            [
+                'name' => 'Admin',
+                'password' => Hash::make('password'), // sesuaikan
+                'role' => 'Admin',
+            ]
+        );
 
         User::firstOrCreate(
-        ['email' => 'admin@smkn1sumenep.sch.id'],
-        [
-            'name' => 'Admin SMKN 1',
-            'password' => Hash::make('password'), // sesuaikan
-            'role' => 'Admin',
-        ]
-    );
+            ['email' => 'operator@smkn1sumenep.sch.id'],
+            [
+                'name' => 'Operator 1',
+                'password' => Hash::make('password'), // sesuaikan
+                'role' => 'Operator',
+            ]
+        );
 
         User::firstOrCreate(
-        ['email' => 'admin@smkn1sumenep.sch.id'],
-        [
-            'name' => 'Admin SMKN 1',
-            'password' => Hash::make('password'), // sesuaikan
-            'role' => 'Admin',
-        ]
-    );
+            ['email' => 'operator2@smkn1sumenep.sch.id'],
+            [
+                'name' => 'Operator 2',
+                'password' => Hash::make('password'), // sesuaikan
+                'role' => 'Operator',
+            ]
+        );
+
+        User::firstOrCreate(
+            ['email' => 'guru@smkn1sumenep.sch.id'],
+            [
+                'name' => 'Guru 1',
+                'password' => Hash::make('password'), // sesuaikan
+                'role' => 'Guru',
+            ]
+        );
+
+        User::firstOrCreate(
+            ['email' => 'guru2@smkn1sumenep.sch.id'],
+            [
+                'name' => 'Guru 2',
+                'password' => Hash::make('password'), // sesuaikan
+                'role' => 'Guru',
+            ]
+        );
     }
 }

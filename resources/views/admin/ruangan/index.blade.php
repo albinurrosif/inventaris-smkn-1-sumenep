@@ -24,7 +24,7 @@
                 <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                     <div class="page-title-right">
                         <ol class="breadcrumb m-0">
-                            <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Dashboard</a></li>
+                            <li class="breadcrumb-item"><a href="{{ route('redirect-dashboard') }}">Dashboard</a></li>
                             <li class="breadcrumb-item active">Ruangan</li>
                         </ol>
                     </div>
@@ -81,8 +81,8 @@
     </div>
 
     {{-- Modal --}}
-    @include('ruangan.partials.modal-create', ['operators' => $operators])
-    @include('ruangan.partials.modal-edit', ['operators' => $operators])
+    @include('admin.ruangan.partials.modal-create', ['operators' => $operators])
+    @include('admin.ruangan.partials.modal-edit', ['operators' => $operators])
 
     <form id="formDeleteRuangan" method="POST" style="display: none;">
         @csrf

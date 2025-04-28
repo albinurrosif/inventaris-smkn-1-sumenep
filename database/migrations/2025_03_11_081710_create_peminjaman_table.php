@@ -19,7 +19,7 @@ return new class extends Migration {
             $table->integer('durasi_pinjam'); // Durasi peminjaman (diambil dari pengaturan atau diinput admin)
             $table->boolean('dapat_diperpanjang'); // Apakah peminjaman bisa diperpanjang (diambil dari pengaturan)
             $table->foreignId('diproses_oleh')->nullable()->constrained('users')->onDelete('set null'); // Admin/operator yang memproses
-            $table->enum('status', ['menunggu', 'dipinjam', 'dikembalikan'])->default('menunggu'); // Status peminjaman
+            $table->enum('status', ['menunggu', 'menunggu_verifikasi_pengembalian', 'dipinjam', 'dikembalikan'])->default('menunggu'); // Status peminjaman
             $table->text('keterangan')->nullable(); // Keterangan tambahan
             $table->timestamps(); // created_at & updated_at
         });

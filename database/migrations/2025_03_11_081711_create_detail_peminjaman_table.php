@@ -20,7 +20,10 @@ return new class extends Migration {
             $table->boolean('diperpanjang')->default(false); // Apakah peminjaman diperpanjang
             $table->text('kondisi_sebelum'); // Kondisi barang sebelum dipinjam
             $table->text('kondisi_setelah')->nullable(); // Kondisi barang setelah dikembalikan
-            $table->enum('status_pengembalian', ['Belum Dikembalikan', 'Dikembalikan', 'Hilang', 'Rusak'])->default('Belum Dikembalikan'); // Status pengembalian
+            $table->enum(
+                'status_pengembalian',
+                ['belum dikembalikan', 'menunggu_verifikasi', 'dikembalikan', 'hilang', 'rusak']
+            )->default('belum dikembalikan'); // Status pengembalian
             $table->foreignId('disetujui_oleh')->nullable()->constrained('users')->onDelete('set null'); // Operator/Admin yang menyetujui peminjaman
             $table->foreignId('diverifikasi_oleh')->nullable()->constrained('users')->onDelete('set null'); // Operator yang memverifikasi pengembalian
             $table->timestamps(); // created_at & updated_at

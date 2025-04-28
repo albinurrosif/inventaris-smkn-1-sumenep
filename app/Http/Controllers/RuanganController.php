@@ -12,14 +12,14 @@ class RuanganController extends Controller
     {
         $ruangan = Ruangan::with('operator')->get();
         $operators = \App\Models\User::where('role', 'operator')->get(); // tambahkan ini
-        return view('ruangan.index', compact('ruangan', 'operators'));
+        return view('admin.ruangan.index', compact('ruangan', 'operators'));
     }
 
 
     public function create()
     {
         $operators = User::where('role', 'operator')->get(); // asumsikan user punya role
-        return view('ruangan.create', compact('operators'));
+        return view('admin.ruangan.create', compact('operators'));
     }
 
     public function store(Request $request)
@@ -38,7 +38,7 @@ class RuanganController extends Controller
     {
         $ruangan = Ruangan::findOrFail($id);
         $operators = User::where('role', 'operator')->get();
-        return view('ruangan.edit', compact('ruangan', 'operators'));
+        return view('admin.ruangan.edit', compact('ruangan', 'operators'));
     }
 
     public function update(Request $request, $id)
@@ -61,5 +61,4 @@ class RuanganController extends Controller
 
         return redirect()->route('ruangan.index')->with('success', 'Ruangan berhasil dihapus');
     }
-    
 }

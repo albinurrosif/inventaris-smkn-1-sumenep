@@ -6,7 +6,7 @@
     <title>@yield('title', 'Dashboard') | Web Inventaris SMKN 1 Sumenep</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- App favicon -->
-    <link rel="shortcut icon" href="{{ asset('assets/images/favicon.ico') }}">
+    <link rel="shortcut icon" href="{{ asset('assets/images/Logo-SMKN_1_Sumenep-removebg-preview.png') }}">
 
     <!-- Bootstrap Css -->
     <link href="{{ asset('assets/css/bootstrap.min.css') }}" id="bootstrap-style" rel="stylesheet" type="text/css" />
@@ -27,7 +27,7 @@
     @stack('styles')
 </head>
 
-<body data-sidebar="brand">
+<body data-sidebar="light">
 
     <!-- Begin page -->
     <div id="layout-wrapper">

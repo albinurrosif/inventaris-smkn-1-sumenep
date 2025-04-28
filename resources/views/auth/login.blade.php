@@ -13,7 +13,7 @@
                         <div class="w-100">
                             <div class="d-flex flex-column h-100">
                                 <div class="mb-4 mb-md-5 text-center">
-                                    <a href="{{ route('dashboard') }}" class="d-block auth-logo">
+                                    <a href="{{ route('redirect-dashboard') }}" class="d-block auth-logo">
                                         <img src="{{ asset('assets/images/logo-sm.svg') }}" alt="" height="28">
                                         <span class="logo-txt">Minia</span>
                                     </a>

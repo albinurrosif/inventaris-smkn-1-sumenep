@@ -2,11 +2,9 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\BarangController;
-//use App\Http\Controllers\BarangQrCodeController;
 use App\Http\Controllers\BarangStatusController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\PemeliharaanController;
@@ -16,86 +14,106 @@ use App\Http\Controllers\PengaturanController;
 use App\Http\Controllers\RuanganController;
 use App\Http\Controllers\StokOpnameController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 
 /*
 |--------------------------------------------------------------------------
-| Web Routes
+| Guest Routes
 |--------------------------------------------------------------------------
-|
-| Di sini adalah rute utama aplikasi. Termasuk autentikasi, dashboard, dan
-| fitur-fitur lainnya yang memerlukan login.
-|
 */
 
-// Halaman utama: Login
-Route::get('/', function () {
-    return view('auth.login');
-})->middleware('guest'); // Hanya bisa diakses oleh yang belum login
-
-// Show logout page (GET request)
-Route::middleware('auth')->get('/logout', [AuthenticatedSessionController::class, 'showLogout'])->name('logout.show');
-
-// Process actual logout (POST request)
-Route::middleware('auth')->post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
-
-// Debugging: Cek status login
-Route::get('/debug-auth', function () {
-    Log::info('Auth check', ['user' => Auth::user()]);
-    return Auth::check() ? '✅ Logged in as ' . Auth::user()->email : '❌ Not logged in';
+Route::middleware('guest')->group(function () {
+    Route::get('/', fn() => view('auth.login'));
+    require __DIR__ . '/auth.php';
 });
 
-// Dashboard utama setelah login
-Route::get('/dashboard', function () {
-    logger('Test logging on dashboard');
-    $jumlahBarang = \App\Models\Barang::count(); // Menghitung total jumlah barang
-    return view('dashboard', compact('jumlahBarang'));
-})->middleware(['auth', 'verified'])->name('dashboard'); // Hanya untuk user yang sudah login & terverifikasi
+/*
+|--------------------------------------------------------------------------
+| Authenticated Routes
+|--------------------------------------------------------------------------
+*/
 
-// Export dan import barang dari excel
-Route::get('/barang/export', [BarangController::class, 'export'])->name('barang.export');
-Route::post('/barang/import', [BarangController::class, 'import'])->name('barang.import');
-
-// Grup rute yang hanya bisa diakses jika sudah login
 Route::middleware('auth')->group(function () {
-    // Profil pengguna
+
+    // Logout
+    Route::get('/logout', [AuthenticatedSessionController::class, 'showLogout'])->name('logout.show');
+    Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
+
+    // Redirect to dashboard by role
+    Route::get('/redirect-dashboard', function () {
+        return match (Auth::user()->role) {
+            'Admin' => redirect()->route('admin.dashboard'),
+            'Operator' => redirect()->route('operator.dashboard'),
+            'Guru' => redirect()->route('guru.dashboard'),
+            default => abort(403),
+        };
+    })->name('redirect-dashboard');
+
+    // Profile
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    // Barang (CRUD)
-    Route::resource('barang', BarangController::class);
+    /*
+    |--------------------------------------------------------------------------
+    | Role: Admin
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('isAdmin')->group(function () {
+        Route::get('/admin/dashboard', [DashboardController::class, 'admin'])->name('admin.dashboard');
+        Route::resource('users', UserController::class);
+        Route::resource('rekap-stok', RekapStokController::class);
+        Route::resource('barang-status', BarangStatusController::class);
+        Route::get('/laporan', [LaporanController::class, 'index'])->name('laporan.index');
+        // Admin - Pengaturan
+        Route::resource('pengaturan', PengaturanController::class)->only(['index']);
+        Route::post('/pengaturan/update', [PengaturanController::class, 'update'])->name('pengaturan.update');
+        // Admin - Export & Import Barang
+        Route::get('/barang/export', [BarangController::class, 'export'])->name('barang.export');
+        Route::post('/barang/import', [BarangController::class, 'import'])->name('barang.import');
+        // Admin - Pantau Semua Peminjaman
+        Route::get('/admin/peminjaman', [PeminjamanController::class, 'adminIndex'])->name('admin.peminjaman.index');
+    });
 
-    // Ruangan
-    Route::resource('ruangan', RuanganController::class);
+    /*
+    |--------------------------------------------------------------------------
+    | Role: Operator
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('isOperator')->group(function () {
+        Route::get('/operator/dashboard', [DashboardController::class, 'operator'])->name('operator.dashboard');
+        Route::resource('stok-opname', StokOpnameController::class);
+        Route::resource('pemeliharaan', PemeliharaanController::class);
+        Route::get('/operator/peminjaman', [PeminjamanController::class, 'operatorIndex'])->name('operator.peminjaman.index');
+        Route::get('/operator/pengembalian', [PeminjamanController::class, 'daftarPengembalianMenunggu'])->name('operator.pengembalian.index');
+        Route::post('/operator/peminjaman/{id}/verifikasi-peminjaman', [PeminjamanController::class, 'verifikasi'])->name('operator.peminjaman.verifikasi');
+        Route::get('/operator/peminjaman/{id}/verifikasi-pengembalian', [PeminjamanController::class, 'verifikasiPengembalianForm'])
+            ->name('operator.peminjaman.verifikasi-pengembalian');
+        Route::post('/operator/peminjaman/{id}/verifikasi-pengembalian', [PeminjamanController::class, 'verifikasiPengembalianStore'])->name('operator.peminjaman.verifikasi-pengembalian.store');
+        Route::get('/operator/peminjaman/daftar-dipinjam', [PeminjamanController::class, 'daftarSedangDipinjam'])
+            ->name('operator.peminjaman.daftar-dipinjam');
+    });
 
-    // Peminjaman
-    Route::resource('peminjaman', PeminjamanController::class);
+    /*
+    |--------------------------------------------------------------------------
+    | Role: Guru
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('isGuru')->group(function () {
+        Route::get('/guru/dashboard', [DashboardController::class, 'guru'])->name('guru.dashboard');
+        Route::resource('peminjaman', PeminjamanController::class);
+        Route::post('/peminjaman/{id}/kembalikan', [PeminjamanController::class, 'returnRequest'])->name('peminjaman.kembalikan');
+        Route::post('/peminjaman/{id}/perpanjang', [PeminjamanController::class, 'perpanjang'])->name('peminjaman.perpanjang');
+    });
 
-    // Pemeliharaan
-    Route::resource('pemeliharaan', PemeliharaanController::class);
-
-    // Barang Rusak / Status Barang
-    Route::resource('barang-status', BarangStatusController::class);
-
-    // Stok Opname
-    Route::resource('stok-opname', StokOpnameController::class);
-
-    // Rekap Stok
-    Route::resource('rekap-stok', RekapStokController::class);
-
-    // Laporan
-    Route::get('/laporan', [LaporanController::class, 'index'])->name('laporan.index');
-
-    // Pengaturan Aplikasi
-    Route::get('/pengaturan', [PengaturanController::class, 'index'])->name('pengaturan.index');
-    Route::post('/pengaturan/update', [PengaturanController::class, 'update'])->name('pengaturan.update');
-
-    // Manajemen User (admin-only)
-    Route::resource('users', UserController::class);
-});
-
-// Rute otentikasi (login, register, lupa password, dll) hanya untuk tamu
-Route::middleware('guest')->group(function () {
-    require __DIR__.'/auth.php';
+    /*
+    |--------------------------------------------------------------------------
+    | Shared Access: Admin & Operator (via canManageBarang)
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('canManageBarang')->group(function () {
+        Route::resource('barang', BarangController::class);
+        Route::resource('ruangan', RuanganController::class);
+    });
 });
