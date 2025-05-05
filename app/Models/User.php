@@ -7,6 +7,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+
 class User extends Authenticatable
 {
     use HasFactory, Notifiable, SoftDeletes;
@@ -56,6 +57,21 @@ class User extends Authenticatable
     ];
 
     /**
+     * Check if user has one of the given roles.
+     *
+     * @param array|string $roles
+     * @return bool
+     */
+    public function hasRole($roles)
+    {
+        if (is_array($roles)) {
+            return in_array($this->role, $roles);
+        }
+
+        return $this->role === $roles;
+    }
+
+    /**
      * Validasi otomatis saat set role.
      */
     public function setRoleAttribute($value)
@@ -73,7 +89,6 @@ class User extends Authenticatable
     {
         return $this->hasMany(Ruangan::class, 'id_operator');
     }
-
 
     /**
      * Scope Query untuk memfilter berdasarkan role.

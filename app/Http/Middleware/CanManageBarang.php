@@ -5,25 +5,22 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route; // Import the Route facade
 
 class CanManageBarang
 {
     public function handle(Request $request, Closure $next)
     {
         $user = Auth::user();
-        $routeName = $request->route()?->getName(); // safe call in case it's null
+        $routeName = Route::currentRouteName(); // Use Route::currentRouteName()
 
         if ($user->role === 'Admin') {
-            // Admin punya akses penuh
+            // Admin memiliki akses penuh
             return $next($request);
         }
 
         if ($user->role === 'Operator') {
-            // Operator hanya bisa kelola barang & ruangan yang sesuai dengan ruangannya
-            // (Asumsinya: ada kolom ruangan_id atau relasi di model Barang & Ruangan)
-
-            $routeName = $request->route()->getName();
-
+            // Operator hanya bisa kelola barang & ruangan.
             if (str_starts_with($routeName, 'barang.') || str_starts_with($routeName, 'ruangan.')) {
                 return $next($request);
             }

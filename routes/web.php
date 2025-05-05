@@ -9,7 +9,6 @@ use App\Http\Controllers\BarangStatusController;
 use App\Http\Controllers\LaporanController;
 use App\Http\Controllers\PemeliharaanController;
 use App\Http\Controllers\RekapStokController;
-use App\Http\Controllers\PeminjamanController;
 use App\Http\Controllers\PengaturanController;
 use App\Http\Controllers\RuanganController;
 use App\Http\Controllers\StokOpnameController;
@@ -17,16 +16,30 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 
+// New Peminjaman Controllers (from new version)
+use App\Http\Controllers\PeminjamanGuruController;
+use App\Http\Controllers\PeminjamanOperatorController;
+use App\Http\Controllers\PeminjamanAdminController;
+
 /*
 |--------------------------------------------------------------------------
 | Guest Routes
 |--------------------------------------------------------------------------
 */
 
+// Bisa diletakkan di paling atas
+Route::get('/', function () {
+    if (Auth::check()) {
+        return redirect()->route('redirect-dashboard');
+    }
+    return view('auth.login');
+});
+
+// Khusus guest (tidak perlu lagi isi '/')
 Route::middleware('guest')->group(function () {
-    Route::get('/', fn() => view('auth.login'));
     require __DIR__ . '/auth.php';
 });
+
 
 /*
 |--------------------------------------------------------------------------
@@ -36,11 +49,7 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware('auth')->group(function () {
 
-    // Logout
-    Route::get('/logout', [AuthenticatedSessionController::class, 'showLogout'])->name('logout.show');
-    Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
-
-    // Redirect to dashboard by role
+    // Redirect to dashboard by role (from old version - using match)
     Route::get('/redirect-dashboard', function () {
         return match (Auth::user()->role) {
             'Admin' => redirect()->route('admin.dashboard'),
@@ -50,6 +59,10 @@ Route::middleware('auth')->group(function () {
         };
     })->name('redirect-dashboard');
 
+    // Logout routes (from old version)
+    Route::get('/logout', [AuthenticatedSessionController::class, 'showLogout'])->name('logout.show');
+    Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
+
     // Profile
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -57,54 +70,81 @@ Route::middleware('auth')->group(function () {
 
     /*
     |--------------------------------------------------------------------------
-    | Role: Admin
-    |--------------------------------------------------------------------------
-    */
-    Route::middleware('isAdmin')->group(function () {
-        Route::get('/admin/dashboard', [DashboardController::class, 'admin'])->name('admin.dashboard');
-        Route::resource('users', UserController::class);
-        Route::resource('rekap-stok', RekapStokController::class);
-        Route::resource('barang-status', BarangStatusController::class);
-        Route::get('/laporan', [LaporanController::class, 'index'])->name('laporan.index');
-        // Admin - Pengaturan
-        Route::resource('pengaturan', PengaturanController::class)->only(['index']);
-        Route::post('/pengaturan/update', [PengaturanController::class, 'update'])->name('pengaturan.update');
-        // Admin - Export & Import Barang
-        Route::get('/barang/export', [BarangController::class, 'export'])->name('barang.export');
-        Route::post('/barang/import', [BarangController::class, 'import'])->name('barang.import');
-        // Admin - Pantau Semua Peminjaman
-        Route::get('/admin/peminjaman', [PeminjamanController::class, 'adminIndex'])->name('admin.peminjaman.index');
-    });
-
-    /*
-    |--------------------------------------------------------------------------
-    | Role: Operator
-    |--------------------------------------------------------------------------
-    */
-    Route::middleware('isOperator')->group(function () {
-        Route::get('/operator/dashboard', [DashboardController::class, 'operator'])->name('operator.dashboard');
-        Route::resource('stok-opname', StokOpnameController::class);
-        Route::resource('pemeliharaan', PemeliharaanController::class);
-        Route::get('/operator/peminjaman', [PeminjamanController::class, 'operatorIndex'])->name('operator.peminjaman.index');
-        Route::get('/operator/pengembalian', [PeminjamanController::class, 'daftarPengembalianMenunggu'])->name('operator.pengembalian.index');
-        Route::post('/operator/peminjaman/{id}/verifikasi-peminjaman', [PeminjamanController::class, 'verifikasi'])->name('operator.peminjaman.verifikasi');
-        Route::get('/operator/peminjaman/{id}/verifikasi-pengembalian', [PeminjamanController::class, 'verifikasiPengembalianForm'])
-            ->name('operator.peminjaman.verifikasi-pengembalian');
-        Route::post('/operator/peminjaman/{id}/verifikasi-pengembalian', [PeminjamanController::class, 'verifikasiPengembalianStore'])->name('operator.peminjaman.verifikasi-pengembalian.store');
-        Route::get('/operator/peminjaman/daftar-dipinjam', [PeminjamanController::class, 'daftarSedangDipinjam'])
-            ->name('operator.peminjaman.daftar-dipinjam');
-    });
-
-    /*
-    |--------------------------------------------------------------------------
-    | Role: Guru
+    | Role: Guru (using isGuru middleware from old version)
     |--------------------------------------------------------------------------
     */
     Route::middleware('isGuru')->group(function () {
         Route::get('/guru/dashboard', [DashboardController::class, 'guru'])->name('guru.dashboard');
-        Route::resource('peminjaman', PeminjamanController::class);
-        Route::post('/peminjaman/{id}/kembalikan', [PeminjamanController::class, 'returnRequest'])->name('peminjaman.kembalikan');
-        Route::post('/peminjaman/{id}/perpanjang', [PeminjamanController::class, 'perpanjang'])->name('peminjaman.perpanjang');
+
+        // Peminjaman Routes for Guru (from new version with PeminjamanGuruController)
+        Route::prefix('guru/peminjaman')->group(function () {
+            Route::get('/', [PeminjamanGuruController::class, 'index'])->name('guru.peminjaman.index');
+            Route::get('/create', [PeminjamanGuruController::class, 'create'])->name('guru.peminjaman.create');
+            Route::post('/', [PeminjamanGuruController::class, 'store'])->name('guru.peminjaman.store');
+            Route::get('/{id}', [PeminjamanGuruController::class, 'show'])->name('guru.peminjaman.show');
+            Route::delete('/{id}', [PeminjamanGuruController::class, 'destroy'])->name('guru.peminjaman.destroy');
+            Route::get('/berlangsung', [PeminjamanGuruController::class, 'peminjamanBerlangsung'])->name('guru.peminjaman.berlangsung');
+            Route::post('/{id}/ajukan-pengembalian', [PeminjamanGuruController::class, 'ajukanPengembalian'])->name('guru.peminjaman.ajukanPengembalian');
+            Route::post('/{id}/ajukan-perpanjangan', [PeminjamanGuruController::class, 'ajukanPerpanjangan'])->name('guru.peminjaman.ajukanPerpanjangan');
+            Route::get('/barang/{ruanganId}', [PeminjamanGuruController::class, 'getBarangByRuangan']);
+            Route::get('/riwayat', [PeminjamanGuruController::class, 'riwayat'])->name('guru.peminjaman.riwayat');
+        });
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Role: Operator (using isOperator middleware from old version)
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('isOperator')->group(function () {
+        Route::get('/operator/dashboard', [DashboardController::class, 'operator'])->name('operator.dashboard');
+
+        // Operator specific routes from old version
+        Route::resource('stok-opname', StokOpnameController::class);
+        Route::resource('pemeliharaan', PemeliharaanController::class);
+        Route::get('/operator/barang', [BarangController::class, 'indexOperator'])->name('operator.barang.index');
+        Route::get('/operator/barang/export', [BarangController::class, 'exportOperator'])->name('operator.barang.export');
+        Route::get('/operator/pengembalian', [PeminjamanOperatorController::class, 'daftarPengembalianMenunggu'])->name('operator.pengembalian.index');
+
+        // Peminjaman Routes for Operator (from new version with PeminjamanOperatorController)
+        Route::prefix('operator/peminjaman')->group(function () {
+            Route::get('/', [PeminjamanOperatorController::class, 'index'])->name('operator.peminjaman.index');
+            Route::get('/{id}', [PeminjamanOperatorController::class, 'show'])->name('operator.peminjaman.show');
+            Route::post('/{id}/setujui', [PeminjamanOperatorController::class, 'setujuiPeminjaman'])->name('operator.peminjaman.setujui');
+            Route::post('/{id}/tolak', [PeminjamanOperatorController::class, 'tolakPeminjaman'])->name('operator.peminjaman.tolak');
+            Route::get('/{id}/verifikasi-pengembalian', [PeminjamanOperatorController::class, 'tampilkanFormVerifikasiPengembalian'])->name('operator.peminjaman.verifikasi-pengembalian');
+            Route::post('/{id}/verifikasi-pengembalian', [PeminjamanOperatorController::class, 'prosesVerifikasiPengembalian'])->name('operator.peminjaman.verifikasi-pengembalian.store');
+            Route::get('/berlangsung', [PeminjamanOperatorController::class, 'peminjamanBerlangsungOperator'])->name('operator.peminjaman.berlangsung');
+        });
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Role: Admin (using isAdmin middleware from old version)
+    |--------------------------------------------------------------------------
+    */
+    Route::middleware('isAdmin')->group(function () {
+        Route::get('/admin/dashboard', [DashboardController::class, 'admin'])->name('admin.dashboard');
+
+        // Admin specific routes from old version
+        Route::resource('users', UserController::class);
+        Route::resource('rekap-stok', RekapStokController::class);
+        Route::resource('barang-status', BarangStatusController::class);
+        Route::get('/laporan', [LaporanController::class, 'index'])->name('laporan.index');
+
+        // Admin - Export & Import Barang (from old version)
+        Route::get('/barang/export', [BarangController::class, 'export'])->name('barang.export');
+        Route::post('/barang/import', [BarangController::class, 'import'])->name('barang.import');
+
+        // Admin - Pengaturan
+        Route::resource('pengaturan', PengaturanController::class)->only(['index']);
+        Route::post('/pengaturan/update', [PengaturanController::class, 'update'])->name('pengaturan.update');
+
+        // Peminjaman Routes for Admin (from new version with PeminjamanAdminController)
+        Route::prefix('admin/peminjaman')->group(function () {
+            Route::get('/', [PeminjamanAdminController::class, 'index'])->name('admin.peminjaman.index');
+            Route::get('/{id}', [PeminjamanAdminController::class, 'show'])->name('admin.peminjaman.show');
+        });
     });
 
     /*

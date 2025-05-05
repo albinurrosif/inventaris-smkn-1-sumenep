@@ -1,10 +1,10 @@
 @extends('layouts.app')
 
-@section('title', 'Daftar Peminjaman')
+@section('title', 'Riwayat Pengajuan Peminjaman')
 
 @section('content')
     <div class="container-fluid">
-        <h4 class="mb-3">Daftar Pengajuan Peminjaman</h4>
+        <h4 class="mb-3">Riwayat Pengajuan Peminjaman</h4>
 
         @if (session('success'))
             <script>
@@ -40,56 +40,56 @@
                     <thead class="table-light">
                         <tr>
                             <th>#</th>
-                            <th>Peminjam</th>
                             <th>Tgl Pengajuan</th>
                             <th>Status</th>
                             <th>Jumlah Item</th>
+                            <th>Keterangan</th>
                             <th>Tgl Selesai</th>
                             <th>Aksi</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse ($peminjaman as $p)
+                        @forelse ($riwayatPeminjaman as $p)
                             <tr>
                                 <td>{{ $loop->iteration }}</td>
-                                <td>{{ $p->peminjam->name }}</td>
                                 <td>{{ \Carbon\Carbon::parse($p->tanggal_pengajuan)->translatedFormat('d M Y H:i') }}</td>
                                 <td>
-                                    @if ($p->status_pengajuan === 'menunggu')
+                                    @if ($p->status === 'menunggu')
                                         <span class="badge bg-warning text-dark">Menunggu</span>
-                                    @elseif ($p->status_pengajuan === 'menunggu_verifikasi')
-                                        <span class="badge bg-secondary">Menunggu Verifikasi</span>
-                                    @elseif ($p->status_pengajuan === 'diajukan')
-                                        <span class="badge bg-warning text-dark">Diajukan</span>
-                                    @elseif ($p->status_pengajuan === 'disetujui')
+                                    @elseif ($p->status === 'disetujui')
                                         <span class="badge bg-success">Disetujui</span>
-                                    @elseif ($p->status_pengajuan === 'ditolak')
+                                    @elseif ($p->status === 'ditolak')
                                         <span class="badge bg-danger">Ditolak</span>
-                                    @elseif ($p->status_pengajuan === 'selesai')
+                                    @elseif ($p->status === 'dipinjam')
+                                        <span class="badge bg-info">Dipinjam</span>
+                                    @elseif ($p->status === 'menunggu_verifikasi')
+                                        <span class="badge bg-secondary">Menunggu Verifikasi</span>
+                                    @elseif ($p->status === 'selesai')
                                         <span class="badge bg-success">Selesai</span>
-                                    @elseif ($p->status_pengajuan === 'dibatalkan')
+                                    @elseif ($p->status === 'dibatalkan')
                                         <span class="badge bg-secondary">Dibatalkan</span>
                                     @endif
                                 </td>
                                 <td>{{ $p->detailPeminjaman()->count() }}</td>
+                                <td>{{ $p->keterangan ?? '-' }}</td>
                                 <td>{{ $p->tanggal_selesai ? \Carbon\Carbon::parse($p->tanggal_selesai)->translatedFormat('d M Y H:i') : '-' }}
                                 </td>
                                 <td>
-                                    <a href="{{ route('operator.peminjaman.show', $p->id) }}" class="btn btn-info btn-sm">
+                                    <a href="{{ route('guru.peminjaman.show', $p->id) }}" class="btn btn-info btn-sm">
                                         <i class="mdi mdi-eye"></i> Detail
                                     </a>
-                                    {{-- Tambahkan tombol aksi lain yang relevan untuk operator di sini --}}
+                                    {{-- Anda bisa menambahkan tombol lain jika diperlukan, misalnya untuk melihat detail pengembalian --}}
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="text-center">Belum ada pengajuan peminjaman.</td>
+                                <td colspan="7" class="text-center">Tidak ada riwayat peminjaman.</td>
                             </tr>
                         @endforelse
                     </tbody>
                 </table>
                 <div class="mt-4">
-                    {{ $peminjaman->links() }}
+                    {{ $riwayatPeminjaman->links() }}
                 </div>
             </div>
         </div>

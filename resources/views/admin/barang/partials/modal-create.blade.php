@@ -85,7 +85,10 @@
                             <label class="form-label">Ruangan</label>
                             <select name="id_ruangan" class="form-select" required>
                                 <option value="">-- Pilih Ruangan --</option>
-                                @if ($ruangan && is_iterable($ruangan) && count($ruangan) > 0)
+                                @php
+                                    $ruangan = $ruangan ?? []; // Inisialisasi $ruangan sebagai array kosong jika belum ada
+                                @endphp
+                                @if (is_iterable($ruangan) && count($ruangan) > 0)
                                     @foreach ($ruangan as $r)
                                         <option value="{{ $r->id }}">{{ $r->nama_ruangan }}</option>
                                     @endforeach

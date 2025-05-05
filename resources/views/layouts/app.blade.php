@@ -113,6 +113,25 @@
         feather.replace();
     </script>
 
+    <script>
+        feather.replace();
+    </script>
+
+    {{-- ✅ Tambahan SweetAlert --}}
+    @if (session('success') || session('error'))
+        <script>
+            Swal.fire({
+                icon: '{{ session('success') ? 'success' : 'error' }}',
+                title: '{{ session('success') ? 'Berhasil' : 'Gagal' }}',
+                text: '{{ session('success') ?? session('error') }}',
+                showConfirmButton: false,
+                timer: 3000,
+                position: 'top',
+                toast: true
+            });
+        </script>
+    @endif
+
     @stack('scripts')
 
 </body>

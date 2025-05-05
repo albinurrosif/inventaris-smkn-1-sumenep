@@ -2,15 +2,20 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use App\Models\Barang;
-use App\Models\User;
 use App\Models\Peminjaman;
-
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
+    // =========================================================================
+    //  Dashboard Admin
+    // =========================================================================
+
+    /**
+     * Menampilkan dashboard untuk admin.
+     */
     public function admin()
     {
         $jumlahBarang = Barang::count();
@@ -19,6 +24,13 @@ class DashboardController extends Controller
         return view('admin.dashboard', compact('jumlahBarang', 'jumlahUser'));
     }
 
+    // =========================================================================
+    //  Dashboard Operator
+    // =========================================================================
+
+    /**
+     * Menampilkan dashboard untuk operator.
+     */
     public function operator()
     {
         $user = Auth::user();
@@ -36,6 +48,13 @@ class DashboardController extends Controller
         }
     }
 
+    // =========================================================================
+    //  Dashboard Guru
+    // =========================================================================
+
+    /**
+     * Menampilkan dashboard untuk guru.
+     */
     public function guru()
     {
         $user = Auth::user();
@@ -44,5 +63,3 @@ class DashboardController extends Controller
         return view('guru.dashboard', compact('jumlahPeminjaman'));
     }
 }
-
-

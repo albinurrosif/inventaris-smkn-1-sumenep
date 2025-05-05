@@ -4,7 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     /**
      * Jalankan migration.
      */
@@ -13,14 +14,11 @@ return new class extends Migration {
         Schema::create('peminjaman', function (Blueprint $table) {
             $table->id(); // Primary Key
             $table->foreignId('id_peminjam')->constrained('users')->onDelete('cascade'); // Relasi ke users
-            $table->foreignId('id_ruangan')->constrained('ruangan')->onDelete('cascade'); // Relasi ke ruangan
-            $table->dateTime('tanggal_pinjam'); // Tanggal peminjaman
-            $table->dateTime('tanggal_kembali')->nullable(); // Tanggal pengembalian dihitung dari durasi_pinjam
-            $table->integer('durasi_pinjam'); // Durasi peminjaman (diambil dari pengaturan atau diinput admin)
-            $table->boolean('dapat_diperpanjang'); // Apakah peminjaman bisa diperpanjang (diambil dari pengaturan)
-            $table->foreignId('diproses_oleh')->nullable()->constrained('users')->onDelete('set null'); // Admin/operator yang memproses
-            $table->enum('status', ['menunggu', 'menunggu_verifikasi_pengembalian', 'dipinjam', 'dikembalikan'])->default('menunggu'); // Status peminjaman
+            $table->dateTime('tanggal_pengajuan')->useCurrent(); // Tanggal pengajuan peminjaman
+            $table->enum('status_pengajuan', ['menunggu_verifikasi', 'disetujui', 'dipinjam', 'selesai', 'ditolak'])->default('menunggu_verifikasi'); // Status pengajuan
+            $table->foreignId('pengajuan_disetujui_oleh')->nullable()->constrained('users')->onDelete('set null'); // Admin/operator yang menyetujui pengajuan
             $table->text('keterangan')->nullable(); // Keterangan tambahan
+            $table->timestamp('tanggal_disetujui')->nullable(); // Tanggal disetujui
             $table->timestamps(); // created_at & updated_at
         });
     }

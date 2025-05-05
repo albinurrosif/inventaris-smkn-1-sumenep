@@ -1,209 +1,362 @@
 @extends('layouts.app')
 
-@section('title', 'Ajukan Peminjaman')
+@section('title', 'Ajukan Peminjaman Barang')
 
 @section('content')
+    <div class="container-fluid">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h4 class="mb-0">Ajukan Peminjaman Barang</h4>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="mb-3">Tambah Barang ke Peminjaman</h5>
+                <form id="form-tambah-barang">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label for="select-ruangan-asal" class="form-label">Ruangan Asal</label>
+                            <select class="form-select" id="select-ruangan-asal" required>
+                                <option value="" disabled selected>Pilih Ruangan Asal</option>
+                                @foreach ($ruangan as $r)
+                                    <option value="{{ $r->id }}">{{ $r->nama_ruangan }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="select-barang" class="form-label">Nama Barang</label>
+                            <select class="form-select" id="select-barang" disabled required>
+                                <option value="" disabled selected>Pilih Barang (setelah ruangan asal)</option>
+                            </select>
+                            <small class="text-muted">Stok tersedia: <span id="stok-tersedia">0</span></small>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="select-ruangan-tujuan" class="form-label">Ruangan Tujuan</label>
+                            <select class="form-select" id="select-ruangan-tujuan" required>
+                                <option value="" disabled selected>Pilih Ruangan Tujuan</option>
+                                @foreach ($ruangan as $r)
+                                    <option value="{{ $r->id }}">{{ $r->nama_ruangan }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="input-jumlah" class="form-label">Jumlah</label>
+                            <input type="number" class="form-control" id="input-jumlah" min="1" value="1"
+                                required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="input-tanggal-pinjam" class="form-label">Tanggal Pinjam</label>
+                            <input type="date" class="form-control" id="input-tanggal-pinjam" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="input-durasi-pinjam" class="form-label">Durasi Pinjam (hari)</label>
+                            <input type="number" class="form-control" id="input-durasi-pinjam" min="1"
+                                value="1" required>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary" id="btn-tambah-barang">
+                                <i class="mdi mdi-plus-circle-outline me-1"></i> Tambah Barang
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-body">
+                <h5 class="mb-3">Keranjang Peminjaman</h5>
+                <div class="table-responsive">
+                    <table class="table table-bordered align-middle" id="tabel-keranjang">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Nama Barang</th>
+                                <th>Ruangan Asal</th>
+                                <th>Ruangan Tujuan</th>
+                                <th>Jumlah</th>
+                                <th>Tanggal Pinjam</th>
+                                <th>Tanggal Kembali</th>
+                                <th>Durasi</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="8" class="text-end"><strong>Total Item:</strong> <span
+                                        id="total-items">0</span>
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <form action="{{ route('guru.peminjaman.store') }}" method="POST">
+                    @csrf
+                    <div id="form-inputs-container">
+                        <input type="hidden" name="items" id="input-items-json">
+                    </div>
+                    <div class="card mt-4 mb-4">
+                        <div class="card-body">
+
+                            <div class="mb-3">
+                                <label for="input-keterangan" class="form-label">Keterangan Peminjaman (Opsional)</label>
+                                <textarea class="form-control" id="input-keterangan" name="keterangan" rows="3"
+                                    placeholder="Tambahkan keterangan atau tujuan peminjaman di sini..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-end">
+                        <button type="submit" class="btn btn-success" id="btn-submit-peminjaman" disabled>
+                            <i class="mdi mdi-check-circle-outline me-1"></i> Ajukan Semua Peminjaman
+                        </button>
+                        <a href="{{ route('guru.peminjaman.index') }}" class="btn btn-secondary ms-2">
+                            <i class="mdi mdi-arrow-left-circle-outline me-1"></i> Batal
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
     @if (session('success'))
         <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Berhasil',
-                    text: '{{ session('success') }}',
-                    timer: 3000,
-                    showConfirmButton: false
-                });
+            Swal.fire({
+                icon: 'success',
+                title: 'Berhasil',
+                text: '{{ session('success') }}',
+                showConfirmButton: false,
+                timer: 2000
+            });
+        </script>
+    @endif
+    @if (session('error'))
+        <script>
+            Swal.fire({
+                icon: 'error',
+                title: 'Gagal',
+                text: '{{ session('error') }}',
+                showConfirmButton: false,
+                timer: 2000
             });
         </script>
     @endif
 
-    <div class="container-fluid">
-        <div class="row justify-content-center">
-            <div class="col-lg-10">
-
-                {{-- Filter Form --}}
-                <form method="GET" action="{{ route('peminjaman.create') }}" class="row mb-4">
-                    <div class="col-md-4">
-                        <label for="filter_ruangan" class="form-label">Filter Ruangan Asal Barang</label>
-                        <select name="filter_ruangan" id="filter_ruangan" class="form-select">
-                            <option value="">-- Semua Ruangan --</option>
-                            @foreach ($ruangan as $r)
-                                <option value="{{ $r->id }}"
-                                    {{ request('filter_ruangan') == $r->id ? 'selected' : '' }}>
-                                    {{ $r->nama_ruangan }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label for="keyword" class="form-label">Cari Barang</label>
-                        <input type="text" name="keyword" id="keyword" class="form-control"
-                            placeholder="Nama atau Kode Barang" value="{{ request('keyword') }}">
-                    </div>
-                    <div class="col-md-4 align-self-end">
-                        <button type="submit" class="btn btn-outline-primary w-100">
-                            <i class="mdi mdi-magnify"></i> Cari Barang
-                        </button>
-                    </div>
-                </form>
-
-                {{-- Form Utama --}}
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h4 class="card-title mb-0">Form Pengajuan Peminjaman</h4>
-                        <a href="{{ route('peminjaman.index') }}" class="btn btn-secondary btn-sm">
-                            <i class="mdi mdi-arrow-left"></i> Kembali
-                        </a>
-                    </div>
-                    <div class="card-body">
-                        <form action="{{ route('peminjaman.store') }}" method="POST">
-                            @csrf
-
-                            <div class="mb-3">
-                                <label for="id_ruangan" class="form-label">Pilih Ruangan Tujuan</label>
-                                <select name="id_ruangan" id="id_ruangan" class="form-select" required>
-                                    <option value="">-- Pilih Ruangan --</option>
-                                    @foreach ($ruangan as $r)
-                                        <option value="{{ $r->id }}"
-                                            {{ old('id_ruangan') == $r->id ? 'selected' : '' }}>
-                                            {{ $r->nama_ruangan }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="tanggal_pinjam" class="form-label">Tanggal Pinjam</label>
-                                <input type="datetime-local" name="tanggal_pinjam" id="tanggal_pinjam"
-                                    value="{{ old('tanggal_pinjam', now()->format('Y-m-d\TH:i')) }}" class="form-control"
-                                    required>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="durasi_pinjam" class="form-label">Durasi Pinjam (hari)</label>
-                                <input type="number" name="durasi_pinjam" id="durasi_pinjam" class="form-control"
-                                    min="1" value="{{ old('durasi_pinjam', 1) }}" required>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="keterangan" class="form-label">Keterangan</label>
-                                <textarea name="keterangan" id="keterangan" rows="3" class="form-control">{{ old('keterangan') }}</textarea>
-                            </div>
-
-                            {{-- Tabel Barang --}}
-                            <div class="mb-3">
-                                <label class="form-label">Pilih Barang</label>
-                                <div class="table-responsive">
-                                    <table class="table table-bordered table-sm align-middle">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th>Pilih</th>
-                                                <th>Kode</th>
-                                                <th>Nama Barang</th>
-                                                <th>Stok</th>
-                                                <th>Jumlah</th>
-                                                <th>Detail</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            @forelse ($barang as $b)
-                                                <tr>
-                                                    <td>
-                                                        <input type="checkbox" name="barang_id[]"
-                                                            value="{{ $b->id }}"
-                                                            class="form-check-input checkbox-barang">
-                                                    </td>
-                                                    <td>{{ $b->kode_barang }}</td>
-                                                    <td>{{ $b->nama_barang }}</td>
-                                                    <td>{{ $b->jumlah_barang }}</td>
-                                                    <td>
-                                                        <input type="number" name="jumlah[{{ $b->id }}]"
-                                                            class="form-control form-control-sm jumlah-barang"
-                                                            min="1" max="{{ $b->jumlah_barang }}" disabled>
-                                                    </td>
-                                                    <td>
-                                                        <button type="button" class="btn btn-info btn-sm"
-                                                            data-bs-toggle="modal"
-                                                            data-bs-target="#detailBarang{{ $b->id }}">
-                                                            <i class="mdi mdi-eye"></i>
-                                                        </button>
-                                                    </td>
-                                                </tr>
-
-                                                {{-- Modal --}}
-                                                <div class="modal fade" id="detailBarang{{ $b->id }}" tabindex="-1"
-                                                    aria-hidden="true">
-                                                    <div class="modal-dialog">
-                                                        <div class="modal-content">
-                                                            <div class="modal-header">
-                                                                <h5 class="modal-title">Detail Barang</h5>
-                                                                <button type="button" class="btn-close"
-                                                                    data-bs-dismiss="modal"></button>
-                                                            </div>
-                                                            <div class="modal-body">
-                                                                <p><strong>Kode:</strong> {{ $b->kode_barang }}</p>
-                                                                <p><strong>Nama:</strong> {{ $b->nama_barang }}</p>
-                                                                <p><strong>Merk/Model:</strong> {{ $b->merk_model ?? '-' }}
-                                                                </p>
-                                                                <p><strong>Ukuran:</strong> {{ $b->ukuran ?? '-' }}</p>
-                                                                <p><strong>Stok:</strong> {{ $b->jumlah_barang }}</p>
-                                                                <p><strong>Kondisi:</strong> {{ $b->keadaan_barang }}</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            @empty
-                                                <tr>
-                                                    <td colspan="6" class="text-center">Tidak ada barang yang tersedia.
-                                                    </td>
-                                                </tr>
-                                            @endforelse
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-
-                            <button type="submit" class="btn btn-primary">
-                                <i class="mdi mdi-check-circle-outline"></i> Ajukan Peminjaman
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 @endsection
 
 @push('scripts')
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('.checkbox-barang').forEach(checkbox => {
-                checkbox.addEventListener('change', function() {
-                    const jumlahInput = this.closest('tr').querySelector('.jumlah-barang');
-                    jumlahInput.disabled = !this.checked;
-                    if (!this.checked) jumlahInput.value = '';
-                });
-            });
-        });
-    </script>
-@endpush
+            let keranjangBarang = [];
+            const tabelKeranjang = document.getElementById('tabel-keranjang');
+            const totalItemsElement = document.getElementById('total-items');
+            const btnSubmit = document.getElementById('btn-submit-peminjaman');
 
-@push('scripts')
-    <script>
-        document.querySelectorAll('.jumlah-barang').forEach(input => {
-            input.addEventListener('input', function() {
-                const max = parseInt(this.getAttribute('max'));
-                if (parseInt(this.value) > max) {
-                    this.value = max;
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Melebihi Stok!',
-                        text: 'Jumlah melebihi stok barang yang tersedia.',
-                        timer: 2500,
-                        showConfirmButton: false,
-                    });
+            const formBarang = document.getElementById('form-tambah-barang');
+            const selectRuanganAsal = document.getElementById('select-ruangan-asal');
+            const selectBarang = document.getElementById('select-barang');
+            const selectRuanganTujuan = document.getElementById('select-ruangan-tujuan');
+            const inputJumlah = document.getElementById('input-jumlah');
+            const inputTanggalPinjam = document.getElementById('input-tanggal-pinjam');
+            const inputDurasiPinjam = document.getElementById('input-durasi-pinjam');
+            const inputKeterangan = document.getElementById('input-keterangan');
+            const btnTambahBarang = document.getElementById('btn-tambah-barang');
+            const inputItemsJson = document.getElementById('input-items-json');
+            const formInputsContainer = document.getElementById('form-inputs-container');
+
+            const allBarang = @json($barang->toArray());
+
+            function loadBarangByRuangan(ruanganId) {
+                selectBarang.innerHTML = '<option value="" disabled selected>Pilih Barang</option>';
+                selectBarang.disabled = true;
+                document.getElementById('stok-tersedia').textContent = '0';
+
+                if (ruanganId) {
+                    const filteredBarang = allBarang.filter(barang => barang.id_ruangan == ruanganId);
+                    if (filteredBarang.length > 0) {
+                        filteredBarang.forEach(item => {
+                            const option = document.createElement('option');
+                            option.value = item.id;
+                            option.dataset.stok = item.jumlah_barang;
+                            option.dataset.ruanganAsal = item.ruangan_id;
+                            option.textContent = item.nama_barang;
+                            selectBarang.appendChild(option);
+                        });
+                        selectBarang.disabled = false;
+                    } else {
+                        selectBarang.innerHTML =
+                            '<option value="" disabled selected>Tidak ada barang di ruangan ini</option>';
+                    }
                 }
+            }
+
+            // Perbaikan fungsi tambahBarang di JavaScript
+            function tambahBarang(e) {
+                e.preventDefault();
+
+                if (!selectBarang.value || !selectRuanganAsal.value || !selectRuanganTujuan.value ||
+                    !inputJumlah.value || !inputTanggalPinjam.value || !inputDurasiPinjam.value) {
+                    showAlert('Silakan lengkapi semua field', 'danger');
+                    return;
+                }
+
+                if (selectRuanganAsal.value === selectRuanganTujuan.value) {
+                    showAlert('Ruangan asal dan ruangan tujuan tidak boleh sama', 'danger');
+                    return;
+                }
+
+                if (parseInt(inputJumlah.value) <= 0) {
+                    showAlert('Jumlah harus lebih dari 0', 'danger');
+                    return;
+                }
+
+                const barangOption = selectBarang.options[selectBarang.selectedIndex];
+                const ruanganAsalOption = selectRuanganAsal.options[selectRuanganAsal.selectedIndex];
+                const ruanganTujuanOption = selectRuanganTujuan.options[selectRuanganTujuan.selectedIndex];
+
+                const stokTersedia = parseInt(barangOption.dataset.stok);
+                if (parseInt(inputJumlah.value) > stokTersedia) {
+                    showAlert(`Stok ${barangOption.text} tidak mencukupi. Tersedia: ${stokTersedia}`, 'danger');
+                    return;
+                }
+
+                // Hitung tanggal kembali berdasarkan tanggal pinjam dan durasi
+                const tanggalPinjam = new Date(inputTanggalPinjam.value);
+                const tanggalKembali = new Date(tanggalPinjam);
+                tanggalKembali.setDate(tanggalKembali.getDate() + parseInt(inputDurasiPinjam.value));
+
+                // Format tanggal kembali sebagai string YYYY-MM-DD
+                const tanggalKembaliFormatted = tanggalKembali.toISOString().split('T')[0];
+
+                const barang = {
+                    barang_id: selectBarang.value, // Gunakan barang_id bukan id
+                    nama: barangOption.text,
+                    ruangan_asal: selectRuanganAsal.value,
+                    nama_ruangan_asal: ruanganAsalOption.text,
+                    ruangan_tujuan: selectRuanganTujuan.value,
+                    nama_ruangan_tujuan: ruanganTujuanOption.text,
+                    jumlah: parseInt(inputJumlah.value),
+                    tanggal_pinjam: inputTanggalPinjam.value,
+                    tanggal_kembali: tanggalKembaliFormatted, // Tambahkan tanggal kembali yang sudah dihitung
+                    durasi_pinjam: parseInt(inputDurasiPinjam.value)
+                };
+
+                keranjangBarang.push(barang);
+                updateKeranjang();
+                formBarang.reset();
+                selectBarang.innerHTML =
+                    '<option value="" disabled selected>Pilih Barang (setelah ruangan asal)</option>';
+                selectBarang.disabled = true;
+                document.getElementById('stok-tersedia').textContent = '0';
+                showAlert('Barang berhasil ditambahkan ke keranjang', 'success');
+            }
+
+            // Perbaikan fungsi hapusBarang - pindahkan ke global scope
+            window.hapusBarang = function(index) {
+                keranjangBarang.splice(index, 1);
+                updateKeranjang();
+                showAlert('Barang dihapus dari keranjang', 'info');
+            }
+
+            function updateKeranjang() {
+                totalItemsElement.textContent = keranjangBarang.length;
+                btnSubmit.disabled = keranjangBarang.length === 0;
+                const tbody = tabelKeranjang.querySelector('tbody');
+                tbody.innerHTML = '';
+
+                keranjangBarang.forEach((barang, index) => {
+                    const tr = document.createElement('tr');
+                    const tanggalPinjam = new Date(barang.tanggal_pinjam);
+                    const tanggalKembali = new Date(tanggalPinjam);
+                    tanggalKembali.setDate(tanggalKembali.getDate() + barang.durasi_pinjam);
+
+                    tr.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${barang.nama}</td>
+                <td>${barang.nama_ruangan_asal}</td>
+                <td>${barang.nama_ruangan_tujuan}</td>
+                <td>${barang.jumlah}</td>
+                <td>${formatDate(tanggalPinjam)}</td>
+                <td>${formatDate(tanggalKembali)}</td>
+                <td>${barang.durasi_pinjam} hari</td>
+                <td>
+    <button type="button" class="btn btn-danger btn-sm" onclick="hapusBarang(${index})">
+        <i class="mdi mdi-delete"></i>
+    </button>
+</td>
+`;
+
+                    tbody.appendChild(tr);
+                });
+
+                inputItemsJson.value = JSON.stringify(keranjangBarang);
+            }
+
+            function hapusBarang(index) {
+                keranjangBarang.splice(index, 1);
+                updateKeranjang();
+                showAlert('Barang dihapus dari keranjang', 'info');
+            }
+
+            function formatDate(date) {
+                const d = new Date(date);
+                const day = String(d.getDate()).padStart(2, '0');
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const year = d.getFullYear();
+                return `${day}-${month}-${year}`;
+            }
+
+            function showAlert(message, type) {
+                Swal.fire({
+                    icon: type,
+                    title: type === 'success' ? 'Sukses' : type === 'danger' ? 'Gagal' : type === 'info' ?
+                        'Info' : 'Peringatan',
+                    text: message,
+                    timer: 3000,
+                    position: 'top', // Ubah posisi agar lebih terlihat sebagai notifikasi
+                    toast: true
+                });
+
+            }
+
+            function updateFormInputs() {
+                // Create hidden input for keterangan if it doesn't exist
+                let keteranganInput = document.querySelector('input[name="keterangan"]');
+                if (!keteranganInput) {
+                    keteranganInput = document.createElement('input');
+                    keteranganInput.type = 'hidden';
+                    keteranganInput.name = 'keterangan';
+                    formInputsContainer.appendChild(keteranganInput);
+                }
+                keteranganInput.value = inputKeterangan.value;
+            }
+
+            // Event listeners
+            selectRuanganAsal.addEventListener('change', function() {
+                loadBarangByRuangan(this.value);
             });
+
+            selectBarang.addEventListener('change', function() {
+                const selected = this.options[this.selectedIndex];
+                const stok = selected.dataset.stok || 0;
+                document.getElementById('stok-tersedia').textContent = stok;
+            });
+
+            formBarang.addEventListener('submit', tambahBarang);
+            btnTambahBarang.addEventListener('click', tambahBarang);
+
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            inputTanggalPinjam.min = `${year}-${month}-${day}`;
+            inputTanggalPinjam.value = `${year}-${month}-${day}`;
+
+            btnSubmit.addEventListener('click', function(e) {
+                inputItemsJson.value = JSON.stringify(keranjangBarang);
+                updateFormInputs(); // pastikan hidden input diperbarui sebelum submit
+            });
+
+            updateKeranjang(); // inisialisasi
         });
     </script>
 @endpush
