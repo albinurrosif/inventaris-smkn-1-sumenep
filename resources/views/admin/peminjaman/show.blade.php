@@ -14,33 +14,67 @@
                         <p class="card-text"><strong>Peminjam:</strong> {{ $peminjaman->peminjam->name }}</p>
                         <p class="card-text"><strong>Tanggal Pengajuan:</strong>
                             {{ \Carbon\Carbon::parse($peminjaman->tanggal_pengajuan)->translatedFormat('d M Y H:i') }}</p>
-                        <p class="card-text"><strong>Status:</strong>
-                            @if ($peminjaman->status_pengajuan === 'menunggu')
-                                <span class="badge bg-warning text-dark">Menunggu</span>
-                            @elseif ($peminjaman->status_pengajuan === 'diajukan')
-                                <span class="badge bg-warning text-dark">Diajukan</span>
-                            @elseif ($peminjaman->status_pengajuan === 'disetujui')
+                        <p class="card-text"><strong>Status Persetujuan:</strong>
+                            @if ($peminjaman->status_persetujuan === 'menunggu_verifikasi')
+                                <span class="badge bg-warning text-dark">Menunggu Verifikasi</span>
+                            @elseif ($peminjaman->status_persetujuan === 'diproses')
+                                <span class="badge bg-info">Diproses</span>
+                            @elseif ($peminjaman->status_persetujuan === 'disetujui')
                                 <span class="badge bg-success">Disetujui</span>
-                            @elseif ($peminjaman->status_pengajuan === 'ditolak')
+                            @elseif ($peminjaman->status_persetujuan === 'ditolak')
                                 <span class="badge bg-danger">Ditolak</span>
-                            @elseif ($peminjaman->status_pengajuan === 'dipinjam')
-                                <span class="badge bg-info">Dipinjam</span>
-                            @elseif ($peminjaman->status_pengajuan === 'menunggu_verifikasi')
-                                <span class="badge bg-secondary">Menunggu Verifikasi</span>
-                            @elseif ($peminjaman->status_pengajuan === 'selesai')
-                                <span class="badge bg-success">Selesai</span>
-                            @elseif ($peminjaman->status_pengajuan === 'dibatalkan')
-                                <span class="badge bg-secondary">Dibatalkan</span>
+                            @elseif ($peminjaman->status_persetujuan === 'sebagian_disetujui')
+                                <span class="badge bg-primary">Sebagian Disetujui</span>
                             @endif
                         </p>
-                        @if ($peminjaman->diproses_oleh)
-                            <p class="card-text"><strong>Diproses Oleh:</strong> {{ $peminjaman->diprosesOleh->name }}</p>
-                            <p class="card-text"><strong>Tanggal Diproses:</strong>
-                                {{ $peminjaman->tanggal_proses ? \Carbon\Carbon::parse($peminjaman->tanggal_proses)->translatedFormat('d M Y H:i') : '-' }}
-                            </p>
-                        @endif
+                        <p class="card-text"><strong>Status Pengambilan:</strong>
+                            @if ($peminjaman->status_pengambilan === 'belum_diambil')
+                                <span class="badge bg-secondary">Belum Diambil</span>
+                            @elseif ($peminjaman->status_pengambilan === 'sebagian_diambil')
+                                <span class="badge bg-info">Sebagian Diambil</span>
+                            @elseif ($peminjaman->status_pengambilan === 'sudah_diambil')
+                                <span class="badge bg-success">Sudah Diambil</span>
+                            @endif
+                        </p>
+                        <p class="card-text"><strong>Status Pengembalian:</strong>
+                            @if ($peminjaman->status_pengembalian === 'belum_dikembalikan')
+                                <span class="badge bg-secondary">Belum Dikembalikan</span>
+                            @elseif ($peminjaman->status_pengembalian === 'sebagian_dikembalikan')
+                                <span class="badge bg-info">Sebagian Dikembalikan</span>
+                            @elseif ($peminjaman->status_pengembalian === 'sudah_dikembalikan')
+                                <span class="badge bg-success">Sudah Dikembalikan</span>
+                            @endif
+                        </p>
                     </div>
                     <div class="col-md-6">
+                        @if ($peminjaman->pengajuanDisetujuiOleh)
+                            <p class="card-text"><strong>Disetujui Oleh:</strong>
+                                {{ $peminjaman->pengajuanDisetujuiOleh->name }}</p>
+                            <p class="card-text"><strong>Tanggal Disetujui:</strong>
+                                {{ $peminjaman->tanggal_disetujui ? \Carbon\Carbon::parse($peminjaman->tanggal_disetujui)->translatedFormat('d M Y H:i') : '-' }}
+                            </p>
+                        @endif
+
+                        @if ($peminjaman->pengajuanDitolakOleh)
+                            <p class="card-text"><strong>Ditolak Oleh:</strong>
+                                {{ $peminjaman->pengajuanDitolakOleh->name }}</p>
+                            <p class="card-text"><strong>Tanggal Ditolak:</strong>
+                                {{ $peminjaman->tanggal_ditolak ? \Carbon\Carbon::parse($peminjaman->tanggal_ditolak)->translatedFormat('d M Y H:i') : '-' }}
+                            </p>
+                        @endif
+
+                        @if ($peminjaman->tanggal_semua_diambil)
+                            <p class="card-text"><strong>Tanggal Pengambilan Lengkap:</strong>
+                                {{ \Carbon\Carbon::parse($peminjaman->tanggal_semua_diambil)->translatedFormat('d M Y H:i') }}
+                            </p>
+                        @endif
+
+                        @if ($peminjaman->tanggal_selesai)
+                            <p class="card-text"><strong>Tanggal Selesai:</strong>
+                                {{ \Carbon\Carbon::parse($peminjaman->tanggal_selesai)->translatedFormat('d M Y H:i') }}
+                            </p>
+                        @endif
+
                         <p class="card-text"><strong>Keterangan:</strong> {{ $peminjaman->keterangan ?? '-' }}</p>
                     </div>
                 </div>
@@ -63,7 +97,8 @@
                                     <th>Tanggal Pinjam</th>
                                     <th>Tanggal Kembali</th>
                                     <th>Status Item</th>
-                                    <th>Disetujui/Diverifikasi Oleh</th>
+                                    <th>Diproses Oleh</th>
+                                    <th>Keterlambatan</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -91,18 +126,44 @@
                                                 <span class="badge bg-secondary">Menunggu Verifikasi</span>
                                             @elseif ($detail->status_pengembalian === 'dikembalikan')
                                                 <span class="badge bg-success">Dikembalikan</span>
-                                            @endif
-
-                                            @if ($detail->terlambat)
-                                                <br>
-                                                <span class="badge bg-danger">Terlambat</span>
+                                            @elseif ($detail->status_pengembalian === 'rusak')
+                                                <span class="badge bg-danger">Rusak</span>
+                                            @elseif ($detail->status_pengembalian === 'hilang')
+                                                <span class="badge bg-danger">Hilang</span>
                                             @endif
                                         </td>
                                         <td>
                                             @if ($detail->disetujuiOleh)
-                                                {{ $detail->disetujuiOleh->name }}
-                                            @elseif ($detail->diverifikasiOleh)
-                                                {{ $detail->diverifikasiOleh->name }}
+                                                <p class="mb-0">Disetujui: {{ $detail->disetujuiOleh->name }}</p>
+                                            @endif
+                                            @if ($detail->ditolakOleh)
+                                                <p class="mb-0">Ditolak: {{ $detail->ditolakOleh->name }}</p>
+                                            @endif
+                                            @if ($detail->pengambilanDikonfirmasiOleh)
+                                                <p class="mb-0">Pengambilan:
+                                                    {{ $detail->pengambilanDikonfirmasiOleh->name }}</p>
+                                            @endif
+                                            @if ($detail->disetujuiOlehPengembalian)
+                                                <p class="mb-0">Kembali: {{ $detail->disetujuiOlehPengembalian->name }}
+                                                </p>
+                                            @endif
+                                            @if ($detail->diverifikasiOlehPengembalian)
+                                                <p class="mb-0">Verifikasi:
+                                                    {{ $detail->diverifikasiOlehPengembalian->name }}</p>
+                                            @endif
+                                            @if (
+                                                !$detail->disetujuiOleh &&
+                                                    !$detail->ditolakOleh &&
+                                                    !$detail->pengambilanDikonfirmasiOleh &&
+                                                    !$detail->disetujuiOlehPengembalian &&
+                                                    !$detail->diverifikasiOlehPengembalian)
+                                                -
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if ($detail->is_terlambat)
+                                                <span class="badge bg-danger">Terlambat
+                                                    {{ $detail->jumlah_hari_terlambat }} hari</span>
                                             @else
                                                 -
                                             @endif
@@ -118,8 +179,6 @@
             </div>
         </div>
 
-        {{--  Riwayat Status (Contoh - Jika Diperlukan) --}}
-        {{--  
         <div class="card mb-4">
             <div class="card-body">
                 <h5 class="card-title">Riwayat Status</h5>
@@ -135,22 +194,74 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td>Diajukan</td>
-                                <td>...</td>
-                                <td>...</td>
-                                <td>...</td>
+                                <td>Pengajuan</td>
+                                <td>{{ \Carbon\Carbon::parse($peminjaman->tanggal_pengajuan)->translatedFormat('d M Y H:i') }}
+                                </td>
+                                <td>{{ $peminjaman->peminjam->name }}</td>
+                                <td>{{ $peminjaman->keterangan ?? '-' }}</td>
                             </tr>
-                            <tr>
-                                <td>Disetujui</td>
-                                <td>...</td>
-                                <td>...</td>
-                                <td>...</td>
-                            </tr>
-                            </tbody>
+                            @if ($peminjaman->pengajuanDisetujuiOleh)
+                                <tr>
+                                    <td>Disetujui</td>
+                                    <td>{{ $peminjaman->tanggal_disetujui ? \Carbon\Carbon::parse($peminjaman->tanggal_disetujui)->translatedFormat('d M Y H:i') : '-' }}
+                                    </td>
+                                    <td>{{ $peminjaman->pengajuanDisetujuiOleh->name }}</td>
+                                    <td>-</td>
+                                </tr>
+                            @endif
+                            @if ($peminjaman->pengajuanDitolakOleh)
+                                <tr>
+                                    <td>Ditolak</td>
+                                    <td>{{ $peminjaman->tanggal_ditolak ? \Carbon\Carbon::parse($peminjaman->tanggal_ditolak)->translatedFormat('d M Y H:i') : '-' }}
+                                    </td>
+                                    <td>{{ $peminjaman->pengajuanDitolakOleh->name }}</td>
+                                    <td>-</td>
+                                </tr>
+                            @endif
+                            @if ($peminjaman->tanggal_semua_diambil)
+                                <tr>
+                                    <td>Sudah Diambil</td>
+                                    <td>{{ \Carbon\Carbon::parse($peminjaman->tanggal_semua_diambil)->translatedFormat('d M Y H:i') }}
+                                    </td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                </tr>
+                            @endif
+                            @if ($peminjaman->tanggal_selesai)
+                                <tr>
+                                    <td>Selesai</td>
+                                    <td>{{ \Carbon\Carbon::parse($peminjaman->tanggal_selesai)->translatedFormat('d M Y H:i') }}
+                                    </td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                </tr>
+                            @endif
+                        </tbody>
                     </table>
                 </div>
             </div>
         </div>
-        --}}
+
+        <!-- Buttons for Actions -->
+        <div class="mb-4">
+            <div class="d-flex gap-2">
+                <a href="{{ route('admin.peminjaman.index') }}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Kembali
+                </a>
+
+                @if ($peminjaman->status_persetujuan === 'menunggu_verifikasi')
+                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#approveModal">
+                        <i class="bi bi-check-circle"></i> Setujui
+                    </button>
+                    <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#rejectModal">
+                        <i class="bi bi-x-circle"></i> Tolak
+                    </button>
+                @endif
+
+                <!-- Add more action buttons as needed based on status -->
+            </div>
+        </div>
     </div>
+
+    <!-- Modal templates as needed based on actions -->
 @endsection

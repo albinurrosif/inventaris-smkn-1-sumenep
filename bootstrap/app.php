@@ -19,6 +19,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'isOperator' => \App\Http\Middleware\IsOperator::class,
             'isGuru' => \App\Http\Middleware\IsGuru::class,
             'canManageBarang' => \App\Http\Middleware\CanManageBarang::class,
+            'checkIncompleteBarang' => \App\Http\Middleware\CheckIncompleteBarang::class,
+        ]);
+
+        $middleware->web(append: [
+            \App\Http\Middleware\EnsureDarkModeIsSet::class,
         ]);
     })
 
@@ -27,5 +32,6 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withProviders([
         RouteServiceProvider::class, //
+
     ])
     ->create();

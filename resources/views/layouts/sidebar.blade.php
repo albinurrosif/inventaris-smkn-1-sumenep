@@ -13,6 +13,7 @@
                 </li>
 
                 @if (auth()->user()->role === 'Admin')
+                    <li class="menu-title">Data Master</li>
                     <li class="{{ request()->routeIs('barang.*') ? 'active' : '' }}">
                         <a href="{{ route('barang.index') }}">
                             <i data-feather="box"></i>
@@ -25,8 +26,15 @@
                             <span>Ruangan</span>
                         </a>
                     </li>
+                    <li class="{{ request()->routeIs('kategori-barang.*') ? 'active' : '' }}">
+                        <a href="{{ route('kategori-barang.index') }}">
+                            <i data-feather="tag"></i>
+                            <span>Kategori</span>
+                        </a>
+                    </li>
                 @endif
                 @if (auth()->user()->role === 'Operator')
+                    <li class="menu-title">Data Master</li>
                     <li class="{{ request()->routeIs('operator.barang.index') ? 'active' : '' }}">
                         <a href="{{ route('operator.barang.index') }}">
                             <i data-feather="box"></i>
@@ -53,53 +61,45 @@
                             <span>Daftar Pengajuan</span>
                         </a>
                     </li>
-                    <li class="{{ request()->routeIs('operator.peminjaman.berlangsungOperator') ? 'active' : '' }}">
+                    <li class="{{ request()->routeIs('operator.peminjaman.berlangsung') ? 'active' : '' }}">
                         <a href="{{ route('operator.peminjaman.berlangsung') }}">
                             <i data-feather="activity"></i>
                             <span>Peminjaman Berlangsung</span>
                         </a>
                     </li>
-                    <li class="{{ request()->routeIs('operator.pengembalian.index') ? 'active' : '' }}">
-                        <a href="{{ route('operator.pengembalian.index') }}">
+                    <li class="{{ request()->routeIs('operator.peminjaman.pengembalian') ? 'active' : '' }}">
+                        <a href="{{ route('operator.peminjaman.pengembalian') }}">
                             <i data-feather="check-square"></i>
                             <span>Verifikasi Pengembalian</span>
                         </a>
                     </li>
                 @elseif (auth()->user()->role === 'Guru')
-                    <li class="{{ request()->routeIs('guru.peminjaman.index') ? 'active' : '' }}">
-                        <a href="{{ route('guru.peminjaman.index') }}">
-                            <i data-feather="list"></i>
-                            <span>Daftar Peminjaman</span>
-                        </a>
-                    </li>
-                    <li class="{{ request()->routeIs('guru.peminjaman.riwayat') ? 'active' : '' }}">
-                        <a href="{{ route('guru.peminjaman.riwayat') }}">
-                            <i data-feather="clock"></i>
-                            <span>Riwayat Peminjaman</span>
-                        </a>
-                    </li>
                     <li class="{{ request()->routeIs('guru.peminjaman.create') ? 'active' : '' }}">
                         <a href="{{ route('guru.peminjaman.create') }}">
                             <i data-feather="plus-circle"></i>
                             <span>Buat Peminjaman</span>
                         </a>
                     </li>
-
-                    {{--  Rute peminjaman berlangsung dan pengembalian/perpanjangan per item --}}
-                    {{--  <li class="{{ request()->routeIs('guru.peminjaman.berlangsung') ? 'active' : '' }}">
-                         <a href="{{ route('guru.peminjaman.berlangsung') }}">
-                             <i data-feather="activity"></i>
-                             <span>Peminjaman Berlangsung</span>
-                         </a>
-                     </li>  --}}
                 @endif
 
                 @if (auth()->user()->role === 'Guru')
                     <li class="menu-title">Peminjaman</li>
+                    <li class="{{ request()->routeIs('guru.peminjaman.index') ? 'active' : '' }}">
+                        <a href="{{ route('guru.peminjaman.index') }}">
+                            <i data-feather="list"></i>
+                            <span>Daftar Pengajuan</span>
+                        </a>
+                    </li>
                     <li class="{{ request()->routeIs('guru.peminjaman.berlangsung') ? 'active' : '' }}">
                         <a href="{{ route('guru.peminjaman.berlangsung') }}">
                             <i data-feather="activity"></i>
                             <span>Sedang Dipinjam</span>
+                        </a>
+                    </li>
+                    <li class="{{ request()->routeIs('guru.peminjaman.riwayat') ? 'active' : '' }}">
+                        <a href="{{ route('guru.peminjaman.riwayat') }}">
+                            <i data-feather="clock"></i>
+                            <span>Riwayat Peminjaman</span>
                         </a>
                     </li>
                 @endif
@@ -121,6 +121,12 @@
                             <span>Status Barang</span>
                         </a>
                     </li>
+                    <li class="{{ request()->routeIs('arsip-barang.*') ? 'active' : '' }}">
+                        <a href="{{ route('arsip-barang.index') }}">
+                            <i data-feather="archive"></i>
+                            <span>Arsip Barang</span>
+                        </a>
+                    </li>
                 @endif
 
                 @if (auth()->user()->role !== 'Guru')
@@ -133,20 +139,18 @@
                 @endif
 
                 @if (auth()->user()->role === 'Admin')
-                    <li class="menu-title">Administrasi</li>
-
                     <li class="{{ request()->routeIs('rekap-stok.*') ? 'active' : '' }}">
                         <a href="{{ route('rekap-stok.index') }}">
                             <i data-feather="archive"></i>
                             <span>Rekap Stok</span>
                         </a>
                     </li>
-                    <li class="{{ request()->routeIs('laporan.*') ? 'active' : '' }}">
+                    {{-- <li class="{{ request()->routeIs('laporan.*') ? 'active' : '' }}">
                         <a href="{{ route('laporan.index') }}">
                             <i data-feather="file-text"></i>
                             <span>Laporan</span>
                         </a>
-                    </li>
+                    </li> --}}
                     <li class="{{ request()->routeIs('pengaturan.*') ? 'active' : '' }}">
                         <a href="{{ route('pengaturan.index') }}">
                             <i data-feather="settings"></i>

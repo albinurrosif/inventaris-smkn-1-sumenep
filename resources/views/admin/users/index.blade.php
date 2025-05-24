@@ -3,19 +3,6 @@
 @section('title', 'Manajemen User')
 
 @section('content')
-    @if (session('success'))
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Berhasil',
-                    text: '{{ session('success') }}',
-                    timer: 3000,
-                    showConfirmButton: false
-                });
-            });
-        </script>
-    @endif
 
     <div class="container-fluid">
         <div class="row">

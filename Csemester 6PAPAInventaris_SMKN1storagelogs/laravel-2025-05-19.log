@@ -1,0 +1,4 @@
+[2025-05-19 12:23:43] local.INFO: select exists (select 1 from information_schema.tables where table_schema = 'smk-inventory' and table_name = 'migrations' and table_type in ('BASE TABLE', 'SYSTEM VERSIONED')) as `exists`  
+[2025-05-19 12:23:43] local.INFO: select exists (select 1 from information_schema.tables where table_schema = 'smk-inventory' and table_name = 'migrations' and table_type in ('BASE TABLE', 'SYSTEM VERSIONED')) as `exists`  
+[2025-05-19 12:23:43] local.INFO: select `migration` from `migrations` order by `batch` asc, `migration` asc  
+[2025-05-19 12:23:43] local.INFO: select `migration` from `migrations` order by `batch` asc, `migration` asc  

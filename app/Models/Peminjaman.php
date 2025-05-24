@@ -11,71 +11,134 @@ class Peminjaman extends Model
 {
     use HasFactory;
 
-    protected $table = 'peminjaman'; // Nama tabel di database
-    protected $primaryKey = 'id'; // Primary Key
-    public $timestamps = true; // Mengaktifkan created_at & updated_at
+    protected $table = 'peminjaman';
+    protected $primaryKey = 'id';
+    public $timestamps = true;
 
     protected $fillable = [
-        'id_peminjam', // ID Peminjam
-        'tanggal_pengajuan', // Tanggal Pengajuan
-        'status_pengajuan', // Status Pengajuan
-        'pengajuan_disetujui_oleh', // Admin/Operator yang menyetujui pengajuan
-        'keterangan', // Keterangan Tambahan
-        'tanggal_disetujui', // Tanggal Disetujui
+        'id_peminjam',
+        'tanggal_pengajuan',
+        'status_persetujuan',
+        'status_pengambilan',
+        'status_pengembalian',
+        'tanggal_disetujui',
+        'tanggal_semua_diambil',
+        'tanggal_selesai',
+        'pengajuan_disetujui_oleh',
+        'pengajuan_ditolak_oleh',
+        'keterangan',
     ];
 
-    /**
-     * Relasi ke tabel Users (User yang meminjam barang).
-     */
     public function peminjam(): BelongsTo
     {
         return $this->belongsTo(User::class, 'id_peminjam');
     }
 
-    /**
-     * Relasi ke tabel Users (Admin/operator yang menyetujui pengajuan).
-     */
     public function pengajuanDisetujuiOleh(): BelongsTo
     {
         return $this->belongsTo(User::class, 'pengajuan_disetujui_oleh');
     }
 
-    /**
-     * Relasi ke tabel DetailPeminjaman (Barang-barang yang dipinjam dalam transaksi ini).
-     */
+    public function pengajuanDitolakOleh(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'pengajuan_ditolak_oleh');
+    }
+
     public function detailPeminjaman(): HasMany
     {
         return $this->hasMany(DetailPeminjaman::class, 'id_peminjaman');
     }
 
-    /**
-     * Cek apakah ada item peminjaman yang terlambat.
-     */
     public function getAdaItemTerlambatAttribute(): bool
     {
         return $this->detailPeminjaman()
-            ->where('status', 'dipinjam')
+            ->where('status_pengembalian', 'dipinjam')
             ->where('tanggal_kembali', '<', now())
             ->exists();
     }
 
-    /**
-     * Cek jumlah total barang yang dipinjam dalam peminjaman ini.
-     */
     public function getTotalBarangAttribute(): int
     {
         return $this->detailPeminjaman()->sum('jumlah_dipinjam');
     }
 
-    /**
-     * Mengubah status pengajuan peminjaman berdasarkan proses approval.
-     */
-    public function setStatusPengajuan(string $status): void
+    // Update status persetujuan berdasarkan detail-detail peminjaman
+    public function updateStatusPersetujuan(): void
     {
-        $this->status_pengajuan = $status;
-        if ($status == 'disetujui') {
+        $details = $this->detailPeminjaman;
+
+        $totalItems = $details->count();
+        $disetujui = $details->where('status_persetujuan', 'disetujui')->count();
+        $ditolak = $details->where('status_persetujuan', 'ditolak')->count();
+
+        if ($disetujui === $totalItems) {
+            $this->status_persetujuan = 'disetujui';
             $this->tanggal_disetujui = now();
+        } elseif ($ditolak === $totalItems) {
+            $this->status_persetujuan = 'ditolak';
+        } elseif ($disetujui > 0 || $ditolak > 0) {
+            if ($disetujui > 0 && $ditolak > 0) {
+                $this->status_persetujuan = 'sebagian_disetujui';
+            } else {
+                $this->status_persetujuan = 'diproses';
+            }
+        } else {
+            $this->status_persetujuan = 'menunggu_verifikasi';
         }
+
+        $this->save();
+    }
+
+    // Update status pengambilan berdasarkan detail-detail peminjaman
+    public function updateStatusPengambilan(): void
+    {
+        $details = $this->detailPeminjaman()
+            ->where('status_persetujuan', 'disetujui')
+            ->get();
+
+        if ($details->isEmpty()) {
+            return;
+        }
+
+        $totalItems = $details->count();
+        $sudahDiambil = $details->where('status_pengambilan', 'sudah_diambil')->count();
+        $sebagianDiambil = $details->where('status_pengambilan', 'sebagian_diambil')->count();
+
+        if ($sudahDiambil === $totalItems) {
+            $this->status_pengambilan = 'sudah_diambil';
+            $this->tanggal_semua_diambil = now();
+        } elseif ($sudahDiambil > 0 || $sebagianDiambil > 0) {
+            $this->status_pengambilan = 'sebagian_diambil';
+        } else {
+            $this->status_pengambilan = 'belum_diambil';
+        }
+
+        $this->save();
+    }
+
+    // Update status pengembalian berdasarkan detail-detail peminjaman
+    public function updateStatusPengembalian(): void
+    {
+        $details = $this->detailPeminjaman()
+            ->whereIn('status_pengambilan', ['sudah_diambil', 'sebagian_diambil'])
+            ->get();
+
+        if ($details->isEmpty()) {
+            return;
+        }
+
+        $totalItems = $details->count();
+        $dikembalikan = $details->whereIn('status_pengembalian', ['dikembalikan', 'rusak', 'hilang'])->count();
+
+        if ($dikembalikan === $totalItems) {
+            $this->status_pengembalian = 'sudah_dikembalikan';
+            $this->tanggal_selesai = now();
+        } elseif ($dikembalikan > 0) {
+            $this->status_pengembalian = 'sebagian_dikembalikan';
+        } else {
+            $this->status_pengembalian = 'belum_dikembalikan';
+        }
+
         $this->save();
     }
 }

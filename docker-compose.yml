@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: smk-inventory
+        ports:
+            - "8000:80"
+        volumes:
+            - ./:/var/www/html:cached # volume utama, dengan :cached untuk Windows/macOS
+            - /var/www/html/vendor # hindari override vendor dari host (biar cepat)
+            - /var/www/html/storage # hindari override storage dari host agar permission bisa diatur dalam container
+        environment:
+            - APACHE_DOCUMENT_ROOT=/var/www/html/public
+        command: >
+            bash -c "
+            composer install --no-interaction --prefer-dist &&
+            chown -R www-data:www-data storage bootstrap/cache &&
+            chmod -R 775 storage bootstrap/cache &&
+            chown -R www-data:www-data storage/logs &&
+            chmod -R 775 storage/logs &&
+            php artisan migrate --force &&
+            php artisan config:cache &&
+            php artisan route:cache &&
+            php artisan view:cache &&
+            apache2-foreground
+            "
+        restart: unless-stopped
+        networks:
+            - shared
+
+networks:
+    shared:
+        external: true

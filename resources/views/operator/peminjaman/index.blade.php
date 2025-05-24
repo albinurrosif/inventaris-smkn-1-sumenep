@@ -36,13 +36,14 @@
 
         <div class="card">
             <div class="card-body table-responsive">
-                <table class="table table-bordered align-middle">
+                <table id="peminjamanTable" class="table table-bordered align-middle">
                     <thead class="table-light">
                         <tr>
                             <th>#</th>
                             <th>Peminjam</th>
                             <th>Tgl Pengajuan</th>
-                            <th>Status</th>
+                            <th>Status Persetujuan</th>
+                            <th>Status Pengambilan</th>
                             <th>Jumlah Item</th>
                             <th>Tgl Selesai</th>
                             <th>Aksi</th>
@@ -55,20 +56,25 @@
                                 <td>{{ $p->peminjam->name }}</td>
                                 <td>{{ \Carbon\Carbon::parse($p->tanggal_pengajuan)->translatedFormat('d M Y H:i') }}</td>
                                 <td>
-                                    @if ($p->status_pengajuan === 'menunggu')
-                                        <span class="badge bg-warning text-dark">Menunggu</span>
-                                    @elseif ($p->status_pengajuan === 'menunggu_verifikasi')
-                                        <span class="badge bg-secondary">Menunggu Verifikasi</span>
-                                    @elseif ($p->status_pengajuan === 'diajukan')
-                                        <span class="badge bg-warning text-dark">Diajukan</span>
-                                    @elseif ($p->status_pengajuan === 'disetujui')
+                                    @if ($p->status_persetujuan === 'menunggu_verifikasi')
+                                        <span class="badge bg-warning text-dark">Menunggu Verifikasi</span>
+                                    @elseif ($p->status_persetujuan === 'diproses')
+                                        <span class="badge bg-info">Diproses</span>
+                                    @elseif ($p->status_persetujuan === 'disetujui')
                                         <span class="badge bg-success">Disetujui</span>
-                                    @elseif ($p->status_pengajuan === 'ditolak')
+                                    @elseif ($p->status_persetujuan === 'ditolak')
                                         <span class="badge bg-danger">Ditolak</span>
-                                    @elseif ($p->status_pengajuan === 'selesai')
-                                        <span class="badge bg-success">Selesai</span>
-                                    @elseif ($p->status_pengajuan === 'dibatalkan')
-                                        <span class="badge bg-secondary">Dibatalkan</span>
+                                    @elseif ($p->status_persetujuan === 'sebagian_disetujui')
+                                        <span class="badge bg-primary">Sebagian Disetujui</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    @if ($p->status_pengambilan === 'belum_diambil')
+                                        <span class="badge bg-secondary">Belum Diambil</span>
+                                    @elseif ($p->status_pengambilan === 'sebagian_diambil')
+                                        <span class="badge bg-info">Sebagian Diambil</span>
+                                    @elseif ($p->status_pengambilan === 'sudah_diambil')
+                                        <span class="badge bg-success">Sudah Diambil</span>
                                     @endif
                                 </td>
                                 <td>{{ $p->detailPeminjaman()->count() }}</td>
@@ -82,9 +88,9 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr>
+                            {{-- <tr>
                                 <td colspan="7" class="text-center">Belum ada pengajuan peminjaman.</td>
-                            </tr>
+                            </tr> --}}
                         @endforelse
                     </tbody>
                 </table>
@@ -95,3 +101,21 @@
         </div>
     </div>
 @endsection
+
+@push('scripts')
+    <script>
+        $(document).ready(function() {
+            // Hanya inisialisasi DataTables jika ada data
+            if ($('#peminjamanTable tbody tr').length > 1) {
+                $('#peminjamanTable').DataTable({
+                    responsive: true,
+                    // Menonaktifkan fitur bawaan DataTables yang mungkin berkonflik dengan paginasi Laravel
+                    paging: true,
+                    ordering: true,
+                    info: true,
+                    searching: true
+                });
+            }
+        });
+    </script>
+@endpush

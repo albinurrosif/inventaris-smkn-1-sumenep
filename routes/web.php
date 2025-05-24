@@ -14,7 +14,11 @@ use App\Http\Controllers\RuanganController;
 use App\Http\Controllers\StokOpnameController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\KategoriBarangController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\BarangQrCodeController;
+use App\Http\Controllers\ArsipBarangController;
+use Illuminate\Http\Request;
 
 // New Peminjaman Controllers (from new version)
 use App\Http\Controllers\PeminjamanGuruController;
@@ -76,17 +80,21 @@ Route::middleware('auth')->group(function () {
     Route::middleware('isGuru')->group(function () {
         Route::get('/guru/dashboard', [DashboardController::class, 'guru'])->name('guru.dashboard');
 
-        // Peminjaman Routes for Guru (from new version with PeminjamanGuruController)
-        Route::prefix('guru/peminjaman')->group(function () {
-            Route::get('/', [PeminjamanGuruController::class, 'index'])->name('guru.peminjaman.index');
-            Route::get('/create', [PeminjamanGuruController::class, 'create'])->name('guru.peminjaman.create');
-            Route::post('/', [PeminjamanGuruController::class, 'store'])->name('guru.peminjaman.store');
-            Route::get('/{id}', [PeminjamanGuruController::class, 'show'])->name('guru.peminjaman.show');
-            Route::delete('/{id}', [PeminjamanGuruController::class, 'destroy'])->name('guru.peminjaman.destroy');
+        // Peminjaman Routes for Guru (using PeminjamanGuruController)
+        Route::prefix('guru')->group(function () {
+            Route::get('/peminjaman', [PeminjamanGuruController::class, 'index'])->name('guru.peminjaman.index');
+            Route::get('/peminjaman/create', [PeminjamanGuruController::class, 'create'])->name('guru.peminjaman.create');
+            Route::post('/peminjaman', [PeminjamanGuruController::class, 'store'])->name('guru.peminjaman.store');
+            Route::get('/peminjaman/{id}', [PeminjamanGuruController::class, 'show'])->name('guru.peminjaman.show');
+            Route::delete('/peminjaman/{id}', [PeminjamanGuruController::class, 'destroy'])->name('guru.peminjaman.destroy');
             Route::get('/berlangsung', [PeminjamanGuruController::class, 'peminjamanBerlangsung'])->name('guru.peminjaman.berlangsung');
-            Route::post('/{id}/ajukan-pengembalian', [PeminjamanGuruController::class, 'ajukanPengembalian'])->name('guru.peminjaman.ajukanPengembalian');
-            Route::post('/{id}/ajukan-perpanjangan', [PeminjamanGuruController::class, 'ajukanPerpanjangan'])->name('guru.peminjaman.ajukanPerpanjangan');
-            Route::get('/barang/{ruanganId}', [PeminjamanGuruController::class, 'getBarangByRuangan']);
+            Route::post('/peminjaman/{id}/ajukan-pengembalian', [PeminjamanGuruController::class, 'ajukanPengembalian'])->name('guru.peminjaman.ajukanPengembalian');
+            Route::post('/peminjaman/{id}/ajukan-perpanjangan', [PeminjamanGuruController::class, 'ajukanPerpanjangan'])->name('guru.peminjaman.ajukanPerpanjangan');
+            Route::get('/barang/{ruanganId}', [PeminjamanGuruController::class, 'getBarangByRuangan'])->name('guru.barang.byRuangan');
+
+
+
+
             Route::get('/riwayat', [PeminjamanGuruController::class, 'riwayat'])->name('guru.peminjaman.riwayat');
         });
     });
@@ -104,17 +112,49 @@ Route::middleware('auth')->group(function () {
         Route::resource('pemeliharaan', PemeliharaanController::class);
         Route::get('/operator/barang', [BarangController::class, 'indexOperator'])->name('operator.barang.index');
         Route::get('/operator/barang/export', [BarangController::class, 'exportOperator'])->name('operator.barang.export');
-        Route::get('/operator/pengembalian', [PeminjamanOperatorController::class, 'daftarPengembalianMenunggu'])->name('operator.pengembalian.index');
 
         // Peminjaman Routes for Operator (from new version with PeminjamanOperatorController)
-        Route::prefix('operator/peminjaman')->group(function () {
-            Route::get('/', [PeminjamanOperatorController::class, 'index'])->name('operator.peminjaman.index');
-            Route::get('/{id}', [PeminjamanOperatorController::class, 'show'])->name('operator.peminjaman.show');
-            Route::post('/{id}/setujui', [PeminjamanOperatorController::class, 'setujuiPeminjaman'])->name('operator.peminjaman.setujui');
-            Route::post('/{id}/tolak', [PeminjamanOperatorController::class, 'tolakPeminjaman'])->name('operator.peminjaman.tolak');
-            Route::get('/{id}/verifikasi-pengembalian', [PeminjamanOperatorController::class, 'tampilkanFormVerifikasiPengembalian'])->name('operator.peminjaman.verifikasi-pengembalian');
-            Route::post('/{id}/verifikasi-pengembalian', [PeminjamanOperatorController::class, 'prosesVerifikasiPengembalian'])->name('operator.peminjaman.verifikasi-pengembalian.store');
-            Route::get('/berlangsung', [PeminjamanOperatorController::class, 'peminjamanBerlangsungOperator'])->name('operator.peminjaman.berlangsung');
+        Route::prefix('operator')->group(function () {
+            // Daftar peminjaman untuk operator
+            Route::get('/peminjaman', [PeminjamanOperatorController::class, 'index'])->name('operator.peminjaman.index');
+
+            // Detail peminjaman
+            Route::get('/peminjaman/{id}', [PeminjamanOperatorController::class, 'show'])->name('operator.peminjaman.show');
+
+            // Export peminjaman (perlu disesuaikan dengan controller yang benar)
+            Route::get('/peminjaman/export', [BarangController::class, 'exportOperator'])->name('operator.peminjaman.export');
+
+            // Persetujuan/penolakan item individual
+            Route::post('/peminjaman/item/{detailId}/setujui', [PeminjamanOperatorController::class, 'setujuiItem'])
+                ->name('operator.peminjaman.setujui-item');
+            Route::post('/peminjaman/item/{detailId}/tolak', [PeminjamanOperatorController::class, 'tolakItem'])
+                ->name('operator.peminjaman.tolak-item');
+
+            // Persetujuan semua item dalam satu peminjaman
+            Route::post('/peminjaman/{peminjamanId}/setujui-semua', [PeminjamanOperatorController::class, 'setujuiSemuaItem'])
+                ->name('operator.peminjaman.setujui-semua');
+
+            // Konfirmasi pengambilan dan pengembalian item
+            Route::post('/peminjaman/konfirmasi-pengambilan', [PeminjamanOperatorController::class, 'konfirmasiPengambilanItem'])
+                ->name('operator.peminjaman.konfirmasi-pengambilan-item');
+            Route::post('/peminjaman/verifikasi-pengembalian', [PeminjamanOperatorController::class, 'verifikasiPengembalianItem'])
+                ->name('operator.peminjaman.verifikasi-pengembalian-item');
+
+            // Daftar peminjaman berlangsung
+            Route::get('/peminjaman-berlangsung', [PeminjamanOperatorController::class, 'peminjamanBerlangsungOperator'])
+                ->name('operator.peminjaman.berlangsung');
+
+            // Daftar pengembalian yang menunggu
+            Route::get('/pengembalian', [PeminjamanOperatorController::class, 'daftarPengembalianMenunggu'])
+                ->name('operator.peminjaman.pengembalian');
+
+            // Daftar item terlambat
+            Route::get('/item-terlambat', [PeminjamanOperatorController::class, 'daftarItemTerlambat'])
+                ->name('operator.peminjaman.item-terlambat');
+
+            // Laporan peminjaman
+            Route::get('/laporan-peminjaman', [PeminjamanOperatorController::class, 'laporanPeminjaman'])
+                ->name('operator.peminjaman.laporan');
         });
     });
 
@@ -130,11 +170,40 @@ Route::middleware('auth')->group(function () {
         Route::resource('users', UserController::class);
         Route::resource('rekap-stok', RekapStokController::class);
         Route::resource('barang-status', BarangStatusController::class);
-        Route::get('/laporan', [LaporanController::class, 'index'])->name('laporan.index');
 
         // Admin - Export & Import Barang (from old version)
         Route::get('/barang/export', [BarangController::class, 'export'])->name('barang.export');
         Route::post('/barang/import', [BarangController::class, 'import'])->name('barang.import');
+
+        Route::get('/barang-qr-code/export/excel', [BarangQrCodeController::class, 'exportExcel'])->name('barang-qr-code.export.excel');
+        Route::get('/barang-qr-code/export/pdf', [BarangQrCodeController::class, 'exportPdf'])->name('barang-qr-code.export.pdf');
+
+        Route::post('/barang/{barang}/qrcode', [BarangQrCodeController::class, 'store'])->name('barang.qrcode.store');
+        // Route::get('/barang', [BarangController::class, 'index'])->name('barang.index');
+        Route::get('/barang/create', [BarangController::class, 'create'])->name('barang.create');
+        Route::post('/barang', [BarangController::class, 'store'])->name('barang.store');
+        Route::get('/barang/{id}/input-serial', [BarangController::class, 'inputSerialForm'])->name('barang.input-serial');
+        Route::post('/barang/{id}/input-serial', [BarangController::class, 'storeSerialNumbers'])->name('barang.store-serial');
+        Route::get('/barang/{id}', [BarangController::class, 'show'])->name('barang.show');
+
+        Route::get('/barang/{id}/suggest-serials', [BarangController::class, 'suggestSerials'])->name('barang.suggest-serials');
+
+        Route::get('/barang/{id}/edit', [BarangController::class, 'edit'])->name('barang.edit');
+        Route::put('/barang/{id}', [BarangController::class, 'update'])->name('barang.update');
+
+        // Tambahkan route baru untuk wizard step 1 edit
+        Route::get('/barang/{id}/edit-step1', [BarangController::class, 'editStep1'])->name('barang.edit-step1');
+        Route::put('/barang/{id}/update-step1', [BarangController::class, 'updateStep1'])->name('barang.update-step1');
+
+        // Route untuk batal pembuatan
+        Route::delete('/barang/{id}/cancel', [BarangController::class, 'cancel'])->name('barang.cancel');
+        Route::delete('/barang/{id}/cancel-create', [BarangController::class, 'cancelCreate'])
+            ->name('barang.cancel-create');
+
+        Route::delete('/barang-qrcode/{id}', [BarangQrCodeController::class, 'destroy'])->name('barang-qrcode.destroy');
+        Route::get('/arsip-barang', [ArsipBarangController::class, 'index'])->name('arsip-barang.index');
+
+
 
         // Admin - Pengaturan
         Route::resource('pengaturan', PengaturanController::class)->only(['index']);
@@ -143,9 +212,20 @@ Route::middleware('auth')->group(function () {
         // Peminjaman Routes for Admin (from new version with PeminjamanAdminController)
         Route::prefix('admin/peminjaman')->group(function () {
             Route::get('/', [PeminjamanAdminController::class, 'index'])->name('admin.peminjaman.index');
+            Route::get('/export', [BarangController::class, 'exportOperator'])->name('admin.peminjaman.export');
+            Route::get('/overdue', [PeminjamanAdminController::class, 'exportOperator'])->name('admin.peminjaman.overdue');
+            Route::get('/report', [PeminjamanAdminController::class, 'exportOperator'])->name('admin.peminjaman.report');
+            Route::get('/exportPdf', [PeminjamanAdminController::class, 'exportPdf'])->name('admin.peminjaman.exportPdf');
+            Route::get('/exportPdf', [PeminjamanAdminController::class, 'exportExcel'])->name('admin.peminjaman.exportExcel');
+
+
+
             Route::get('/{id}', [PeminjamanAdminController::class, 'show'])->name('admin.peminjaman.show');
         });
+
+        Route::get('/ruangan/{id}', [RuanganController::class, 'show'])->name('ruangan.show');
     });
+
 
     /*
     |--------------------------------------------------------------------------
@@ -156,4 +236,28 @@ Route::middleware('auth')->group(function () {
         Route::resource('barang', BarangController::class);
         Route::resource('ruangan', RuanganController::class);
     });
+
+    /**
+     * Laravel Route for saving dark mode preference to session
+     * Add this to your web.php routes file
+     */
+
+    // Route for saving dark mode preference to session
+    Route::post('/set-dark-mode', function (Request $request) {
+        // Validate the request
+        $validated = $request->validate([
+            'darkMode' => 'required|string|in:dark,light',
+        ]);
+
+        // Store in session
+        session(['darkMode' => $validated['darkMode']]);
+
+        // Return success response
+        return response()->json(['success' => true, 'mode' => $validated['darkMode']]);
+    })->middleware('web');
+
+
+    Route::resource('kategori-barang', KategoriBarangController::class);
+    Route::get('kategori-barang/{kategoriBarang}/items', [KategoriBarangController::class, 'getItems'])->name('kategori-barang.items');
+    Route::get('kategori-barang-statistics', [KategoriBarangController::class, 'getStatistics'])->name('kategori-barang.statistics');
 });

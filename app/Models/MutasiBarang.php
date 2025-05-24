@@ -12,27 +12,35 @@ class MutasiBarang extends Model
     protected $table = 'mutasi_barang';
 
     protected $fillable = [
-        'id_barang',
-        'id_ruangan_lama',
-        'id_ruangan_baru',
-        'tanggal_mutasi'
+        'id_barang_qr_code',
+        'id_ruangan_asal',
+        'id_ruangan_tujuan',
+        'tanggal_mutasi',
+        'alasan_pemindahan',
+        'id_user_admin',
+        'surat_pemindahan_path',
+        'catatan',
     ];
 
-    // Relasi ke barang
-    public function barang()
+
+
+    public function barangQrCode()
     {
-        return $this->belongsTo(Barang::class, 'id_barang');
+        return $this->belongsTo(BarangQrCode::class, 'id_barang_qr_code');
     }
 
-    // Relasi ke ruangan lama
-    public function ruanganLama()
+    public function ruanganAsal()
     {
-        return $this->belongsTo(Ruangan::class, 'id_ruangan_lama');
+        return $this->belongsTo(Ruangan::class, 'id_ruangan_asal');
     }
 
-    // Relasi ke ruangan baru (bisa null)
-    public function ruanganBaru()
+    public function ruanganTujuan()
     {
-        return $this->belongsTo(Ruangan::class, 'id_ruangan_baru');
+        return $this->belongsTo(Ruangan::class, 'id_ruangan_tujuan');
+    }
+
+    public function admin()
+    {
+        return $this->belongsTo(User::class, 'id_user_admin');
     }
 }

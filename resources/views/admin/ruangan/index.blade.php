@@ -3,20 +3,6 @@
 @section('title', 'Data Ruangan')
 
 @section('content')
-    {{-- SweetAlert Notifications --}}
-    @if (session('success'))
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Berhasil',
-                    text: '{{ session('success') }}',
-                    timer: 3000,
-                    showConfirmButton: false
-                });
-            });
-        </script>
-    @endif
 
     <div class="container-fluid">
         <div class="row">
@@ -43,7 +29,7 @@
 
             <div class="card-body">
                 <div class="table-responsive">
-                    <table id="tabelRuangan" class="table table-bordered dt-responsive nowrap w-100">
+                    <table id="tabelRuangan" class="table table-bordered dt-responsive nowrap w-100 table-hover">
                         <thead class="table-light">
                             <tr>
                                 <th>No</th>
@@ -56,17 +42,20 @@
                             @foreach ($ruangan as $index => $item)
                                 <tr>
                                     <td>{{ $index + 1 }}</td>
-                                    <td>{{ $item->nama_ruangan }}</td>
+                                    <td>
+                                        <a href="{{ route('ruangan.show', $item->id) }}">{{ $item->nama_ruangan }}</a>
+                                    </td>
+
                                     <td>{{ $item->operator->name ?? '-' }}</td>
                                     <td>
                                         <div class="d-flex gap-2">
                                             <button type="button" class="btn btn-warning btn-sm btn-edit-ruangan"
                                                 data-ruangan='@json($item)'>
-                                                <i class="mdi mdi-pencil"></i>
+                                                <i class="fas fa-edit"></i>
                                             </button>
                                             <button type="button" class="btn btn-danger btn-sm btn-delete-ruangan"
                                                 data-id="{{ $item->id }}" data-nama="{{ $item->nama_ruangan }}">
-                                                <i class="mdi mdi-trash-can"></i>
+                                                <i class="fas fa-trash"></i>
                                             </button>
 
                                         </div>
@@ -140,6 +129,19 @@
                     });
                 });
             });
+        });
+
+        // Initialize DataTable
+        $('#tabelRuangan').DataTable({
+            responsive: true,
+            paging: true,
+            searching: true,
+            info: true,
+            ordering: true,
+            columnDefs: [{
+                targets: [3],
+                orderable: false
+            }]
         });
     </script>
 @endpush

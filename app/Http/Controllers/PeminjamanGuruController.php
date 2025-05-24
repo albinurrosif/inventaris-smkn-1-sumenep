@@ -75,8 +75,9 @@ class PeminjamanGuruController extends Controller
                 $peminjaman = Peminjaman::create([
                     'id_peminjam' => $user->id,
                     'tanggal_pengajuan' => now(),
-                    // Pastikan tanggal_pinjam dan tanggal_kembali ada dalam data
-                    'status_pengajuan' => 'menunggu_verifikasi', // Status awal
+                    'status_persetujuan' => 'menunggu_verifikasi', // Status awal
+                    'status_pengambilan' => 'belum_diambil', // Status pengambilan awal
+                    'status_pengembalian' => 'belum_dikembalikan', // Status pengembalian awal
                     'pengajuan_disetujui_oleh' => null,
                     'keterangan' => $keterangan, // Set the keterangan value from form
                 ]);
@@ -87,7 +88,9 @@ class PeminjamanGuruController extends Controller
                         'id_peminjaman' => $peminjaman->id,
                         'id_barang' => $item['barang_id'],
                         'jumlah_dipinjam' => $item['jumlah'],
-                        'status_pengembalian' => 'menunggu_verifikasi', // Gunakan nilai yang valid sesuai ENUM
+                        'status_persetujuan' => 'menunggu_verifikasi', // Status persetujuan awal
+                        'status_pengambilan' => 'belum_diambil', // Status pengambilan awal
+                        'status_pengembalian' => 'dipinjam', // Status pengembalian awal
                         'ruangan_asal' => $item['ruangan_asal'],
                         'ruangan_tujuan' => $item['ruangan_tujuan'],
                         'tanggal_pinjam' => $item['tanggal_pinjam'],
@@ -107,7 +110,6 @@ class PeminjamanGuruController extends Controller
             return back()->with('error', 'Terjadi kesalahan saat mengajukan peminjaman: ' . $th->getMessage());
         }
     }
-
 
     private function calculateDurasi($tanggalPinjam, $tanggalKembali)
     {
@@ -141,7 +143,7 @@ class PeminjamanGuruController extends Controller
             $detail = DetailPeminjaman::findOrFail($detailId);
             $peminjaman = Peminjaman::findOrFail($detail->id_peminjaman);
 
-            if ($peminjaman->status_pengajuan != 'menunggu_verifikasi') {
+            if ($peminjaman->status_persetujuan != 'menunggu_verifikasi') {
                 throw new \Exception('Hanya dapat menghapus item dari peminjaman dengan status menunggu_verifikasi.');
             }
 
@@ -155,6 +157,7 @@ class PeminjamanGuruController extends Controller
 
             $detail->delete();
 
+            // Jika semua detail peminjaman telah dihapus, hapus peminjaman
             if ($peminjaman->detailPeminjaman()->count() === 0) {
                 $peminjaman->delete();
                 DB::commit();
@@ -172,11 +175,11 @@ class PeminjamanGuruController extends Controller
     public function peminjamanBerlangsung()
     {
         $user = Auth::user();
+
         $peminjamanBerlangsung = Peminjaman::where('id_peminjam', $user->id)
-            ->where('status_pengajuan', 'dipinjam')
-            ->orWhere(function ($query) {
-                $query->where('status_pengajuan', 'menunggu_verifikasi')
-                    ->where('id_peminjam', Auth::id());
+            ->where(function ($query) {
+                $query->where('status_persetujuan', 'disetujui')
+                    ->orWhere('status_persetujuan', 'menunggu_verifikasi');
             })
             ->with(['detailPeminjaman.barang', 'detailPeminjaman.ruanganTujuan'])
             ->paginate(10, ['*'], 'peminjamanBerlangsungPage');
@@ -189,7 +192,7 @@ class PeminjamanGuruController extends Controller
             ->with(['detailPeminjaman.barang', 'detailPeminjaman.ruanganTujuan'])
             ->paginate(10, ['*'], 'peminjamanTerlambatPage');
 
-        return view('guru.peminjaman.berlangsung', compact('peminjamanBerlangsung', 'peminjamanTerlambat'));
+        return view('guru.peminjaman.sedang-berlangsung', compact('peminjamanBerlangsung', 'peminjamanTerlambat'));
     }
 
     public function ajukanPengembalian($id)
@@ -203,8 +206,8 @@ class PeminjamanGuruController extends Controller
                 throw new \Exception("Pengembalian hanya dapat diajukan untuk item yang sedang dipinjam.");
             }
 
-            $detailPeminjaman->status_pengembalian = 'menunggu_verifikasi';
-            $detailPeminjaman->save();
+            // Menggunakan metode yang ada di model DetailPeminjaman
+            $detailPeminjaman->ajukanPengembalian();
 
             DB::commit();
 
@@ -230,8 +233,13 @@ class PeminjamanGuruController extends Controller
                 throw new \Exception("Item ini tidak dapat diperpanjang.");
             }
 
-            $detailPeminjaman->status_pengembalian = 'diajukan'; // Status perpanjangan diajukan
+            // Ubah status pengajuan perpanjangan
+            $detailPeminjaman->status_pengembalian = 'menunggu_verifikasi';
+            $detailPeminjaman->diperpanjang = true; // Menandai bahwa ini adalah permintaan perpanjangan
             $detailPeminjaman->save();
+
+            // Update status peminjaman induk
+            $detailPeminjaman->peminjaman->updateStatusPengembalian();
 
             DB::commit();
 
