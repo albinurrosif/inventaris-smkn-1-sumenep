@@ -24,7 +24,7 @@ return new class extends Migration
             $table->timestamp('tanggal_ditolak')->nullable();
             $table->timestamp('tanggal_semua_diambil')->nullable();
             $table->timestamp('tanggal_selesai')->nullable();
-            $table->timestamp('tanggal_harus_kembali');
+            $table->timestamp('tanggal_harus_kembali')->nullable();
 
             // Kolom tambahan sesuai model dan standar SIMA
             $table->date('tanggal_rencana_pinjam')->nullable();

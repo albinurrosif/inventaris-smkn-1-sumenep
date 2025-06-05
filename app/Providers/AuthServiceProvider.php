@@ -26,6 +26,8 @@ use App\Models\RekapStok;
 use App\Policies\RekapStokPolicy;
 use App\Models\LogAktivitas;
 use App\Policies\LogAktivitasPolicy;
+use App\Models\DetailPeminjaman;
+use App\Policies\DetailPeminjamanPolicy;
 
 
 
@@ -55,6 +57,7 @@ class AuthServiceProvider extends ServiceProvider
         RekapStok::class => RekapStokPolicy::class,
         KategoriBarang::class => KategoriBarangPolicy::class,
         Peminjaman::class => PeminjamanPolicy::class,
+        DetailPeminjaman::class => DetailPeminjaman::class,
         User::class => UserPolicy::class,
         LogAktivitas::class => LogAktivitasPolicy::class,
 
