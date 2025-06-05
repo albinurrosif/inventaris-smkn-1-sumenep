@@ -1,629 +1,1025 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers; // Sesuaikan dengan namespace Anda
 
+use App\Http\Controllers\Controller;
 use App\Models\Barang;
 use App\Models\BarangQrCode;
 use App\Models\Ruangan;
+use App\Models\User;
+use App\Models\LogAktivitas;
+use App\Models\ArsipBarang;
+use App\Models\MutasiBarang;
+use App\Models\BarangStatus; // Pastikan ini di-use
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
-use SimpleSoftwareIO\QrCode\Facades\QrCode;
-use App\Exports\Barang\BarangQrCodeExportExcel;
-use App\Exports\Barang\BarangQrCodeExportPdf;
-use Maatwebsite\Excel\Facades\Excel;
-use App\Models\KategoriBarang;
-use App\Models\ArsipBarang;
-use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\View\View;
+use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Barryvdh\DomPDF\Facade\Pdf as PDF;
+use SimpleSoftwareIO\QrCode\Facades\QrCode as GeneratorQrCode;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Str;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 
 class BarangQrCodeController extends Controller
 {
+    use AuthorizesRequests;
+
     /**
-     * Display a listing of the resource.
+     * Menampilkan daftar semua unit barang dengan filter dan paginasi.
      */
-    public function index(Request $request)
+    public function index(Request $request): View
     {
+        $this->authorize('viewAny', BarangQrCode::class);
         $user = Auth::user();
-        $barangId = $request->get('id_barang');
-        $ruanganId = $request->get('id_ruangan');
-        $status = $request->get('status');
-        $keadaan_barang = $request->get('keadaan_barang');
+        /** @var \App\Models\User $user */
 
-        // Base query dengan eager loading - UNIT BASED
-        $qrCodes = BarangQrCode::with(['barang', 'barang.kategori', 'ruangan'])
-            ->when($barangId, function ($query, $barangId) {
-                return $query->where('id_barang', $barangId);
-            })
-            ->when($ruanganId, function ($query, $ruanganId) {
-                return $query->where('id_ruangan', $ruanganId);
-            })
-            ->when($status, function ($query, $status) {
-                return $query->where('status', $status);
-            })
-            ->when($keadaan_barang, function ($query, $keadaan_barang) {
-                return $query->where('keadaan_barang', $keadaan_barang);
+        $qrCodesQuery = BarangQrCode::with(['barang.kategori', 'ruangan', 'pemegangPersonal'])
+            ->filter($request); // Menggunakan local scope 'filter' dari model
+
+        if ($user->hasRole([User::ROLE_OPERATOR])) {
+            $ruanganIds = $user->ruanganYangDiKelola()->pluck('id');
+            // Operator melihat barang di ruangannya ATAU barang yang belum punya ruangan (mungkin baru atau personal)
+            // ATAU barang yang dipegang personal (jika kebijakan memperbolehkan operator melihat ini)
+            $qrCodesQuery->where(function ($query) use ($ruanganIds) {
+                $query->whereIn('id_ruangan', $ruanganIds)
+                    ->orWhereNull('id_ruangan') // Barang baru/belum ditempatkan
+                    ->orWhereNotNull('id_pemegang_personal'); // Barang dipegang personal
             });
-
-        // Filter berdasarkan role pengguna - UNIT BASED
-        if ($user->role === 'Operator') {
-            $ruanganYangDiKelola = Ruangan::where('id_operator', $user->id)->pluck('id');
-            $qrCodes = $qrCodes->whereIn('id_ruangan', $ruanganYangDiKelola);
         }
 
-        $qrCodes = $qrCodes->paginate(15);
+        $qrCodes = $qrCodesQuery->latest()->paginate(15)->withQueryString();
 
-        // Data untuk filter
         $barangList = Barang::orderBy('nama_barang')->get();
-        $ruanganList = $user->role === 'Operator'
-            ? Ruangan::where('id_operator', $user->id)->orderBy('nama_ruangan')->get()
+        $ruanganList = $user->hasRole([User::ROLE_OPERATOR])
+            ? $user->ruanganYangDiKelola()->orderBy('nama_ruangan')->get()
             : Ruangan::orderBy('nama_ruangan')->get();
         $statusOptions = BarangQrCode::getValidStatus();
-        $keadaan_barangOptions = BarangQrCode::getValidKeadaanBarang();
+        $kondisiOptions = BarangQrCode::getValidKondisi();
 
-        if ($user->role === 'Admin') {
-            return view('admin.barang_qr_code.index', compact(
-                'qrCodes',
-                'barangList',
-                'ruanganList',
-                'statusOptions',
-                'keadaan_barangOptions',
-                'barangId',
-                'ruanganId',
-                'status',
-                'keadaan_barang'
-            ));
-        } else {
-            return view('operator.barang_qr_code.index', compact(
-                'qrCodes',
-                'barangList',
-                'ruanganList',
-                'statusOptions',
-                'keadaan_barangOptions',
-                'barangId',
-                'ruanganId',
-                'status',
-                'keadaan_barang'
-            ));
-        }
+        return view('admin.barang_qr_code.index', compact(
+            'qrCodes',
+            'barangList',
+            'ruanganList',
+            'statusOptions',
+            'kondisiOptions',
+            'request'
+        ));
     }
 
     /**
-     * Langkah 1: Form input data barang utama (AGREGAT)
+     * Menampilkan form untuk menambahkan satu atau beberapa unit fisik baru.
      */
-    public function create()
+    public function create(Request $request): View|RedirectResponse
     {
+        $barangId = $request->query('barang_id');
+        if (!$barangId) {
+            return redirect()->route('barang.index')->with('error', 'Jenis Barang Induk tidak ditemukan atau tidak dipilih.');
+        }
+
+        $barang = Barang::find($barangId);
+        if (!$barang) {
+            return redirect()->route('barang.index')->with('error', "Jenis Barang Induk dengan ID {$barangId} tidak ditemukan.");
+        }
+
         $user = Auth::user();
-        $kategoriList = KategoriBarang::orderBy('nama_kategori')->get();
-        $ruanganList = $user->role === 'Operator'
-            ? Ruangan::where('id_operator', $user->id)->orderBy('nama_ruangan')->get()
+        /** @var \App\Models\User $user */
+
+        if (!$user->hasAnyRole([User::ROLE_ADMIN, User::ROLE_OPERATOR])) {
+            abort(403, 'Anda tidak memiliki izin untuk menambahkan unit barang.');
+        }
+
+        if (!$barang->menggunakan_nomor_seri) {
+            return redirect()->route('barang.show', $barang->id)
+                ->with('warning', "Jenis barang '{$barang->nama_barang}' tidak dikelola per unit individual (tidak menggunakan nomor seri).");
+        }
+
+        $ruanganList = $user->hasRole([User::ROLE_OPERATOR])
+            ? $user->ruanganYangDiKelola()->orderBy('nama_ruangan')->get()
             : Ruangan::orderBy('nama_ruangan')->get();
 
-        if ($user->role === 'Admin') {
-            return view('admin.barang.create_step1', compact('kategoriList', 'ruanganList'));
-        } else {
-            return view('operator.barang.create_step1', compact('kategoriList', 'ruanganList'));
-        }
+        $pemegangList = User::whereIn('role', [User::ROLE_GURU, User::ROLE_OPERATOR, User::ROLE_ADMIN])
+            ->orderBy('username')->get();
+
+        $kondisiOptions = BarangQrCode::getValidKondisi();
+        $jumlahUnit = filter_var($request->query('jumlah_unit', 1), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 1]]);
+
+        return view('admin.barang_qr_code.create_units', compact(
+            'barang',
+            'jumlahUnit',
+            'ruanganList',
+            'pemegangList',
+            'kondisiOptions'
+        ));
     }
 
-
     /**
-     * Proses form langkah 1 dan redirect ke langkah 2 untuk input unit
+     * Menyimpan satu atau beberapa unit fisik baru (BarangQrCode) ke database.
      */
-    public function storeStep1(Request $request)
+    public function store(Request $request): RedirectResponse
     {
-        // Validasi input form langkah 1 - DATA AGREGAT
+        $barangId = $request->input('id_barang');
+        $barang = Barang::find($barangId);
+
+        if (!$barang) {
+            return redirect()->route('barang.index')->with('error', 'Jenis Barang Induk tidak valid.');
+        }
+        if (!$barang->menggunakan_nomor_seri) {
+            return redirect()->route('barang.show', $barang->id)->with('error', 'Tidak dapat menambahkan unit individual karena jenis barang ini tidak menggunakan nomor seri.');
+        }
+
+        $userPencatat = Auth::user();
+        /** @var \App\Models\User $userPencatat */
+        if (!$userPencatat->hasAnyRole([User::ROLE_ADMIN, User::ROLE_OPERATOR])) {
+            abort(403, 'Anda tidak memiliki izin untuk menyimpan unit barang.');
+        }
+
         $validated = $request->validate([
-            'nama_barang' => 'required|string|max:255',
-            'kode_barang' => 'required|string|max:50',
-            'merk_model' => 'nullable|string|max:100',
-            'ukuran' => 'nullable|string|max:50',
-            'bahan' => 'nullable|string|max:50',
-            'tahun_pembuatan_pembelian' => 'nullable|integer',
-            'jumlah_barang' => 'required|integer|min:1',
-            'harga_beli' => 'nullable|numeric',
-            'sumber' => 'nullable|string|max:100',
-            'keadaan_barang' => 'required|string|in:Baik,Kurang Baik,Rusak Berat',
-            'menggunakan_nomor_seri' => 'required|boolean',
-            'id_kategori' => 'required|exists:kategori_barang,id',
-            'id_ruangan' => 'required|exists:ruangan,id',
+            'id_barang' => 'required|exists:barangs,id',
+            'units' => 'required|array|min:1',
+            'units.*.id_ruangan' => ['nullable', 'exists:ruangans,id'],
+            'units.*.id_pemegang_personal' => [
+                'nullable',
+                'exists:users,id',
+                function ($attribute, $value, $fail) use ($request) {
+                    $index = explode('.', $attribute)[1];
+                    $ruanganValue = $request->input("units.{$index}.id_ruangan");
+                    if ($value && $ruanganValue) {
+                        $fail('Unit ke-' . ($index + 1) . ' tidak bisa ditempatkan di ruangan dan dipegang personal sekaligus.');
+                    }
+                    // Kebijakan opsional: Barang baru harus punya lokasi atau pemegang.
+                    // if (!$value && !$ruanganValue) {
+                    //     $fail('Unit ke-' . ($index + 1) . ' harus ditempatkan di ruangan atau dipegang oleh personal.');
+                    // }
+                },
+            ],
+            'units.*.no_seri_pabrik' => [
+                'nullable',
+                'string',
+                'max:255',
+                Rule::unique('barang_qr_codes', 'no_seri_pabrik')->whereNull('deleted_at'),
+                function ($attribute, $value, $fail) use ($request) {
+                    if (empty($value)) return;
+                    $currentIndex = explode('.', $attribute)[1];
+                    $allSerialsInput = $request->input('units');
+                    foreach ($allSerialsInput as $index => $unitInput) {
+                        if ($index != $currentIndex && !empty($unitInput['no_seri_pabrik']) && $unitInput['no_seri_pabrik'] === $value) {
+                            $fail('Nomor Seri Pabrik duplikat dalam pengajuan (Unit ke-' . ($currentIndex + 1) . ' & ' . ($index + 1) . ').');
+                            return;
+                        }
+                    }
+                },
+            ],
+            'units.*.harga_perolehan_unit' => 'required|numeric|min:0',
+            'units.*.tanggal_perolehan_unit' => 'required|date|before_or_equal:today',
+            'units.*.sumber_dana_unit' => 'nullable|string|max:255',
+            'units.*.no_dokumen_perolehan_unit' => 'nullable|string|max:255',
+            'units.*.kondisi' => ['required', Rule::in(BarangQrCode::getValidKondisi())],
+            'units.*.deskripsi_unit' => 'nullable|string|max:1000',
+        ], [
+            'units.*.id_ruangan.exists' => 'Ruangan unit ke-:position tidak valid.',
+            'units.*.id_pemegang_personal.exists' => 'Pemegang personal unit ke-:position tidak valid.',
+            'units.*.no_seri_pabrik.unique' => 'No. Seri Pabrik unit ke-:position sudah ada.',
+            'units.*.harga_perolehan_unit.required' => 'Harga unit ke-:position wajib.',
+            'units.*.tanggal_perolehan_unit.required' => 'Tgl. perolehan unit ke-:position wajib.',
+            'units.*.kondisi.required' => 'Kondisi unit ke-:position wajib.',
         ]);
 
-        // Create barang without id_ruangan
-        $barangData = $request->except('id_ruangan');
-        $barang = Barang::create($barangData);
-
-        // Store ruangan in session for Step 2
-        session([
-            'incomplete_barang_id' => $barang->id,
-            'target_ruangan_id' => $validated['id_ruangan']
-        ]);
-
-        // Selalu redirect ke langkah 2 untuk input unit dengan ruangan
-        return redirect()->route('barang.create.step2', $barang->id)
-            ->with('success', 'Data barang berhasil disimpan. Silahkan lanjutkan dengan pengaturan unit.');
-    }
-
-    /**
-     * Langkah 2: Form input unit dengan ruangan dan nomor seri
-     */
-    public function createStep2($barangId)
-    {
-        $barang = Barang::findOrFail($barangId);
-        $user = Auth::user();
-        $ruangan = Ruangan::find(session('target_ruangan_id'));
-
-        // Cek apakah sudah ada unit yang dibuat
-        $existingUnits = $barang->qrCodes()->count();
-        if ($existingUnits >= $barang->jumlah_barang) {
-            return redirect()->route('barang.index')
-                ->with('info', 'Barang ini sudah memiliki semua unit yang diperlukan.');
-        }
-
-        // Ruangan berdasarkan role
-        $ruanganList = $user->role === 'Operator'
-            ? Ruangan::where('id_operator', $user->id)->orderBy('nama_ruangan')->get()
-            : Ruangan::orderBy('nama_ruangan')->get();
-
-        if ($user->role === 'Admin') {
-            return view('admin.barang.create_step2', compact('barang', 'ruanganList'));
-        } else {
-            return view('operator.barang.create_step2', compact('barang', 'ruanganList'));
-        }
-    }
-
-    /**
-     * Proses form langkah 2: Simpan unit dengan ruangan dan generate QR codes
-     */
-    public function storeStep2(Request $request, $barangId)
-    {
-        $barang = Barang::findOrFail($barangId);
-        $user = Auth::user();
-
-        // Validasi input unit
-        $validated = $request->validate([
-            'units' => 'required|array|size:' . $barang->jumlah_barang,
-            'units.*.id_ruangan' => 'required|exists:ruangan,id',
-            'units.*.no_seri_pabrik' => $barang->menggunakan_nomor_seri
-                ? 'required|string|max:100|distinct|unique:barang_qr_code,no_seri_pabrik'
-                : 'nullable',
-        ]);
-
-        // Validasi hak akses untuk operator
-        if ($user->role === 'Operator') {
-            $ruanganYangDiKelola = Ruangan::where('id_operator', $user->id)->pluck('id')->toArray();
-            foreach ($validated['units'] as $unit) {
-                if (!in_array($unit['id_ruangan'], $ruanganYangDiKelola)) {
-                    return redirect()->back()->with('error', 'Anda tidak memiliki izin untuk menambah unit di salah satu ruangan yang dipilih.');
-                }
-            }
-        }
-
-        DB::transaction(function () use ($barang, $validated) {
-            $createdQrCodes = [];
+        DB::beginTransaction();
+        try {
+            $createdUnitsCount = 0;
+            $pencatatId = $userPencatat->id;
 
             foreach ($validated['units'] as $unitData) {
-                // Generate nomor seri jika tidak menggunakan input manual
-                $noSeri = $barang->menggunakan_nomor_seri
-                    ? $unitData['no_seri_pabrik']
-                    : $barang->generateUniqueSerialNumber();
+                $newUnit = BarangQrCode::createWithQrCodeImage(
+                    idBarang: $barang->id,
+                    idRuangan: $unitData['id_ruangan'] ?? null,
+                    noSeriPabrik: $unitData['no_seri_pabrik'] ?? null,
+                    hargaPerolehanUnit: $unitData['harga_perolehan_unit'],
+                    tanggalPerolehanUnit: $unitData['tanggal_perolehan_unit'],
+                    sumberDanaUnit: $unitData['sumber_dana_unit'] ?? null,
+                    noDokumenPerolehanUnit: $unitData['no_dokumen_perolehan_unit'] ?? null,
+                    kondisi: $unitData['kondisi'],
+                    status: BarangQrCode::STATUS_TERSEDIA,
+                    deskripsiUnit: $unitData['deskripsi_unit'] ?? null,
+                    idPemegangPersonal: $unitData['id_pemegang_personal'] ?? null,
+                    idPemegangPencatat: $pencatatId
+                );
 
-                // Buat unit QR code
-                $qrCode = BarangQrCode::create([
-                    'id_barang' => $barang->id,
-                    'id_ruangan' => $unitData['id_ruangan'],
-                    'no_seri_pabrik' => $noSeri,
-                    'keadaan_barang' => $barang->keadaan_barang,
-                    'status' => BarangQrCode::STATUS_TERSEDIA,
+                LogAktivitas::create([
+                    'id_user' => $userPencatat->id,
+                    'aktivitas' => 'Tambah Unit Barang',
+                    'deskripsi' => "Menambahkan unit: {$newUnit->kode_inventaris_sekolah} untuk barang: {$barang->nama_barang}",
+                    'model_terkait' => BarangQrCode::class,
+                    'id_model_terkait' => $newUnit->id,
+                    'data_baru' => $newUnit->toJson(),
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
                 ]);
-
-                // Generate QR Code image
-                $qrImage = QrCode::format('svg')
-                    ->size(300)
-                    ->generate($noSeri);
-
-                $filename = 'qr_codes/' . $noSeri . '.svg';
-                Storage::disk('public')->put($filename, $qrImage);
-
-                // Update path QR code
-                $qrCode->update(['qr_path' => $filename]);
-                $createdQrCodes[] = $qrCode;
+                $createdUnitsCount++;
             }
-
-            // Sync jumlah barang otomatis
-            $barang->syncQrCodeCount();
-        });
-
-        return redirect()->route('barang.index')
-            ->with('success', 'Barang berhasil ditambahkan dengan ' . count($validated['units']) . ' unit QR code.');
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
-    {
-        $qrCode = BarangQrCode::with(['barang', 'barang.kategori', 'ruangan'])->findOrFail($id);
-        $user = Auth::user();
-
-        // Cek izin pengguna - UNIT BASED
-        if ($user->role === 'Operator') {
-            $ruanganYangDiKelola = Ruangan::where('id_operator', $user->id)->pluck('id');
-            if (!in_array($qrCode->id_ruangan, $ruanganYangDiKelola->toArray())) {
-                abort(403, 'Anda tidak memiliki izin untuk melihat QR Code barang ini.');
-            }
-        }
-
-        if ($user->role === 'Admin') {
-            return view('admin.barang_qr_code.show', compact('qrCode'));
-        } else {
-            return view('operator.barang_qr_code.show', compact('qrCode'));
+            DB::commit();
+            return redirect()->route('barang.show', $barang->id)->with('success', "{$createdUnitsCount} unit barang berhasil ditambahkan untuk '{$barang->nama_barang}'.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Gagal menyimpan unit BarangQrCode (Barang ID {$barang->id}): " . $e->getMessage(), ['exception' => $e]);
+            return redirect()->back()->with('error', 'Gagal menyimpan unit: ' . (config('app.debug') ? $e->getMessage() : 'Terjadi kesalahan sistem.'))->withInput();
         }
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-        $qrCode = BarangQrCode::with(['barang', 'ruangan'])->findOrFail($id);
-        $user = Auth::user();
 
-        // Cek izin pengguna - UNIT BASED
-        if ($user->role === 'Operator') {
-            $ruanganYangDiKelola = Ruangan::where('id_operator', $user->id)->pluck('id');
-            if (!in_array($qrCode->id_ruangan, $ruanganYangDiKelola->toArray())) {
-                abort(403, 'Anda tidak memiliki izin untuk mengedit QR Code barang ini.');
-            }
-            $ruanganList = Ruangan::whereIn('id', $ruanganYangDiKelola)->orderBy('nama_ruangan')->get();
-        } else {
-            $ruanganList = Ruangan::orderBy('nama_ruangan')->get();
+    /**
+     * Menampilkan detail lengkap (KIB) dari satu unit barang.
+     * Juga menyiapkan data untuk modal-modal aksi.
+     */
+    public function show(BarangQrCode $barangQrCode): View
+    {
+        $this->authorize('view', $barangQrCode);
+
+        $qrCode = $barangQrCode->load([
+            'barang.kategori',
+            'ruangan', // Eager load ruangan jika ada
+            'pemegangPersonal', // Eager load pemegangPersonal jika ada
+            'mutasiDetails' => fn($q) => $q->with(['ruanganAsal', 'ruanganTujuan', 'admin'])->orderBy('tanggal_mutasi', 'desc'),
+            'peminjamanDetails' => fn($q) => $q->with(['peminjaman.guru'])->orderBy('created_at', 'desc'),
+            'pemeliharaanRecords' => fn($q) => $q->with(['pengaju', 'operatorPengerjaan', 'penyetuju'])->orderBy('tanggal_pengajuan', 'desc'),
+            'barangStatuses' => fn($q) => $q->with(['userPencatat', 'ruanganSebelumnya', 'ruanganSesudahnya', 'pemegangPersonalSebelumnya', 'pemegangPersonalSesudahnya'])->orderBy('tanggal_pencatatan', 'desc'),
+            'arsip'
+        ]);
+
+        // Data umum yang mungkin dibutuhkan oleh beberapa modal atau halaman KIB itu sendiri
+        $ruanganListAll = Ruangan::orderBy('nama_ruangan', 'asc')->get();
+        $kondisiOptionsAll = BarangQrCode::getValidKondisi();
+        $statusOptionsAll = BarangQrCode::getValidStatus();
+        $jenisPenghapusanOptions = ArsipBarang::getValidJenisPenghapusan();
+        $user = Auth::user();
+        /** @var \App\Models\User $user */
+
+        // 1. Data untuk Modal "Serahkan ke Personal"
+        // Pengguna yang bisa dipilih untuk diserahi barang (semua user aktif)
+        $eligibleUsersForAssign = User::orderBy('username', 'asc')->get();
+
+        // 2. Data untuk Modal "Kembalikan ke Ruangan"
+        // Daftar ruangan tujuan, difilter untuk Operator
+        $ruangansQueryForReturn = Ruangan::query();
+        if ($user && $user->hasRole(User::ROLE_OPERATOR)) {
+            $ruanganOperatorIds = $user->ruanganYangDiKelola()->pluck('id');
+            $ruangansQueryForReturn->whereIn('id', $ruanganOperatorIds);
+        }
+        $ruangansForReturnForm = $ruangansQueryForReturn->orderBy('nama_ruangan', 'asc')->get();
+
+        // 3. Data untuk Modal "Transfer Personal"
+        // Pengguna yang bisa dipilih untuk menerima transfer (semua user aktif kecuali pemegang saat ini)
+        $eligibleUsersForTransfer = collect(); // Default koleksi kosong
+        if ($qrCode->id_pemegang_personal) {
+            $eligibleUsersForTransfer = User::where('id', '!=', $qrCode->id_pemegang_personal)
+                ->orderBy('username', 'asc')
+                ->get();
         }
 
+
+        return view('admin.barang_qr_code.show', compact(
+            'qrCode',
+            'ruanganListAll', // Untuk modal mutasi
+            // 'userListAll', // Bisa dihapus jika sudah ada yang lebih spesifik di bawah
+            'kondisiOptionsAll', // Untuk modal edit unit
+            'statusOptionsAll', // Untuk modal edit unit
+            'jenisPenghapusanOptions', // Untuk modal arsip
+            'eligibleUsersForAssign',   // Untuk modal serahkan ke personal
+            'ruangansForReturnForm',    // Untuk modal kembalikan ke ruangan
+            'eligibleUsersForTransfer'  // Untuk modal transfer personal
+        ));
+    }
+
+    /**
+     * Menampilkan form untuk mengedit detail atribut dasar unit barang.
+     * Tidak untuk transisi lokasi/pemegang.
+     */
+    public function edit(BarangQrCode $barangQrCode): View
+    {
+        $this->authorize('update', $barangQrCode);
         $statusOptions = BarangQrCode::getValidStatus();
-        $keadaan_barangOptions = BarangQrCode::getValidKeadaanBarang();
+        $kondisiOptions = BarangQrCode::getValidKondisi();
+        // Untuk form edit ini, kita tidak menyediakan pilihan ruangan atau pemegang personal
+        // karena transisi tersebut memiliki alur tersendiri.
 
-        if ($user->role === 'Admin') {
-            return view('admin.barang_qr_code.edit', compact('qrCode', 'ruanganList', 'statusOptions', 'keadaan_barangOptions'));
-        } else {
-            return view('operator.barang_qr_code.edit', compact('qrCode', 'ruanganList', 'statusOptions', 'keadaan_barangOptions'));
-        }
+        return view('admin.barang_qr_code.edit', compact('barangQrCode', 'statusOptions', 'kondisiOptions'));
     }
 
     /**
-     * Update the specified resource in storage.
+     * Memperbarui detail atribut dasar unit barang di database.
+     * Metode ini TIDAK untuk mengubah id_ruangan atau id_pemegang_personal.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, BarangQrCode $barangQrCode): RedirectResponse
     {
-        $qrCode = BarangQrCode::findOrFail($id);
+        $this->authorize('update', $barangQrCode);
+        $userPencatat = Auth::user();
+        /** @var \App\Models\User $userPencatat */
 
         $validated = $request->validate([
-            'id_ruangan' => 'required|exists:ruangan,id',
-            'no_seri_pabrik' => 'required|string|max:100|unique:barang_qr_code,no_seri_pabrik,' . $id,
-            'keadaan_barang' => 'required|in:' . implode(',', BarangQrCode::getValidKeadaanBarang()),
-            'status' => 'required|in:' . implode(',', BarangQrCode::getValidStatus()),
-            'keterangan' => 'nullable|string',
+            'no_seri_pabrik' => ['nullable', 'string', 'max:255', Rule::unique('barang_qr_codes', 'no_seri_pabrik')->ignore($barangQrCode->id)->whereNull('deleted_at')],
+            'kode_inventaris_sekolah' => ['required', 'string', 'max:255', Rule::unique('barang_qr_codes', 'kode_inventaris_sekolah')->ignore($barangQrCode->id)->whereNull('deleted_at')],
+            'harga_perolehan_unit' => 'required|numeric|min:0',
+            'tanggal_perolehan_unit' => 'required|date|before_or_equal:today',
+            'sumber_dana_unit' => 'nullable|string|max:255',
+            'no_dokumen_perolehan_unit' => 'nullable|string|max:255',
+            'kondisi' => ['required', Rule::in(BarangQrCode::getValidKondisi())],
+            'status' => ['required', Rule::in(BarangQrCode::getValidStatus())], // Hati-hati jika status diubah di sini
+            'deskripsi_unit' => 'nullable|string|max:1000',
         ]);
 
-        $user = Auth::user();
+        $dataToUpdate = $validated;
+        $oldData = $barangQrCode->getRawOriginal(); // Mengambil data mentah sebelum di-fill
+        $originalForLog = collect($oldData)->only(array_keys($validated))->all(); // Hanya data lama dari field yang divalidasi
+        $oldQrPath = $barangQrCode->qr_path;
 
-        // Cek izin pengguna - UNIT BASED
-        if ($user->role === 'Operator') {
-            $ruanganYangDiKelola = Ruangan::where('id_operator', $user->id)->pluck('id')->toArray();
-
-            if (
-                !in_array($qrCode->id_ruangan, $ruanganYangDiKelola) ||
-                !in_array($validated['id_ruangan'], $ruanganYangDiKelola)
-            ) {
-                abort(403, 'Anda tidak memiliki izin untuk mengubah QR Code barang ini.');
+        if ($barangQrCode->kode_inventaris_sekolah !== $validated['kode_inventaris_sekolah']) {
+            if ($oldQrPath && Storage::disk('public')->exists($oldQrPath)) {
+                Storage::disk('public')->delete($oldQrPath);
             }
-        }
-
-        // Cek apakah nomor seri berubah
-        if ($qrCode->no_seri_pabrik !== $validated['no_seri_pabrik']) {
-            // Hapus file QR code lama
-            if ($qrCode->qr_path && Storage::disk('public')->exists($qrCode->qr_path)) {
-                Storage::disk('public')->delete($qrCode->qr_path);
+            $qrContent = $validated['kode_inventaris_sekolah'];
+            $directory = 'qr_codes';
+            if (!Storage::disk('public')->exists($directory)) {
+                Storage::disk('public')->makeDirectory($directory);
             }
-
-            // Generate QR code baru
-            $qrImage = QrCode::format('svg')
-                ->size(300)
-                ->generate($validated['no_seri_pabrik']);
-
-            $filename = 'qr_codes/' . $validated['no_seri_pabrik'] . '.svg';
+            $filename = $directory . '/' . Str::slug($qrContent . '-' . Str::random(5)) . '.svg'; // Tambah random untuk unik
+            $qrImage = GeneratorQrCode::format('svg')->size(200)->generate($qrContent);
             Storage::disk('public')->put($filename, $qrImage);
-            $validated['qr_path'] = $filename;
+            $dataToUpdate['qr_path'] = $filename;
         }
 
-        $qrCode->update($validated);
+        $barangQrCode->fill($dataToUpdate);
 
-        return redirect()->route('barang-qr-code.index')->with('success', 'QR Code barang berhasil diperbarui.');
-    }
+        if ($barangQrCode->isDirty()) {
+            $changedAttributes = $barangQrCode->getDirty();
+            $barangQrCode->save();
 
-    /**
-     * Remove the specified resource from storage (SOFT DELETE dengan ARSIP)
-     */
-    public function destroy(Request $request, $id)
-    {
-        $qrCode = BarangQrCode::findOrFail($id);
-        $barang = $qrCode->barang;
-        $user = Auth::user();
-
-        // Validasi hak akses - UNIT BASED
-        if ($user->role === 'Operator') {
-            $ruanganYangDiKelola = Ruangan::where('id_operator', $user->id)->pluck('id')->toArray();
-            if (!in_array($qrCode->id_ruangan, $ruanganYangDiKelola)) {
-                abort(403, 'Anda tidak memiliki izin untuk menghapus QR Code barang ini.');
-            }
-        }
-
-        // Validasi: tidak sedang dipinjam
-        if ($qrCode->status === BarangQrCode::STATUS_DIPINJAM) {
-            return redirect()->back()->with('error', 'QR Code barang sedang dipinjam dan tidak dapat dihapus.');
-        }
-
-        // Validasi input
-        $validated = $request->validate([
-            'alasan' => 'required|string|max:500',
-            'berita_acara' => 'nullable|file|mimes:pdf,doc,docx|max:2048',
-            'foto_bukti' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
-        ]);
-
-        DB::transaction(function () use ($qrCode, $barang, $validated, $user) {
-            // Proses upload file
-            $beritaAcaraPath = null;
-            $fotoBuktiPath = null;
-
-            if (request()->hasFile('berita_acara')) {
-                $beritaAcaraPath = request()->file('berita_acara')->store('arsip/berita_acara', 'public');
-            }
-
-            if (request()->hasFile('foto_bukti')) {
-                $fotoBuktiPath = request()->file('foto_bukti')->store('arsip/foto_bukti', 'public');
-            }
-
-            // Update data unit sebelum soft delete
-            $qrCode->update([
-                'alasan_penghapusan' => $validated['alasan'],
-                'berita_acara' => $beritaAcaraPath,
-                'foto_pendukung' => $fotoBuktiPath,
-                'deleted_by' => $user->id,
-            ]);
-
-            // Arsipkan unit
-            ArsipBarang::create([
-                'id_barang_qr_code' => $qrCode->id,
-                'id_barang' => $qrCode->id_barang,
-                'id_user' => $user->id,
-                'alasan' => $validated['alasan'],
-                'tanggal_dihapus' => now(),
-                'berita_acara_path' => $beritaAcaraPath,
-                'foto_bukti_path' => $fotoBuktiPath,
-            ]);
-
-            // Soft delete unit
-            $qrCode->delete();
-
-            // Sync jumlah barang
-            $barang->refresh();
-            $remainingUnits = $barang->qrCodes()->whereNull('deleted_at')->count();
-            $barang->update(['jumlah_barang' => $remainingUnits]);
-
-            // Jika semua unit dihapus, soft delete agregat juga
-            if ($remainingUnits === 0) {
-                // Arsipkan agregat
-                ArsipBarang::create([
-                    'id_barang' => $barang->id,
-                    'id_barang_qr_code' => null,
-                    'id_user' => $user->id,
-                    'alasan' => 'Otomatis: Semua unit telah dihapus',
-                    'tanggal_dihapus' => now(),
+            // Log BarangStatus jika kondisi atau status berubah
+            if (isset($changedAttributes['kondisi']) || isset($changedAttributes['status'])) {
+                BarangStatus::create([
+                    'id_barang_qr_code' => $barangQrCode->id,
+                    'id_user_pencatat' => $userPencatat->id,
+                    'tanggal_pencatatan' => now(),
+                    'kondisi_sebelumnya' => $oldData['kondisi'] ?? null,
+                    'kondisi_sesudahnya' => $barangQrCode->kondisi,
+                    'status_ketersediaan_sebelumnya' => $oldData['status'] ?? null,
+                    'status_ketersediaan_sesudahnya' => $barangQrCode->status,
+                    'id_ruangan_sebelumnya' => $barangQrCode->id_ruangan, // Tidak berubah oleh form ini
+                    'id_ruangan_sesudahnya' => $barangQrCode->id_ruangan,
+                    'id_pemegang_personal_sebelumnya' => $barangQrCode->id_pemegang_personal,
+                    'id_pemegang_personal_sesudahnya' => $barangQrCode->id_pemegang_personal,
+                    'deskripsi_kejadian' => 'Update detail atribut unit barang.',
                 ]);
-
-                // Soft delete agregat
-                $barang->update(['deleted_by' => $user->id]);
-                $barang->delete();
             }
-        });
 
-        return redirect()->back()->with('success', 'Unit berhasil dihapus dan diarsipkan.');
-    }
-
-    /**
-     * Restore unit yang sudah dihapus (untuk Admin)
-     */
-    public function restore($id)
-    {
-        if (Auth::user()->role !== 'Admin') {
-            abort(403, 'Hanya Admin yang dapat melakukan restore.');
+            LogAktivitas::create([
+                'id_user' => $userPencatat->id,
+                'aktivitas' => 'Update Unit Barang',
+                'deskripsi' => "Memperbarui unit: {$barangQrCode->kode_inventaris_sekolah}",
+                'model_terkait' => BarangQrCode::class,
+                'id_model_terkait' => $barangQrCode->id,
+                'data_lama' => json_encode(array_intersect_key($originalForLog, $changedAttributes)),
+                'data_baru' => json_encode($changedAttributes),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+            return redirect()->route('barang-qr-code.show', $barangQrCode->id)->with('success', 'Data unit barang berhasil diperbarui.');
         }
 
-        $qrCode = BarangQrCode::onlyTrashed()->findOrFail($id);
-        $barang = $qrCode->barang()->withTrashed()->first();
-
-        DB::transaction(function () use ($qrCode, $barang) {
-            // Restore unit
-            $qrCode->restore();
-            $qrCode->update([
-                'alasan_penghapusan' => null,
-                'berita_acara' => null,
-                'foto_pendukung' => null,
-                'deleted_by' => null,
-            ]);
-
-            // Restore agregat jika terhapus
-            if ($barang->trashed()) {
-                $barang->restore();
-                $barang->update(['deleted_by' => null]);
-            }
-
-            // Sync jumlah barang
-            $barang->syncQrCodeCount();
-
-            // Hapus dari arsip
-            ArsipBarang::where('id_barang_qr_code', $qrCode->id)->delete();
-        });
-
-        return redirect()->back()->with('success', 'Unit berhasil dipulihkan.');
+        return redirect()->route('barang-qr-code.show', $barangQrCode->id)->with('info', 'Tidak ada perubahan data.');
     }
 
     /**
-     * Mutasi unit ke ruangan lain
+     * Menampilkan form untuk menyerahkan unit barang ke pemegang personal.
      */
-    public function mutasi(Request $request, $id)
+
+    public function showAssignPersonalForm(BarangQrCode $barangQrCode): View|RedirectResponse|JsonResponse // Diperbarui
     {
-        $qrCode = BarangQrCode::findOrFail($id);
-        $user = Auth::user();
+        $this->authorize('assignPersonal', $barangQrCode);
+
+        if ($barangQrCode->status === BarangQrCode::STATUS_DIPINJAM) {
+            if (request()->ajax() || request()->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Unit barang sedang dipinjam, tidak bisa diserahkan personal.'], 403);
+            }
+            return redirect()->route('barang-qr-code.show', $barangQrCode->id)->with('error', 'Unit barang sedang dipinjam, tidak bisa diserahkan personal.');
+        }
+        if ($barangQrCode->id_pemegang_personal) {
+            if (request()->ajax() || request()->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Unit barang sudah dipegang personal.'], 403);
+            }
+            return redirect()->route('barang-qr-code.show', $barangQrCode->id)->with('error', 'Unit barang sudah dipegang personal.');
+        }
+        if (is_null($barangQrCode->id_ruangan)) {
+            if (request()->ajax() || request()->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Unit barang tidak sedang berada di ruangan manapun untuk bisa diserahkan.'], 403);
+            }
+            return redirect()->route('barang-qr-code.show', $barangQrCode->id)->with('error', 'Unit barang tidak sedang berada di ruangan manapun untuk bisa diserahkan.');
+        }
+
+        $eligibleUsers = User::orderBy('username', 'asc')
+            ->get();
+
+        return view('admin.barang_qr_code.assign_personal', [
+            'barangQrCode' => $barangQrCode,
+            'users' => $eligibleUsers,
+            'pageTitle' => 'Serahkan Unit ke Pemegang Personal',
+        ]);
+    }
+
+
+    /**
+     * Memproses penyerahan unit barang ke pemegang personal.
+     */
+    public function assignPersonal(Request $request, BarangQrCode $barangQrCode): RedirectResponse|JsonResponse
+    {
+        $this->authorize('assignPersonal', $barangQrCode);
 
         $validated = $request->validate([
-            'id_ruangan_tujuan' => 'required|exists:ruangan,id|different:id_ruangan_asal',
-            'keterangan_mutasi' => 'nullable|string|max:500',
-        ]);
+            'id_pemegang_personal' => [
+                'required',
+                'exists:users,id',
+                Rule::notIn([$barangQrCode->id_pemegang_personal])
+            ],
+            'catatan_penyerahan_personal' => 'nullable|string|max:1000',
+        ], ['id_pemegang_personal.not_in' => 'Pemegang personal yang dipilih sama dengan pemegang saat ini.']);
 
-        // Validasi hak akses
-        if ($user->role === 'Operator') {
-            $ruanganYangDiKelola = Ruangan::where('id_operator', $user->id)->pluck('id')->toArray();
-            if (
-                !in_array($qrCode->id_ruangan, $ruanganYangDiKelola) ||
-                !in_array($validated['id_ruangan_tujuan'], $ruanganYangDiKelola)
-            ) {
-                abort(403, 'Anda tidak memiliki izin untuk memutasi unit ini.');
+        $userPenerima = User::find($validated['id_pemegang_personal']);
+        $catatanPenyerahan = $validated['catatan_penyerahan_personal'] ?? null;
+
+        // Tanggal penyerahan akan dicatat sebagai now() di dalam model/BarangStatus
+        if ($barangQrCode->assignToPersonal($validated['id_pemegang_personal'], Auth::id())) {
+            $deskripsiLog = "Menyerahkan unit: {$barangQrCode->kode_inventaris_sekolah} ke {$userPenerima->username}.";
+            if ($catatanPenyerahan) {
+                $deskripsiLog .= " Catatan: " . $catatanPenyerahan;
             }
+
+            LogAktivitas::create([
+                'id_user' => Auth::id(),
+                'aktivitas' => 'Serah Terima ke Personal',
+                'deskripsi' => $deskripsiLog,
+                'model_terkait' => BarangQrCode::class,
+                'id_model_terkait' => $barangQrCode->id,
+                'data_baru' => $barangQrCode->fresh()->toJson(), // Ambil data terbaru
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Barang berhasil diserahkan ke: ' . $userPenerima->username,
+                    'redirect_url' => route('barang-qr-code.show', $barangQrCode->id) // Opsional, untuk JS redirect
+                ]);
+            }
+            return redirect()->route('barang-qr-code.show', $barangQrCode->id)->with('success', 'Barang berhasil diserahkan ke: ' . $userPenerima->username);
         }
 
-        // Validasi status unit
-        if ($qrCode->status === BarangQrCode::STATUS_DIPINJAM) {
-            return redirect()->back()->with('error', 'Unit sedang dipinjam dan tidak dapat dimutasi.');
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menyerahkan barang.'
+            ], 500); // Kode status error server
         }
-
-        $ruanganAsal = $qrCode->ruangan;
-        $ruanganTujuan = Ruangan::findOrFail($validated['id_ruangan_tujuan']);
-
-        // Update ruangan unit
-        $qrCode->update([
-            'id_ruangan' => $validated['id_ruangan_tujuan'],
-            'keterangan' => $validated['keterangan_mutasi'] ?? $qrCode->keterangan,
-        ]);
-
-        // Log mutasi bisa ditambahkan di sini jika diperlukan
-
-        return redirect()->back()->with(
-            'success',
-            "Unit berhasil dimutasi dari {$ruanganAsal->nama_ruangan} ke {$ruanganTujuan->nama_ruangan}."
-        );
+        return back()->with('error', 'Gagal menyerahkan barang.')->withInput();
     }
 
     /**
-     * Download QR Code as SVG image
+     * Menampilkan form untuk mengembalikan barang dari pemegang personal ke ruangan.
      */
-    public function download(string $id)
+    public function showReturnFromPersonalForm(BarangQrCode $barangQrCode): View|RedirectResponse|JsonResponse // Diperbarui
     {
-        $qrCode = BarangQrCode::findOrFail($id);
-        $user = Auth::user();
+        $this->authorize('returnPersonal', $barangQrCode);
 
-        // Cek izin pengguna - UNIT BASED
-        if ($user->role === 'Operator') {
-            $ruanganYangDiKelola = Ruangan::where('id_operator', $user->id)->pluck('id');
-            if (!in_array($qrCode->id_ruangan, $ruanganYangDiKelola->toArray())) {
-                abort(403, 'Anda tidak memiliki izin untuk mengunduh QR Code barang ini.');
+        if ($barangQrCode->id_pemegang_personal === null) {
+            if (request()->ajax() || request()->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Barang tidak sedang dipegang personal.'], 403);
             }
+            return redirect()->route('barang-qr-code.show', $barangQrCode->id)->with('error', 'Barang tidak sedang dipegang personal.');
         }
 
-        if (!$qrCode->qr_path || !Storage::disk('public')->exists($qrCode->qr_path)) {
-            // Generate QR code jika belum ada
-            $qrImage = QrCode::format('svg')
-                ->size(300)
-                ->generate($qrCode->no_seri_pabrik);
+        $user = Auth::user();
+        /** @var \App\Models\User $user */
 
-            $filename = 'qr_codes/' . $qrCode->no_seri_pabrik . '.svg';
-            Storage::disk('public')->put($filename, $qrImage);
+        $ruangansQuery = Ruangan::query();
+        if ($user->hasRole(User::ROLE_OPERATOR)) {
+            $ruanganOperatorIds = $user->ruanganYangDiKelola()->pluck('id');
+            $ruangansQuery->whereIn('id', $ruanganOperatorIds);
+        }
+        $ruangans = $ruangansQuery->orderBy('nama_ruangan', 'asc')->get();
 
-            $qrCode->update(['qr_path' => $filename]);
+        if ($user->hasRole(User::ROLE_OPERATOR) && $ruangans->isEmpty()) {
+            if (request()->ajax() || request()->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Anda tidak mengelola ruangan manapun untuk dijadikan tujuan pengembalian.'], 403);
+            }
+            return redirect()->route('barang-qr-code.show', $barangQrCode->id)->with('error', 'Anda tidak mengelola ruangan manapun untuk dijadikan tujuan pengembalian.');
         }
 
-        return response()->download(
-            storage_path('app/public/' . $qrCode->qr_path),
-            $qrCode->no_seri_pabrik . '.svg'
-        );
+        return view('admin.barang_qr_code.return_personal', [
+            'barangQrCode' => $barangQrCode,
+            'ruangans' => $ruangans,
+            'pageTitle' => 'Kembalikan Unit dari Personal ke Ruangan',
+        ]);
     }
 
+
     /**
-     * Print multiple QR codes
+     * Memproses pengembalian barang dari pemegang personal ke ruangan.
      */
-    public function printMultiple(Request $request)
+    public function returnFromPersonal(Request $request, BarangQrCode $barangQrCode): RedirectResponse|JsonResponse
     {
-        $qrCodeIds = $request->get('qr_code_ids', []);
+        $this->authorize('returnPersonal', $barangQrCode);
 
-        if (empty($qrCodeIds)) {
-            return redirect()->back()->with('error', 'Pilih minimal satu QR Code untuk dicetak.');
-        }
+        $validated = $request->validate([
+            'id_ruangan_tujuan' => 'required|exists:ruangans,id',
+            'catatan_pengembalian_ruangan' => 'nullable|string|max:1000',
+        ]);
 
-        $qrCodes = BarangQrCode::with(['barang', 'ruangan'])->whereIn('id', $qrCodeIds)->get();
-        $user = Auth::user();
+        $ruanganTujuan = Ruangan::find($validated['id_ruangan_tujuan']);
+        $pemegangLama = $barangQrCode->pemegangPersonal; // Bisa null jika tidak ada relasi atau tidak dimuat
+        $namaPemegangLama = $pemegangLama ? $pemegangLama->username : 'N/A';
 
-        // Cek izin pengguna - UNIT BASED
-        if ($user->role === 'Operator') {
-            $ruanganYangDiKelola = Ruangan::where('id_operator', $user->id)->pluck('id')->toArray();
 
-            foreach ($qrCodes as $qrCode) {
-                if (!in_array($qrCode->id_ruangan, $ruanganYangDiKelola)) {
-                    abort(403, 'Anda tidak memiliki izin untuk mencetak beberapa QR Code barang.');
+        $userPencatat = Auth::user();
+        /** @var \App\Models\User $userPencatat */
+
+        if ($userPencatat->hasRole(User::ROLE_OPERATOR)) {
+            if (!$userPencatat->ruanganYangDiKelola()->where('id', $ruanganTujuan->id)->exists()) {
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json(['success' => false, 'message' => 'Anda tidak diizinkan mengembalikan barang ke ruangan yang dipilih.'], 403);
                 }
+                return back()->with('error', 'Anda tidak diizinkan mengembalikan barang ke ruangan yang dipilih.')->withInput();
             }
         }
 
-        // Generate QR code yang belum ada
-        foreach ($qrCodes as $qrCode) {
-            if (!$qrCode->qr_path || !Storage::disk('public')->exists($qrCode->qr_path)) {
-                $qrImage = QrCode::format('svg')
-                    ->size(300)
-                    ->generate($qrCode->no_seri_pabrik);
+        $catatanPengembalian = $validated['catatan_pengembalian_ruangan'] ?? null;
+        // Tanggal pengembalian akan dicatat sebagai now() di dalam model/BarangStatus
 
-                $filename = 'qr_codes/' . $qrCode->no_seri_pabrik . '.svg';
-                Storage::disk('public')->put($filename, $qrImage);
-
-                $qrCode->update(['qr_path' => $filename]);
+        if ($barangQrCode->returnFromPersonalToRoom($validated['id_ruangan_tujuan'], Auth::id())) {
+            $deskripsiLog = "Mengembalikan unit: {$barangQrCode->kode_inventaris_sekolah} dari {$namaPemegangLama} ke ruangan {$ruanganTujuan->nama_ruangan}.";
+            if ($catatanPengembalian) {
+                $deskripsiLog .= " Catatan: " . $catatanPengembalian;
             }
+
+            LogAktivitas::create([
+                'id_user' => Auth::id(),
+                'aktivitas' => 'Pengembalian dari Personal ke Ruangan',
+                'deskripsi' => $deskripsiLog,
+                'model_terkait' => BarangQrCode::class,
+                'id_model_terkait' => $barangQrCode->id,
+                'data_baru' => $barangQrCode->fresh()->toJson(),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Barang berhasil dikembalikan ke ruangan: ' . $ruanganTujuan->nama_ruangan,
+                    'redirect_url' => route('barang-qr-code.show', $barangQrCode->id)
+                ]);
+            }
+            return redirect()->route('barang-qr-code.show', $barangQrCode->id)->with('success', 'Barang berhasil dikembalikan ke ruangan: ' . $ruanganTujuan->nama_ruangan);
         }
 
-        return view('qr_code.print_multiple', compact('qrCodes'));
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json(['success' => false, 'message' => 'Gagal mengembalikan barang.'], 500);
+        }
+        return back()->with('error', 'Gagal mengembalikan barang.')->withInput();
     }
 
     /**
-     * Export Excel dengan filter unit-based
+     * Menampilkan form untuk mentransfer barang antar pemegang personal.
      */
-    public function exportExcel(Request $request)
+    public function showTransferPersonalForm(BarangQrCode $barangQrCode): View|RedirectResponse|JsonResponse // Diperbarui
     {
-        $filters = [
-            'id_ruangan' => $request->get('id_ruangan'),
-            'id_kategori' => $request->get('id_kategori'),
-            'status' => $request->get('status'),
-            'keadaan_barang' => $request->get('keadaan_barang'),
-            'tahun' => $request->get('tahun'),
+        $this->authorize('transferPersonal', $barangQrCode);
+
+        if ($barangQrCode->id_pemegang_personal === null) {
+            if (request()->ajax() || request()->wantsJson()) {
+                return response()->json(['success' => false, 'message' => 'Barang tidak sedang dipegang personal.'], 403);
+            }
+            return redirect()->route('barang-qr-code.show', $barangQrCode->id)->with('error', 'Barang tidak sedang dipegang personal.');
+        }
+
+        $eligibleUsers = User::where('id', '!=', $barangQrCode->id_pemegang_personal)
+            ->orderBy('username', 'asc')
+            ->get();
+
+        return view('admin.barang_qr_code.transfer_personal', [
+            'barangQrCode' => $barangQrCode,
+            'users' => $eligibleUsers,
+            'pageTitle' => 'Transfer Pemegang Personal Unit Barang',
+        ]);
+    }
+
+
+    /**
+     * Memproses transfer barang antar pemegang personal.
+     */
+    public function transferPersonal(Request $request, BarangQrCode $barangQrCode): RedirectResponse|JsonResponse
+    {
+        $this->authorize('transferPersonal', $barangQrCode);
+
+        $validated = $request->validate([
+            'new_id_pemegang_personal' => [
+                'required',
+                'exists:users,id',
+                Rule::notIn([$barangQrCode->id_pemegang_personal])
+            ],
+            'catatan_transfer_personal' => 'nullable|string|max:1000',
+        ], ['new_id_pemegang_personal.not_in' => 'Pemegang personal baru tidak boleh sama dengan pemegang saat ini.']);
+
+        $pemegangBaru = User::find($validated['new_id_pemegang_personal']);
+        $pemegangLama = $barangQrCode->pemegangPersonal; // Bisa null jika tidak ada relasi atau tidak dimuat
+        $namaPemegangLama = $pemegangLama ? $pemegangLama->username : 'N/A';
+
+        $catatanTransfer = $validated['catatan_transfer_personal'] ?? null;
+        // Tanggal transfer akan dicatat sebagai now() di dalam model/BarangStatus
+
+        if ($barangQrCode->transferPersonalHolder($validated['new_id_pemegang_personal'], Auth::id())) {
+            $deskripsiLog = "Transfer unit: {$barangQrCode->kode_inventaris_sekolah} dari {$namaPemegangLama} ke {$pemegangBaru->username}.";
+            if ($catatanTransfer) {
+                $deskripsiLog .= " Catatan: " . $catatanTransfer;
+            }
+
+            LogAktivitas::create([
+                'id_user' => Auth::id(),
+                'aktivitas' => 'Transfer Pemegang Personal',
+                'deskripsi' => $deskripsiLog,
+                'model_terkait' => BarangQrCode::class,
+                'id_model_terkait' => $barangQrCode->id,
+                'data_lama' => json_encode(['id_pemegang_personal' => $pemegangLama->id ?? null, 'username_pemegang_lama' => $namaPemegangLama]),
+                'data_baru' => $barangQrCode->fresh()->toJson(),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Barang berhasil ditransfer ke: ' . $pemegangBaru->username,
+                    'redirect_url' => route('barang-qr-code.show', $barangQrCode->id)
+                ]);
+            }
+            return redirect()->route('barang-qr-code.show', $barangQrCode->id)->with('success', 'Barang berhasil ditransfer ke: ' . $pemegangBaru->username);
+        }
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json(['success' => false, 'message' => 'Gagal mentransfer pemegang personal.'], 500);
+        }
+        return back()->with('error', 'Gagal mentransfer pemegang personal.')->withInput();
+    }
+
+
+    /**
+     * Memproses pengajuan arsip untuk sebuah unit barang.
+     */
+    public function archive(Request $request, BarangQrCode $barangQrCode): RedirectResponse
+{
+    $this->authorize('archive', $barangQrCode); // Menggunakan BarangQrCodePolicy@archive
+    $userActor = Auth::user();
+    /** @var \App\Models\User $userActor */
+
+    if ($barangQrCode->status === BarangQrCode::STATUS_DIPINJAM) {
+        return back()->with('error', 'Barang tidak dapat diarsipkan karena sedang dipinjam.');
+    }
+    // Cek apakah sudah ada arsip aktif (Diajukan, Disetujui, atau Disetujui Permanen)
+    $existingArsip = ArsipBarang::where('id_barang_qr_code', $barangQrCode->id)
+        ->whereIn('status_arsip', [
+            ArsipBarang::STATUS_ARSIP_DIAJUKAN,
+            ArsipBarang::STATUS_ARSIP_DISETUJUI,
+            ArsipBarang::STATUS_ARSIP_DISETUJUI_PERMANEN
+        ])
+        ->first();
+    if ($existingArsip) {
+        return back()->with('warning', 'Unit ini sudah dalam proses pengajuan arsip atau sudah diarsipkan permanen.');
+    }
+
+    $validated = $request->validate([
+        'jenis_penghapusan' => ['required', 'string', Rule::in(array_keys(ArsipBarang::getValidJenisPenghapusan()))],
+        'alasan_penghapusan' => 'required|string|max:1000',
+        'berita_acara_path' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:2048',
+        'foto_bukti_path' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
+        'konfirmasi_arsip_unit' => 'required|in:ARSIPKAN',
+    ], ['konfirmasi_arsip_unit.in' => "Mohon ketik 'ARSIPKAN' untuk konfirmasi."]); // [cite: 635]
+
+    DB::beginTransaction();
+    try {
+        $beritaAcaraPath = $request->hasFile('berita_acara_path') ? $request->file('berita_acara_path')->store('arsip/berita_acara_unit', 'public') : null;
+        $fotoBuktiPath = $request->hasFile('foto_bukti_path') ? $request->file('foto_bukti_path')->store('arsip/foto_bukti_unit', 'public') : null;
+
+        $arsipData = [
+            'id_barang_qr_code' => $barangQrCode->id,
+            'id_user_pengaju' => $userActor->id,
+            'jenis_penghapusan' => $validated['jenis_penghapusan'],
+            'alasan_penghapusan' => $validated['alasan_penghapusan'],
+            'berita_acara_path' => $beritaAcaraPath,
+            'foto_bukti_path' => $fotoBuktiPath,
+            'data_unit_snapshot' => $barangQrCode->toArray(),
+            'tanggal_pengajuan_arsip' => now(),
         ];
 
-        return Excel::download(new BarangQrCodeExportExcel($filters), 'barang_qr_codes.xlsx');
+        $logAktivitasDeskripsi = "";
+        $redirectMessage = "";
+        $logAktivitasJenis = "";
+
+        $kondisiSebelum = $barangQrCode->kondisi;
+        $statusKetersediaanSebelum = $barangQrCode->status;
+        $ruanganSebelum = $barangQrCode->id_ruangan;
+        $pemegangSebelum = $barangQrCode->id_pemegang_personal;
+        $statusKetersediaanSesudah = $statusKetersediaanSebelum; // Default
+
+        if ($userActor->hasRole(User::ROLE_ADMIN)) {
+            // Admin melakukan arsip langsung
+            $arsipData['status_arsip'] = ArsipBarang::STATUS_ARSIP_DISETUJUI_PERMANEN;
+            $arsipData['id_user_penyetuju'] = $userActor->id; // Admin juga sebagai penyetuju
+            $arsipData['tanggal_penghapusan_resmi'] = now();
+
+            $logAktivitasJenis = 'Arsip Langsung Unit';
+            $logAktivitasDeskripsi = "Admin {$userActor->username} langsung mengarsipkan unit: {$barangQrCode->kode_inventaris_sekolah}";
+            $redirectMessage = "Unit {$barangQrCode->kode_inventaris_sekolah} berhasil diarsipkan secara langsung.";
+            
+            // Soft delete BarangQrCode
+            if (!$barangQrCode->trashed()) {
+                $barangQrCode->delete(); // Ini akan memicu event 'deleted' di BarangQrCode model
+            }
+            $statusKetersediaanSesudah = BarangQrCode::STATUS_DIARSIPKAN; // Atau konstanta yang sesuai dari model
+        } else { // Operator atau role lain yang mengajukan
+            $arsipData['status_arsip'] = ArsipBarang::STATUS_ARSIP_DIAJUKAN;
+            // id_user_penyetuju dan tanggal_penghapusan_resmi akan null, diisi saat approval
+
+            $logAktivitasJenis = 'Pengajuan Arsip Unit';
+            $logAktivitasDeskripsi = "Pengajuan arsip untuk unit {$barangQrCode->kode_inventaris_sekolah} oleh {$userActor->username}";
+            $redirectMessage = "Pengajuan arsip unit {$barangQrCode->kode_inventaris_sekolah} berhasil.";
+            // Status BarangQrCode tidak diubah saat pengajuan, hanya dicatat di BarangStatus
+        }
+
+        $arsip = ArsipBarang::create($arsipData);
+
+        // Catat di BarangStatus (terlepas dari Admin langsung atau pengajuan Operator)
+        BarangStatus::create([
+            'id_barang_qr_code' => $barangQrCode->id,
+            'id_user_pencatat' => $userActor->id,
+            'tanggal_pencatatan' => now(),
+            'kondisi_sebelumnya' => $kondisiSebelum,
+            'kondisi_sesudahnya' => $kondisiSebelum, // Kondisi barang diasumsikan tidak berubah saat diarsipkan
+            'status_ketersediaan_sebelumnya' => $statusKetersediaanSebelum,
+            'status_ketersediaan_sesudahnya' => $statusKetersediaanSesudah,
+            'id_ruangan_sebelumnya' => $ruanganSebelum,
+            'id_ruangan_sesudahnya' => ($userActor->hasRole(User::ROLE_ADMIN)) ? null : $ruanganSebelum,
+            'id_pemegang_personal_sebelumnya' => $pemegangSebelum,
+            'id_pemegang_personal_sesudahnya' => ($userActor->hasRole(User::ROLE_ADMIN)) ? null : $pemegangSebelum,
+            'deskripsi_kejadian' => ($userActor->hasRole(User::ROLE_ADMIN)) ? 
+                                    "Unit diarsipkan permanen langsung oleh Admin. Arsip ID: {$arsip->id}" : 
+                                    "Pengajuan arsip unit barang. Jenis: {$validated['jenis_penghapusan']}. Arsip ID: {$arsip->id}",
+            'id_arsip_barang_trigger' => $arsip->id,
+        ]);
+
+        LogAktivitas::create([
+            'id_user' => $userActor->id,
+            'aktivitas' => $logAktivitasJenis,
+            'deskripsi' => $logAktivitasDeskripsi,
+            'model_terkait' => ArsipBarang::class,
+            'id_model_terkait' => $arsip->id,
+            'data_baru' => $arsip->toJson(),
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        DB::commit();
+        return redirect()->route('barang.show', $barangQrCode->id_barang)->with('success', $redirectMessage); // [cite: 647]
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error("Error archiving/submitting archive for BarangQrCode (ID: {$barangQrCode->id}): {$e->getMessage()}", ['exception' => $e]); // [cite: 649]
+        return back()->with('error', 'Gagal memproses arsip: ' . (config('app.debug') ? $e->getMessage() : 'Kesalahan sistem.'))->withInput(); // [cite: 649]
+    }
+}
+
+
+    /**
+     * Memulihkan unit BarangQrCode dari arsip.
+     */
+    public function restore(Request $request, BarangQrCode $barangQrCode): RedirectResponse
+    {
+        $this->authorize('restore', $barangQrCode);
+        $userPencatat = Auth::user();
+        /** @var \App\Models\User $userPencatat */
+
+        $arsip = ArsipBarang::where('id_barang_qr_code', $barangQrCode->id)
+            ->where('status_arsip', '!=', ArsipBarang::STATUS_ARSIP_DIPULIHKAN)
+            ->first();
+
+        if (!$arsip) {
+            return back()->with('error', 'Data arsip aktif untuk unit ini tidak ditemukan atau sudah dipulihkan.');
+        }
+
+        // Unit barang mungkin di-soft-delete jika arsipnya disetujui permanen
+        // Kita perlu withTrashed untuk memastikan kita mendapatkan objeknya jika trashed
+        $unitActual = BarangQrCode::withTrashed()->find($barangQrCode->id);
+        if (!$unitActual) {
+            return back()->with('error', 'Unit barang fisik tidak ditemukan.');
+        }
+
+        DB::beginTransaction();
+        try {
+            $restoredUnit = $arsip->restoreBarang($userPencatat->id);
+
+            if ($restoredUnit) {
+                LogAktivitas::create([
+                    'id_user' => $userPencatat->id,
+                    'aktivitas' => 'Pemulihan Unit dari Arsip',
+                    'deskripsi' => "Memulihkan unit: {$restoredUnit->kode_inventaris_sekolah}",
+                    'model_terkait' => ArsipBarang::class,
+                    'id_model_terkait' => $arsip->id,
+                    'data_baru' => $arsip->toJson(),
+                    'ip_address' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ]);
+                DB::commit();
+                return redirect()->route('barang-qr-code.show', $restoredUnit->id)->with('success', 'Unit barang berhasil dipulihkan.');
+            } else {
+                DB::rollBack();
+                return back()->with('error', 'Gagal memulihkan unit barang. Proses internal model gagal.');
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error restoring BarangQrCode (ID: {$barangQrCode->id}): {$e->getMessage()}", ['exception' => $e]);
+            return back()->with('error', 'Gagal memulihkan dari arsip: ' . (config('app.debug') ? $e->getMessage() : 'Kesalahan sistem.'))->withInput();
+        }
     }
 
     /**
-     * Export PDF dengan filter unit-based
+     * Memproses mutasi (perpindahan) unit BarangQrCode ke ruangan lain.
+     * Metode ini HANYA untuk perpindahan Ruangan -> Ruangan.
+     * Untuk Personal -> Ruangan, gunakan returnFromPersonal().
+     */
+    public function mutasi(Request $request, BarangQrCode $barangQrCode): RedirectResponse
+    {
+        $this->authorize('mutasi', $barangQrCode);
+        $userPencatat = Auth::user();
+        /** @var \App\Models\User $userPencatat */
+
+        // Validasi awal
+        if ($barangQrCode->status === BarangQrCode::STATUS_DIPINJAM) {
+            return back()->with('error', 'Unit sedang dipinjam dan tidak dapat dimutasi.');
+        }
+        if ($barangQrCode->arsip && in_array($barangQrCode->arsip->status_arsip, [ArsipBarang::STATUS_ARSIP_DIAJUKAN, ArsipBarang::STATUS_ARSIP_DISETUJUI])) {
+            return back()->with('error', 'Unit sedang dalam proses arsip.');
+        }
+        if ($barangQrCode->id_pemegang_personal !== null) {
+            return back()->with('error', 'Unit sedang dipegang personal. Gunakan fitur "Kembalikan ke Ruangan" terlebih dahulu.');
+        }
+        if ($barangQrCode->id_ruangan === null) {
+            return back()->with('error', 'Unit tidak memiliki lokasi ruangan asal yang jelas untuk dimutasi.');
+        }
+
+        $validated = $request->validate([
+            'id_ruangan_tujuan' => [
+                'required',
+                'exists:ruangans,id',
+                Rule::notIn([$barangQrCode->id_ruangan]) // Ruangan tujuan tidak boleh sama dengan asal
+            ],
+            'alasan_pemindahan' => 'required|string|max:1000',
+            'surat_pemindahan_path' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:2048',
+        ], ['id_ruangan_tujuan.not_in' => 'Ruangan tujuan tidak boleh sama dengan ruangan saat ini.']);
+
+        DB::beginTransaction();
+        try {
+            $suratPath = $request->hasFile('surat_pemindahan_path') ? $request->file('surat_pemindahan_path')->store('mutasi/dokumen_unit', 'public') : null;
+
+            $ruanganAsalIdSebelumMutasi = $barangQrCode->id_ruangan; // Pasti ada nilainya berdasarkan cek di atas
+            $ruanganAsalObj = Ruangan::find($ruanganAsalIdSebelumMutasi);
+            $lokasiAsalDisplay = $ruanganAsalObj->nama_ruangan ?? 'Ruangan Asal Tidak Diketahui';
+
+            $mutasi = MutasiBarang::create([
+                'id_barang_qr_code' => $barangQrCode->id,
+                'id_ruangan_asal' => $ruanganAsalIdSebelumMutasi,
+                'id_ruangan_tujuan' => $validated['id_ruangan_tujuan'],
+                'alasan_pemindahan' => $validated['alasan_pemindahan'],
+                'surat_pemindahan_path' => $suratPath,
+                'id_user_admin' => $userPencatat->id,
+            ]);
+            // Event 'created' di MutasiBarang akan mengupdate BarangQrCode dan BarangStatus
+
+            $ruanganTujuanNama = Ruangan::find($validated['id_ruangan_tujuan'])->nama_ruangan;
+
+            LogAktivitas::create([
+                'id_user' => $userPencatat->id,
+                'aktivitas' => 'Mutasi Unit Barang',
+                'deskripsi' => "Memutasi unit: {$barangQrCode->kode_inventaris_sekolah} dari '{$lokasiAsalDisplay}' ke '{$ruanganTujuanNama}'",
+                'model_terkait' => MutasiBarang::class,
+                'id_model_terkait' => $mutasi->id,
+                'data_lama' => json_encode(['id_ruangan' => $ruanganAsalIdSebelumMutasi]), // Pemegang personal sudah pasti null
+                'data_baru' => json_encode(['id_ruangan' => $validated['id_ruangan_tujuan'], 'id_pemegang_personal' => null]),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            DB::commit();
+            return redirect()->route('barang-qr-code.show', $barangQrCode->id)->with('success', 'Unit barang berhasil dimutasi ke: ' . $ruanganTujuanNama);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error mutating BarangQrCode (ID: {$barangQrCode->id}): {$e->getMessage()}", ['exception' => $e]);
+            return back()->with('error', 'Gagal memutasi unit: ' . (config('app.debug') ? $e->getMessage() : 'Kesalahan sistem.'))->withInput();
+        }
+    }
+
+    /**
+     * Mengunduh file gambar QR Code.
+     */
+    public function download(BarangQrCode $barangQrCode): BinaryFileResponse
+    {
+        $this->authorize('downloadQr', $barangQrCode);
+        $path = $barangQrCode->qr_path;
+
+        if (!$path || !Storage::disk('public')->exists($path)) {
+            $qrContent = $barangQrCode->getQrCodeContent();
+            $directory = 'qr_codes';
+            if (!Storage::disk('public')->exists($directory)) {
+                Storage::disk('public')->makeDirectory($directory);
+            }
+            $filename = $directory . '/' . Str::slug($barangQrCode->kode_inventaris_sekolah ?: ('unit-' . $barangQrCode->id . '-' . Str::random(5))) . '.svg';
+
+            $qrImage = GeneratorQrCode::format('svg')->size(200)->errorCorrection('H')->generate($qrContent);
+            Storage::disk('public')->put($filename, $qrImage);
+            $barangQrCode->updateQuietly(['qr_path' => $filename]);
+            $path = $filename;
+        }
+        return response()->download(storage_path('app/public/' . $path));
+    }
+
+    /**
+     * Menampilkan halaman untuk mencetak beberapa QR Code yang dipilih.
+     */
+    public function printMultiple(Request $request): View|RedirectResponse
+    {
+        $this->authorize('printQr', BarangQrCode::class);
+        $validated = $request->validate([
+            'qr_code_ids' => 'required|array|min:1',
+            'qr_code_ids.*' => 'integer|exists:barang_qr_codes,id'
+        ]);
+
+        $qrCodes = BarangQrCode::with(['barang', 'ruangan', 'pemegangPersonal'])->whereIn('id', $validated['qr_code_ids'])->get();
+        $user = Auth::user();
+        /** @var \App\Models\User $user */
+
+        if ($user->hasRole([User::ROLE_OPERATOR])) {
+            $ruanganIdsDikelola = $user->ruanganYangDiKelola()->pluck('id')->toArray();
+            $qrCodes = $qrCodes->filter(function ($qrCode) use ($ruanganIdsDikelola) {
+                return (!is_null($qrCode->id_ruangan) && in_array($qrCode->id_ruangan, $ruanganIdsDikelola)) ||
+                    !is_null($qrCode->id_pemegang_personal) ||
+                    is_null($qrCode->id_ruangan);
+            });
+        }
+
+        if ($qrCodes->isEmpty()) {
+            return back()->with('error', 'Tidak ada unit barang yang valid untuk dicetak.');
+        }
+        return view('admin.barang_qr_code.print_multiple', compact('qrCodes'));
+    }
+
+    /**
+     * Mengekspor daftar unit barang ke format PDF berdasarkan filter.
      */
     public function exportPdf(Request $request)
     {
-        $filters = [
-            'ruangan' => $request->filled('id_ruangan') ? Ruangan::find($request->id_ruangan) : null,
-            'kategori' => $request->filled('id_kategori') ? KategoriBarang::find($request->id_kategori) : null,
-            'status' => $request->status,
-            'keadaan_barang' => $request->keadaan_barang,
-            'tahun' => $request->tahun,
+        $this->authorize('export', BarangQrCode::class);
+        $user = Auth::user();
+        /** @var \App\Models\User $user */
+        $qrCodesQuery = BarangQrCode::with(['barang.kategori', 'ruangan', 'pemegangPersonal'])->filter($request);
+
+        if ($user->hasRole([User::ROLE_OPERATOR])) {
+            $ruanganIds = $user->ruanganYangDiKelola()->pluck('id');
+            $qrCodesQuery->where(function ($query) use ($ruanganIds) {
+                $query->whereIn('id_ruangan', $ruanganIds)
+                    ->orWhereNull('id_ruangan')
+                    ->orWhereNotNull('id_pemegang_personal');
+            });
+        }
+        $qrCodes = $qrCodesQuery->get();
+
+        if ($qrCodes->isEmpty()) {
+            return redirect()->back()->with('error', 'Tidak ada data untuk diekspor.');
+        }
+
+        $filterInfo = [
+            'search' => $request->search ?? 'Semua',
+            'nama_barang_induk' => $request->id_barang ? (Barang::find($request->id_barang)->nama_barang ?? 'N/A') : 'Semua',
+            'nama_ruangan' => $request->id_ruangan ? (Ruangan::find($request->id_ruangan)->nama_ruangan ?? 'N/A') : 'Semua',
+            'status_unit' => $request->status ?? 'Semua',
+            'kondisi_unit' => $request->kondisi ?? 'Semua',
+            'tanggal_export' => now()->isoFormat('dddd, D MMMM YYYY HH:mm:ss') . ' WIB',
+            'user_export' => $user->username,
         ];
 
-        $qrCodes = (new BarangQrCodeExportPdf($request))->getFilteredData();
-        $groupByRuangan = $request->boolean('pisah_per_ruangan');
-
-        return PDF::loadView('exports.barang_qrcode_pdf', compact('qrCodes', 'groupByRuangan', 'filters'))
-            ->setPaper([0, 0, 612, 792], 'landscape')
-            ->download('barang_qr_codes.pdf');
+        $pdf = PDF::loadView('admin.exports.barang_qrcode_pdf', compact('qrCodes', 'filterInfo'))
+            ->setPaper('a4', 'landscape');
+        return $pdf->download('daftar_unit_barang-' . now()->format('Ymd_His') . '.pdf');
     }
 }

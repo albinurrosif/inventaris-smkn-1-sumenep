@@ -7,13 +7,14 @@ use Illuminate\Support\Facades\Storage;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use App\Models\Barang;
 use App\Models\BarangQrCode;
-use App\Models\KategoriBarang;
 use App\Models\Ruangan;
+use Carbon\Carbon;
 
 class BarangQrCodeSeeder extends Seeder
 {
     public function run(): void
     {
+        // Pastikan direktori qr_codes ada
         if (!Storage::disk('public')->exists('qr_codes')) {
             Storage::disk('public')->makeDirectory('qr_codes');
         }
@@ -22,51 +23,80 @@ class BarangQrCodeSeeder extends Seeder
         $ruanganIds = Ruangan::pluck('id')->toArray();
 
         if ($barangs->isEmpty()) {
-            $this->command->warn('Tidak ada barang yang ditemukan. Pastikan BarangSeeder sudah dijalankan.');
+            $this->command->warn('Tidak ada data di tabel "barangs". Pastikan BarangSeeder (induk) sudah dijalankan.');
             return;
         }
 
-        foreach ($barangs as $barang) {
-            $jumlah = $barang->jumlah_barang;
-
-            // Tetapkan SATU ruangan acak untuk semua unit dalam agregat ini
-            $id_ruangan = $ruanganIds[array_rand($ruanganIds)];
-
-            // Generate semua unit dengan ruangan yang sama
-            $this->generateQrCodes($barang, $jumlah, $id_ruangan);
+        if (empty($ruanganIds)) {
+            $this->command->warn('Tidak ada data di tabel "ruangans". Pastikan RuanganSeeder sudah dijalankan.');
+            return;
         }
 
-        $this->command->info('QR Code berhasil dibuat: ' . BarangQrCode::count() . ' unit.');
-    }
+        $totalUnitDibuat = 0;
 
-    private function generateQrCodes(Barang $barang, int $count, int $id_ruangan): void
-    {
-        for ($i = 1; $i <= $count; $i++) {
-            $no_seri = $barang->kode_barang . '-' . str_pad($i, 3, '0', STR_PAD_LEFT);
+        foreach ($barangs as $barang) {
+            // Tentukan berapa banyak unit yang ingin dibuat per barang induk.
+            // Kolom 'jumlah_barang' tidak lagi ada di tabel 'barangs' baru.
+            // Anda bisa set jumlah tetap, atau mengambil dari properti lain jika ada.
+            // Untuk contoh ini, kita buat 2-3 unit per barang induk.
+            $jumlahUnitUntukDibuat = rand(2, 3);
 
-            if (BarangQrCode::where('no_seri_pabrik', $no_seri)->exists()) {
+            // Tetapkan SATU ruangan acak untuk semua unit dalam barang induk ini
+            // (Anda bisa variasikan jika perlu)
+            $id_ruangan_default = !empty($ruanganIds) ? $ruanganIds[array_rand($ruanganIds)] : null;
+            if (!$id_ruangan_default) {
+                $this->command->warn("Tidak ada ruangan tersedia untuk barang: {$barang->nama_barang}. Unit tidak dibuat.");
                 continue;
             }
 
-            $qr_image = QrCode::format('svg')
-                ->size(300)
-                ->margin(2)
-                ->errorCorrection('H')
-                ->encoding('UTF-8')
-                ->generate($no_seri);
+            for ($i = 1; $i <= $jumlahUnitUntukDibuat; $i++) {
+                // 1. Generate Kode Inventaris Sekolah yang unik
+                $kodeInventarisSekolah = BarangQrCode::generateKodeInventarisSekolah($barang->id); // [cite: 337]
 
-            $filename = "qr_codes/{$no_seri}.svg";
-            Storage::disk('public')->put($filename, $qr_image);
+                // Cek apakah unit dengan kode inventaris ini sudah ada
+                if (BarangQrCode::where('kode_inventaris_sekolah', $kodeInventarisSekolah)->exists()) {
+                    $this->command->info("Unit dengan kode inventaris {$kodeInventarisSekolah} sudah ada, dilewati.");
+                    continue;
+                }
 
-            BarangQrCode::create([
-                'id_barang' => $barang->id,
-                'id_ruangan' => $id_ruangan, // Gunakan ruangan yang sama untuk semua unit
-                'no_seri_pabrik' => $no_seri,
-                'keadaan_barang' => BarangQrCode::KEADAAN_BARANG_BAIK,
-                'status' => BarangQrCode::STATUS_TERSEDIA,
-                'keterangan' => null,
-                'qr_path' => $filename
-            ]);
+                // 2. Generate Nomor Seri Pabrik (jika barang menggunakan nomor seri)
+                $noSeriPabrik = null;
+                if ($barang->menggunakan_nomor_seri) { // [cite: 34]
+                    $noSeriPabrik = strtoupper(str_replace(' ', '-', $barang->merk_model ?? 'SERI')) . '-SN' . substr(uniqid(), -5) . $i;
+                }
+
+                // 3. Generate dan Simpan Gambar QR Code
+                // Konten QR Code adalah Kode Inventaris Sekolah [cite: 328]
+                $qrImageContent = $kodeInventarisSekolah;
+                $qr_image = QrCode::format('svg')
+                    ->size(300)
+                    ->margin(2)
+                    ->errorCorrection('H')
+                    ->encoding('UTF-8')
+                    ->generate($qrImageContent);
+
+                $filename = "qr_codes/{$qrImageContent}.svg";
+                Storage::disk('public')->put($filename, $qr_image);
+
+                // 4. Buat Record BarangQrCode
+                BarangQrCode::create([
+                    'id_barang' => $barang->id, // [cite: 42]
+                    'id_ruangan' => $id_ruangan_default, // [cite: 42]
+                    'no_seri_pabrik' => $noSeriPabrik, // [cite: 42]
+                    'kode_inventaris_sekolah' => $kodeInventarisSekolah, // [cite: 43]
+                    'deskripsi_unit' => 'Unit Seeder ke-' . $i . ' untuk ' . $barang->nama_barang, // [cite: 43]
+                    'harga_perolehan_unit' => $barang->harga_perolehan_induk ?? rand(100000, 5000000), // [cite: 43]
+                    'tanggal_perolehan_unit' => Carbon::createFromFormat('Y', $barang->tahun_pembuatan ?? date('Y'))->subMonths(rand(1, 12))->toDateString(), // [cite: 43]
+                    'sumber_dana_unit' => $barang->sumber_perolehan_induk ?? 'Sumber Seeder', // [cite: 43]
+                    'no_dokumen_perolehan_unit' => 'DOC-SEEDER/' . date('Y/m') . '/' . rand(100, 999), // [cite: 44]
+                    'kondisi' => BarangQrCode::KONDISI_BAIK, // [cite: 44, 306]
+                    'status' => BarangQrCode::STATUS_TERSEDIA, // [cite: 45, 308]
+                    'qr_path' => $filename, // [cite: 45]
+                ]);
+                $totalUnitDibuat++;
+            }
         }
+
+        $this->command->info("Seeder unit barang selesai. Total {$totalUnitDibuat} unit BarangQrCode berhasil dibuat/diperbarui.");
     }
 }

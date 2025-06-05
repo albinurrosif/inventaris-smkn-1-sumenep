@@ -1,263 +1,227 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
+// --- Controller Imports ---
+use App\Http\Controllers\Auth\AuthenticatedSessionController; // Perbaikan nama controller
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\BarangController;
-use App\Http\Controllers\BarangStatusController;
-use App\Http\Controllers\LaporanController;
-use App\Http\Controllers\PemeliharaanController;
-use App\Http\Controllers\RekapStokController;
-use App\Http\Controllers\PengaturanController;
-use App\Http\Controllers\RuanganController;
-use App\Http\Controllers\StokOpnameController;
-use App\Http\Controllers\UserController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\KategoriBarangController;
-use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\BarangQrCodeController;
+use App\Http\Controllers\RuanganController;
+use App\Http\Controllers\KategoriBarangController;
+use App\Http\Controllers\PeminjamanController;
+use App\Http\Controllers\PemeliharaanController;
+use App\Http\Controllers\StokOpnameController;
 use App\Http\Controllers\ArsipBarangController;
-use Illuminate\Http\Request;
-
-// New Peminjaman Controllers (from new version)
-use App\Http\Controllers\PeminjamanGuruController;
-use App\Http\Controllers\PeminjamanOperatorController;
-use App\Http\Controllers\PeminjamanAdminController;
+use App\Http\Controllers\UserController;
+use App\Http\Controllers\PengaturanController;
+use App\Http\Controllers\RekapStokController;       // Tambahkan jika belum ada
+use App\Http\Controllers\BarangStatusController;   // Tambahkan jika belum ada
+use App\Http\Controllers\LogAktivitasController;
 
 /*
 |--------------------------------------------------------------------------
-| Guest Routes
+| Web Routes
 |--------------------------------------------------------------------------
 */
 
-// Bisa diletakkan di paling atas
 Route::get('/', function () {
     if (Auth::check()) {
         return redirect()->route('redirect-dashboard');
     }
-    return view('auth.login');
+    return view('auth.login'); // Pastikan view login Anda ada di auth/login.blade.php
 });
 
-// Khusus guest (tidak perlu lagi isi '/')
 Route::middleware('guest')->group(function () {
+    // Ini akan mengambil route dari routes/auth.php (login, register, forgot password, dll.)
+    // Pastikan Anda sudah menjalankan php artisan ui bootstrap --auth atau sejenisnya jika menggunakan UI bawaan
     require __DIR__ . '/auth.php';
 });
 
+// Grup utama yang memerlukan autentikasi
+Route::middleware(['auth'])->group(function () {
 
-/*
-|--------------------------------------------------------------------------
-| Authenticated Routes
-|--------------------------------------------------------------------------
-*/
+    Route::get('/redirect-dashboard', [DashboardController::class, 'redirectDashboard'])->name('redirect-dashboard');
 
-Route::middleware('auth')->group(function () {
-
-    // Redirect to dashboard by role (from old version - using match)
-    Route::get('/redirect-dashboard', function () {
-        return match (Auth::user()->role) {
-            'Admin' => redirect()->route('admin.dashboard'),
-            'Operator' => redirect()->route('operator.dashboard'),
-            'Guru' => redirect()->route('guru.dashboard'),
-            default => abort(403),
-        };
-    })->name('redirect-dashboard');
-
-    // Logout routes (from old version)
-    Route::get('/logout', [AuthenticatedSessionController::class, 'showLogout'])->name('logout.show');
+    // Logout - pastikan ini sesuai dengan setup autentikasi Anda (misal, Laravel Breeze)
+    // Jika menggunakan Breeze, route POST /logout biasanya sudah ada.
+    // Route GET ini mungkin tidak diperlukan atau bisa jadi halaman konfirmasi logout.
+    Route::get('/logout-confirmation', [AuthenticatedSessionController::class, 'showLogoutConfirmation'])->name('logout.show'); // Contoh
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 
     // Profile
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    /*
-    |--------------------------------------------------------------------------
-    | Role: Guru (using isGuru middleware from old version)
-    |--------------------------------------------------------------------------
-    */
-    Route::middleware('isGuru')->group(function () {
-        Route::get('/guru/dashboard', [DashboardController::class, 'guru'])->name('guru.dashboard');
+    // =====================================================================
+    //          SUMBER DAYA UTAMA (DIKONTROL OLEH POLICY)
+    // =====================================================================
 
-        // Peminjaman Routes for Guru (using PeminjamanGuruController)
-        Route::prefix('guru')->group(function () {
-            Route::get('/peminjaman', [PeminjamanGuruController::class, 'index'])->name('guru.peminjaman.index');
-            Route::get('/peminjaman/create', [PeminjamanGuruController::class, 'create'])->name('guru.peminjaman.create');
-            Route::post('/peminjaman', [PeminjamanGuruController::class, 'store'])->name('guru.peminjaman.store');
-            Route::get('/peminjaman/{id}', [PeminjamanGuruController::class, 'show'])->name('guru.peminjaman.show');
-            Route::delete('/peminjaman/{id}', [PeminjamanGuruController::class, 'destroy'])->name('guru.peminjaman.destroy');
-            Route::get('/berlangsung', [PeminjamanGuruController::class, 'peminjamanBerlangsung'])->name('guru.peminjaman.berlangsung');
-            Route::post('/peminjaman/{id}/ajukan-pengembalian', [PeminjamanGuruController::class, 'ajukanPengembalian'])->name('guru.peminjaman.ajukanPengembalian');
-            Route::post('/peminjaman/{id}/ajukan-perpanjangan', [PeminjamanGuruController::class, 'ajukanPerpanjangan'])->name('guru.peminjaman.ajukanPerpanjangan');
-            Route::get('/barang/{ruanganId}', [PeminjamanGuruController::class, 'getBarangByRuangan'])->name('guru.barang.byRuangan');
+    // --- Manajemen Barang & Aset ---
+    Route::resource('barang', BarangController::class);
+    // Custom routes untuk Barang
+    Route::get('/barang/{barang}/input-serial', [BarangController::class, 'inputSerialForm'])->name('barang.input-serial');
+    Route::post('/barang/{barang}/input-serial', [BarangController::class, 'storeSerialNumbers'])->name('barang.store-serial');
+    Route::get('/barang/{barang}/suggest-serials', [BarangController::class, 'suggestSerials'])->name('barang.suggest-serials');
+    Route::delete('/barang/{barang}/cancel-create', [BarangController::class, 'cancelCreate'])->name('barang.cancel-create');
+    Route::get('/barang-export-all', [BarangController::class, 'export'])->name('barang.export.all');
+    Route::post('/barang-import-all', [BarangController::class, 'import'])->name('barang.import.all');
+    Route::get('/barang/{barang}/edit-step1', [BarangController::class, 'editStep1'])->name('barang.edit-step1');
+    Route::put('/barang/{barang}/update-step1', [BarangController::class, 'updateStep1'])->name('barang.update-step1');
+
+    Route::get('/barang/suggest-serials-for-new', [BarangController::class, 'suggestSerialsForNew'])->name('barang.suggest-serials-for-new');
+    // Hanya SATU definisi resource untuk barang-qr-code
+    // Ini akan secara otomatis membuat rute untuk index, create, store, show, edit, update, destroy
+    // dengan parameter {barangQrCode} karena kustomisasi ->parameters()
+    Route::resource('barang-qr-code', BarangQrCodeController::class)
+        ->parameters(['barang-qr-code' => 'barangQrCode']); // Pastikan parameter ini 'barangQrCode' (camelCase)
+
+    // Rute custom untuk BarangQrCodeController yang tidak termasuk dalam resource standar:
+    Route::post('barang-qr-code/{barangQrCode}/mutasi', [BarangQrCodeController::class, 'mutasi'])->name('barang-qr-code.mutasi');
+    Route::post('barang-qr-code/{barangQrCode}/archive', [BarangQrCodeController::class, 'archive'])->name('barang-qr-code.archive');
+    Route::post('barang-qr-code/{barangQrCode}/restore', [BarangQrCodeController::class, 'restore'])->name('barang-qr-code.restore');
+    Route::get('barang-qr-code/{barangQrCode}/download', [BarangQrCodeController::class, 'download'])->name('barang-qr-code.download');
+    Route::post('barang-qr-code/print-multiple', [BarangQrCodeController::class, 'printMultiple'])->name('barang-qr-code.print-multiple'); // Tidak ada {barangQrCode}
+    Route::get('/barang-qr-code/export-pdf', [BarangQrCodeController::class, 'exportPdf'])->name('barang-qr-code.export-pdf'); // Tidak ada {barangQrCode}
+    Route::get('barang-qr-code/export-excel', [BarangQrCodeController::class, 'exportExcel'])->name('barang-qr-code.export-excel'); // Tidak ada {barangQrCode}
+    Route::get('/barang-qr-code/{barangQrCode}/assign-personal-form', [BarangQrCodeController::class, 'showAssignPersonalForm'])
+        ->name('barang-qr-code.show-assign-personal-form');
+    Route::post('/barang-qr-code/{barangQrCode}/assign-personal', [BarangQrCodeController::class, 'assignPersonal'])
+        ->name('barang-qr-code.assign-personal');
+    Route::get('/barang-qr-code/{barangQrCode}/return-personal-form', [BarangQrCodeController::class, 'showReturnFromPersonalForm'])
+        ->name('barang-qr-code.show-return-personal-form');
+    Route::post('/barang-qr-code/{barangQrCode}/return-personal', [BarangQrCodeController::class, 'returnFromPersonal'])
+        ->name('barang-qr-code.return-personal');
+    Route::get('/barang-qr-code/{barangQrCode}/transfer-personal-form', [BarangQrCodeController::class, 'showTransferPersonalForm'])
+        ->name('barang-qr-code.show-transfer-personal-form');
+    Route::post('/barang-qr-code/{barangQrCode}/transfer-personal', [BarangQrCodeController::class, 'transferPersonal'])
+        ->name('barang-qr-code.transfer-personal');
 
 
 
 
-            Route::get('/riwayat', [PeminjamanGuruController::class, 'riwayat'])->name('guru.peminjaman.riwayat');
-        });
+    // --- Manajemen Aktivitas Aset ---
+    Route::resource('pemeliharaan', PemeliharaanController::class);
+    Route::resource('stok-opname', StokOpnameController::class); // Untuk Admin dan Operator (dikontrol Policy)
+
+    // --- Manajemen Peminjaman (Struktur Terpadu) ---
+    Route::prefix('peminjaman')->name('peminjaman.')->group(function () {
+        Route::get('/', [PeminjamanController::class, 'index'])->name('index');
+        Route::get('/create', [PeminjamanController::class, 'create'])->name('create'); // Untuk Guru
+        Route::post('/', [PeminjamanController::class, 'store'])->name('store'); // Untuk Guru
+        Route::get('/{peminjaman}', [PeminjamanController::class, 'show'])->name('show');
+        Route::delete('/{peminjaman}', [PeminjamanController::class, 'destroy'])->name('destroy'); // Untuk Guru membatalkan
+
+        // Rute aksi untuk Operator & Admin (dilindungi Policy di controller)
+        Route::post('/{peminjaman}/approve', [PeminjamanController::class, 'approve'])->name('approve');
+        Route::post('/{peminjaman}/reject', [PeminjamanController::class, 'reject'])->name('reject');
+        Route::post('/detail/{detail}/konfirmasi-pengambilan', [PeminjamanController::class, 'konfirmasiPengambilan'])->name('detail.konfirmasiPengambilan');
+        Route::post('/detail/{detail}/verifikasi-pengembalian', [PeminjamanController::class, 'verifikasiPengembalian'])->name('detail.verifikasiPengembalian');
+
+        // Rute tambahan untuk Guru (tampilan berbeda dari index utama)
+        Route::get('/guru/berlangsung', [PeminjamanController::class, 'peminjamanBerlangsungGuru'])->name('guru.berlangsung'); // Method baru di controller
+        Route::get('/guru/riwayat', [PeminjamanController::class, 'riwayatPeminjamanGuru'])->name('guru.riwayat');         // Method baru di controller
+        // Route::post('/guru/{peminjaman}/ajukan-pengembalian', [PeminjamanController::class, 'ajukanPengembalianGuru'])->name('guru.ajukanPengembalian'); // Jika ada
+        // Route::post('/guru/{peminjaman}/ajukan-perpanjangan', [PeminjamanController::class, 'ajukanPerpanjanganGuru'])->name('guru.ajukanPerpanjangan'); // Jika ada
     });
 
-    /*
-    |--------------------------------------------------------------------------
-    | Role: Operator (using isOperator middleware from old version)
-    |--------------------------------------------------------------------------
-    */
-    Route::middleware('isOperator')->group(function () {
-        Route::get('/operator/dashboard', [DashboardController::class, 'operator'])->name('operator.dashboard');
+    // =====================================================================
+    //          RUTE EKSKLUSIF BERDASARKAN PERAN
+    // =====================================================================
 
-        // Operator specific routes from old version
-        Route::resource('stok-opname', StokOpnameController::class);
-        Route::resource('pemeliharaan', PemeliharaanController::class);
-        Route::get('/operator/barang', [BarangController::class, 'indexOperator'])->name('operator.barang.index');
-        Route::get('/operator/barang/export', [BarangController::class, 'exportOperator'])->name('operator.barang.export');
-
-        // Peminjaman Routes for Operator (from new version with PeminjamanOperatorController)
-        Route::prefix('operator')->group(function () {
-            // Daftar peminjaman untuk operator
-            Route::get('/peminjaman', [PeminjamanOperatorController::class, 'index'])->name('operator.peminjaman.index');
-
-            // Detail peminjaman
-            Route::get('/peminjaman/{id}', [PeminjamanOperatorController::class, 'show'])->name('operator.peminjaman.show');
-
-            // Export peminjaman (perlu disesuaikan dengan controller yang benar)
-            Route::get('/peminjaman/export', [BarangController::class, 'exportOperator'])->name('operator.peminjaman.export');
-
-            // Persetujuan/penolakan item individual
-            Route::post('/peminjaman/item/{detailId}/setujui', [PeminjamanOperatorController::class, 'setujuiItem'])
-                ->name('operator.peminjaman.setujui-item');
-            Route::post('/peminjaman/item/{detailId}/tolak', [PeminjamanOperatorController::class, 'tolakItem'])
-                ->name('operator.peminjaman.tolak-item');
-
-            // Persetujuan semua item dalam satu peminjaman
-            Route::post('/peminjaman/{peminjamanId}/setujui-semua', [PeminjamanOperatorController::class, 'setujuiSemuaItem'])
-                ->name('operator.peminjaman.setujui-semua');
-
-            // Konfirmasi pengambilan dan pengembalian item
-            Route::post('/peminjaman/konfirmasi-pengambilan', [PeminjamanOperatorController::class, 'konfirmasiPengambilanItem'])
-                ->name('operator.peminjaman.konfirmasi-pengambilan-item');
-            Route::post('/peminjaman/verifikasi-pengembalian', [PeminjamanOperatorController::class, 'verifikasiPengembalianItem'])
-                ->name('operator.peminjaman.verifikasi-pengembalian-item');
-
-            // Daftar peminjaman berlangsung
-            Route::get('/peminjaman-berlangsung', [PeminjamanOperatorController::class, 'peminjamanBerlangsungOperator'])
-                ->name('operator.peminjaman.berlangsung');
-
-            // Daftar pengembalian yang menunggu
-            Route::get('/pengembalian', [PeminjamanOperatorController::class, 'daftarPengembalianMenunggu'])
-                ->name('operator.peminjaman.pengembalian');
-
-            // Daftar item terlambat
-            Route::get('/item-terlambat', [PeminjamanOperatorController::class, 'daftarItemTerlambat'])
-                ->name('operator.peminjaman.item-terlambat');
-
-            // Laporan peminjaman
-            Route::get('/laporan-peminjaman', [PeminjamanOperatorController::class, 'laporanPeminjaman'])
-                ->name('operator.peminjaman.laporan');
-        });
-    });
-
-    /*
-    |--------------------------------------------------------------------------
-    | Role: Admin (using isAdmin middleware from old version)
-    |--------------------------------------------------------------------------
-    */
-    Route::middleware('isAdmin')->group(function () {
-        Route::get('/admin/dashboard', [DashboardController::class, 'admin'])->name('admin.dashboard');
-
-        // Admin specific routes from old version
+    // --- Rute Khusus Admin ---
+    Route::middleware('isAdmin')->prefix('admin')->name('admin.')->group(function () {
+        Route::get('dashboard', [DashboardController::class, 'admin'])->name('dashboard');
         Route::resource('users', UserController::class);
+        Route::resource('pengaturan', PengaturanController::class)->only(['index', 'store']);
         Route::resource('rekap-stok', RekapStokController::class);
-        Route::resource('barang-status', BarangStatusController::class);
+        Route::resource('barang-status', BarangStatusController::class)->only(['index', 'show']);;
+        Route::resource('arsip-barang', ArsipBarangController::class)->only(['index', 'show']);
+        Route::post('arsip-barang/{arsipBarang}/restore', [ArsipBarangController::class, 'restore'])->name('arsip-barang.restore');
+        Route::resource('pemeliharaan', PemeliharaanController::class)->parameters([
+            'pemeliharaan' => 'pemeliharaan'
+        ]);
+        Route::post('pemeliharaan/{id}/restore', [PemeliharaanController::class, 'restore'])->name('pemeliharaan.restore');
 
-        // Admin - Export & Import Barang (from old version)
-        Route::get('/barang/export', [BarangController::class, 'export'])->name('barang.export');
-        Route::post('/barang/import', [BarangController::class, 'import'])->name('barang.import');
+        // Grup untuk Stok Opname
+        Route::prefix('stok-opname')->name('stok-opname.')->group(function () {
+            Route::get('/', [StokOpnameController::class, 'index'])->name('index');
+            Route::get('/create', [StokOpnameController::class, 'create'])->name('create');
+            Route::post('/', [StokOpnameController::class, 'store'])->name('store');
+            Route::get('/{stokOpname}', [StokOpnameController::class, 'show'])->name('show');
+            Route::get('/{stokOpname}/edit', [StokOpnameController::class, 'edit'])->name('edit');
+            Route::put('/{stokOpname}', [StokOpnameController::class, 'update'])->name('update');
+            Route::delete('/{stokOpname}', [StokOpnameController::class, 'destroy'])->name('destroy');
 
-        Route::get('/barang-qr-code/export/excel', [BarangQrCodeController::class, 'exportExcel'])->name('barang-qr-code.export.excel');
-        Route::get('/barang-qr-code/export/pdf', [BarangQrCodeController::class, 'exportPdf'])->name('barang-qr-code.export.pdf');
+            // Route untuk restore, finalize, cancel (parameter {stokOpname} karena menerima ID atau model)
+            Route::post('/{stokOpname}/restore', [StokOpnameController::class, 'restore'])->name('restore'); // Diubah dari {id} ke {stokOpname} untuk konsistensi
+            Route::post('/{stokOpname}/finalize', [StokOpnameController::class, 'finalize'])->name('finalize');
+            Route::post('/{stokOpname}/cancel', [StokOpnameController::class, 'cancel'])->name('cancel');
 
-        Route::post('/barang/{barang}/qrcode', [BarangQrCodeController::class, 'store'])->name('barang.qrcode.store');
-        // Route::get('/barang', [BarangController::class, 'index'])->name('barang.index');
-        Route::get('/barang/create', [BarangController::class, 'create'])->name('barang.create');
-        Route::post('/barang', [BarangController::class, 'store'])->name('barang.store');
-        Route::get('/barang/{id}/input-serial', [BarangController::class, 'inputSerialForm'])->name('barang.input-serial');
-        Route::post('/barang/{id}/input-serial', [BarangController::class, 'storeSerialNumbers'])->name('barang.store-serial');
-        Route::get('/barang/{id}', [BarangController::class, 'show'])->name('barang.show');
-
-        Route::get('/barang/{id}/suggest-serials', [BarangController::class, 'suggestSerials'])->name('barang.suggest-serials');
-
-        Route::get('/barang/{id}/edit', [BarangController::class, 'edit'])->name('barang.edit');
-        Route::put('/barang/{id}', [BarangController::class, 'update'])->name('barang.update');
-
-        // Tambahkan route baru untuk wizard step 1 edit
-        Route::get('/barang/{id}/edit-step1', [BarangController::class, 'editStep1'])->name('barang.edit-step1');
-        Route::put('/barang/{id}/update-step1', [BarangController::class, 'updateStep1'])->name('barang.update-step1');
-
-        // Route untuk batal pembuatan
-        Route::delete('/barang/{id}/cancel', [BarangController::class, 'cancel'])->name('barang.cancel');
-        Route::delete('/barang/{id}/cancel-create', [BarangController::class, 'cancelCreate'])
-            ->name('barang.cancel-create');
-
-        Route::delete('/barang-qrcode/{id}', [BarangQrCodeController::class, 'destroy'])->name('barang-qrcode.destroy');
-        Route::get('/arsip-barang', [ArsipBarangController::class, 'index'])->name('arsip-barang.index');
-
-
-
-        // Admin - Pengaturan
-        Route::resource('pengaturan', PengaturanController::class)->only(['index']);
-        Route::post('/pengaturan/update', [PengaturanController::class, 'update'])->name('pengaturan.update');
-
-        // Peminjaman Routes for Admin (from new version with PeminjamanAdminController)
-        Route::prefix('admin/peminjaman')->group(function () {
-            Route::get('/', [PeminjamanAdminController::class, 'index'])->name('admin.peminjaman.index');
-            Route::get('/export', [BarangController::class, 'exportOperator'])->name('admin.peminjaman.export');
-            Route::get('/overdue', [PeminjamanAdminController::class, 'exportOperator'])->name('admin.peminjaman.overdue');
-            Route::get('/report', [PeminjamanAdminController::class, 'exportOperator'])->name('admin.peminjaman.report');
-            Route::get('/exportPdf', [PeminjamanAdminController::class, 'exportPdf'])->name('admin.peminjaman.exportPdf');
-            Route::get('/exportPdf', [PeminjamanAdminController::class, 'exportExcel'])->name('admin.peminjaman.exportExcel');
-
-
-
-            Route::get('/{id}', [PeminjamanAdminController::class, 'show'])->name('admin.peminjaman.show');
+            // Route untuk AJAX (parameter {stokOpname} untuk ID sesi SO)
+            // Pastikan nama parameter {stokOpname} dan {detail} konsisten dengan controller dan view
+            Route::put('/{stokOpname}/detail/{detail}', [StokOpnameController::class, 'updateDetail'])->name('updateDetail');
+            Route::get('/search-barang-qr', [StokOpnameController::class, 'searchBarangQr'])->name('search-barang-qr'); // Tidak perlu {stokOpname} di URL jika dikirim via query param
+            Route::post('/add-barang-temuan', [StokOpnameController::class, 'addBarangTemuan'])->name('add-barang-temuan'); // Tidak perlu {stokOpname} di URL jika dikirim via form data
         });
 
-        Route::get('/ruangan/{id}', [RuanganController::class, 'show'])->name('ruangan.show');
-    });
+        // Route untuk Kategori Barang
+        Route::resource('kategori-barang', KategoriBarangController::class)->parameters([
+            'kategori_barang' => 'kategoriBarang'
+        ]);
+        Route::get('kategori-barang/{kategoriBarang}/items', [KategoriBarangController::class, 'getItems'])
+            ->name('kategori-barang.items');
+        Route::get('kategori-barang-stats/all', [KategoriBarangController::class, 'getStatistics'])
+            ->name('kategori-barang.statistics');
 
-
-    /*
-    |--------------------------------------------------------------------------
-    | Shared Access: Admin & Operator (via canManageBarang)
-    |--------------------------------------------------------------------------
-    */
-    Route::middleware('canManageBarang')->group(function () {
-        Route::resource('barang', BarangController::class);
-        Route::resource('ruangan', RuanganController::class);
-    });
-
-    /**
-     * Laravel Route for saving dark mode preference to session
-     * Add this to your web.php routes file
-     */
-
-    // Route for saving dark mode preference to session
-    Route::post('/set-dark-mode', function (Request $request) {
-        // Validate the request
-        $validated = $request->validate([
-            'darkMode' => 'required|string|in:dark,light',
+        // Tambahkan Route untuk Ruangan di sini
+        Route::resource('ruangan', RuanganController::class)->parameters([
+            'ruangan' => 'ruangan' // Sesuaikan nama parameter jika berbeda di controller
         ]);
 
-        // Store in session
-        session(['darkMode' => $validated['darkMode']]);
+        // Untuk User
+        // URI: admin/users/{id}/restore
+        // Nama Route: admin.users.restore
+        Route::post('users/{id}/restore', [UserController::class, 'restore'])->name('users.restore');
 
-        // Return success response
-        return response()->json(['success' => true, 'mode' => $validated['darkMode']]);
-    })->middleware('web');
+        // Untuk Ruangan
+        // URI: admin/ruangan/{id}/restore
+        // Nama Route: admin.ruangan.restore
+        Route::post('ruangan/{id}/restore', [RuanganController::class, 'restore'])->name('ruangan.restore');
+
+        // Untuk Kategori Barang
+        // URI: admin/kategori-barang/{id}/restore
+        // Nama Route: admin.kategori-barang.restore
+        Route::post('kategori-barang/{id}/restore', [KategoriBarangController::class, 'restore'])->name('kategori-barang.restore');
+        // Jika ada route custom untuk ruangan, tambahkan di sini juga, misalnya:
+        // Route::get('ruangan/{ruangan}/inventory', [RuanganController::class, 'inventory'])->name('ruangan.inventory');
 
 
-    Route::resource('kategori-barang', KategoriBarangController::class);
-    Route::get('kategori-barang/{kategoriBarang}/items', [KategoriBarangController::class, 'getItems'])->name('kategori-barang.items');
-    Route::get('kategori-barang-statistics', [KategoriBarangController::class, 'getStatistics'])->name('kategori-barang.statistics');
+        Route::get('log-aktivitas', [LogAktivitasController::class, 'index'])->name('log-aktivitas.index');
+        Route::get('log-aktivitas/{logAktivitas}', [LogAktivitasController::class, 'show'])->name('log-aktivitas.show');
+    });
+
+    // --- Rute Khusus Operator ---
+    Route::middleware('isOperator')->prefix('operator')->name('operator.')->group(function () {
+        Route::get('dashboard', [DashboardController::class, 'operator'])->name('dashboard');
+        // Operator akan mengakses pemeliharaan & stok opname via rute utama, dikontrol Policy
+        // Jika ada laporan spesifik operator:
+        // Route::get('laporan/peminjaman', [LaporanController::class, 'peminjamanOperator'])->name('laporan.peminjaman');
+    });
+
+    // --- Rute Khusus Guru ---
+    Route::middleware('isGuru')->prefix('guru')->name('guru.')->group(function () {
+        Route::get('dashboard', [DashboardController::class, 'guru'])->name('dashboard');
+        // Rute AJAX untuk form peminjaman guru
+        Route::get('/get-units-by-ruangan/{ruangan}', [PeminjamanController::class, 'getAvailableUnitsByRuangan'])->name('peminjaman.getAvailableUnitsByRuangan'); // Nama lebih spesifik
+    });
+
+    // Dark Mode Toggle
+    Route::post('/set-dark-mode', function (Request $request) {
+        session(['darkMode' => $request->input('darkMode', 'light')]);
+        return response()->json(['success' => true]);
+    })->name('set-dark-mode');
 });

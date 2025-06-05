@@ -10,7 +10,7 @@ class IsOperator
 {
     public function handle(Request $request, Closure $next)
     {
-        if (Auth::check() && Auth::user()->role === 'Operator') {
+        if (Auth::check() && Auth::user()->role === \App\Models\User::ROLE_OPERATOR) {
             return $next($request);
         }
 

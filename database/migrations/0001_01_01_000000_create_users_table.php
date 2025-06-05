@@ -11,15 +11,15 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
-            $table->id(); // Primary Key
-            $table->string('name', 100); // Nama user
-            $table->string('email', 100)->unique(); // Email harus unik
-            $table->timestamp('email_verified_at')->nullable(); // Verifikasi email
-            $table->string('password'); // Password
-            $table->enum('role', ['Admin', 'Operator', 'Guru']); // Role pengguna
-            $table->rememberToken(); // Token autentikasi
-            $table->softDeletes(); // Untuk penghapusan sementara
-            $table->timestamps(); // created_at & updated_at
+            $table->id();
+            $table->string('username')->unique();
+            $table->string('email')->unique();
+            $table->timestamp('email_verified_at')->nullable();
+            $table->string('password');
+            $table->enum('role', ['Admin', 'Operator', 'Guru'])->default('Guru');
+            $table->rememberToken();
+            $table->timestamps();
+            $table->softDeletes();
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {

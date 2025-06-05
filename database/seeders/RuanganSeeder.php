@@ -4,33 +4,36 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\Ruangan;
-use App\Models\User; // Import model User
+use App\Models\User;
 
 class RuanganSeeder extends Seeder
 {
     public function run(): void
     {
-        // Pastikan user operator ada
-        $operator1 = User::where('email', 'operator@smkn1sumenep.sch.id')->first();
-        $operator2 = User::where('email', 'operator2@smkn1sumenep.sch.id')->first();
+        $operator1 = User::where('role', User::ROLE_OPERATOR)->skip(0)->first();
+        $operator2 = User::where('role', User::ROLE_OPERATOR)->skip(1)->first();
 
-        if (!$operator1 && !$operator2) {
-            $this->command->warn('Tidak ada operator yang ditemukan. Pastikan UserSeeder sudah dijalankan.');
-            return; // Hentikan seeder jika tidak ada operator
+        if (!$operator1) {
+            $this->command->warn('Tidak ada user dengan role Operator. Jalankan UserSeeder terlebih dahulu.');
+            return;
         }
 
-        // Buat ruangan dan tetapkan operatornya
-        Ruangan::firstOrCreate(
-            ['nama_ruangan' => 'Ruang Lab Komputer 1'],
-            ['id_operator' => $operator1->id] // Tetapkan operator
-        );
-        Ruangan::firstOrCreate(
-            ['nama_ruangan' => 'Ruang Guru'],
-            ['id_operator' => $operator2->id] // Tetapkan operator
-        );
-        Ruangan::firstOrCreate(
-            ['nama_ruangan' => 'Perpustakaan'],
-            ['id_operator' => $operator1->id] // Tetapkan operator
-        );
+        $ruangan = [
+            ['nama' => 'Laboratorium RPL 1', 'kode' => 'LAB-RPL-1', 'operator' => $operator1->id],
+            ['nama' => 'Laboratorium TKJ 1', 'kode' => 'LAB-TKJ-1', 'operator' => $operator1->id],
+            ['nama' => 'Ruang Guru Umum', 'kode' => 'RG-UMUM', 'operator' => $operator2->id ?? $operator1->id],
+            ['nama' => 'Perpustakaan', 'kode' => 'PERPUS', 'operator' => $operator2->id ?? $operator1->id],
+            ['nama' => 'Ruang Kepala Sekolah', 'kode' => 'KS-01', 'operator' => $operator2->id ?? $operator1->id],
+        ];
+
+        foreach ($ruangan as $data) {
+            Ruangan::firstOrCreate(
+                ['kode_ruangan' => $data['kode']], // Menggunakan kode_ruangan sebagai unique key [cite: 26]
+                [
+                    'nama_ruangan' => $data['nama'], // [cite: 26]
+                    'id_operator' => $data['operator'], // [cite: 26]
+                ]
+            );
+        }
     }
 }

@@ -4,28 +4,37 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
-    /**
-     * Jalankan migration.
-     */
-    public function up(): void
+return new class extends Migration
+{
+    public function up()
     {
         Schema::create('stok_opname', function (Blueprint $table) {
-            $table->id(); // Primary Key
-            $table->foreignId('id_operator')->constrained('users')->onDelete('cascade'); // Operator yang memulai opname
-            $table->foreignId('id_ruangan')->constrained('ruangan')->onDelete('cascade'); // Ruangan tempat opname dilakukan
-            $table->date('tanggal_opname'); // Tanggal opname dilakukan
-            $table->enum('status', ['Sedang Berlangsung', 'Selesai'])->default('Sedang Berlangsung'); // Status opname
-            $table->text('keterangan')->nullable(); // Keterangan tambahan
-            $table->timestamps(); // created_at & updated_at
+            $table->id();
+            $table->foreignId('id_ruangan')->constrained('ruangans')->onDelete('cascade');
+            $table->foreignId('id_operator')->constrained('users')->onDelete('cascade');
+            $table->date('tanggal_opname');
+            $table->text('catatan')->nullable();
+            $table->enum('status', ['Draft', 'Selesai', 'Dibatalkan'])->default('Draft');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        Schema::create('detail_stok_opname', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('id_stok_opname')->constrained('stok_opname')->onDelete('cascade');
+            $table->foreignId('id_barang_qr_code')->constrained('barang_qr_codes')->onDelete('cascade');
+            $table->enum('kondisi_tercatat', ['Baik', 'Kurang Baik', 'Rusak Berat', 'Hilang', 'Diarsipkan'])->default('Baik');
+            // Memastikan 'Ditemukan' ada di enum kondisi_fisik
+            $table->enum('kondisi_fisik', ['Baik', 'Kurang Baik', 'Rusak Berat', 'Hilang', 'Ditemukan'])->nullable();
+            $table->text('catatan_fisik')->nullable();
+            $table->timestamps();
+            $table->softDeletes();
         });
     }
 
-    /**
-     * Rollback migration.
-     */
-    public function down(): void
+    public function down()
     {
+        Schema::dropIfExists('detail_stok_opname');
         Schema::dropIfExists('stok_opname');
     }
 };

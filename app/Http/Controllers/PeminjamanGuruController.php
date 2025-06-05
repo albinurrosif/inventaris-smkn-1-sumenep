@@ -3,256 +3,367 @@
 namespace App\Http\Controllers;
 
 use App\Models\Barang;
+use App\Models\BarangQrCode;
 use App\Models\DetailPeminjaman;
 use App\Models\Peminjaman;
 use App\Models\Ruangan;
+use App\Models\User;
+use App\Models\LogAktivitas;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use App\Models\User;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
+use Carbon\Carbon;
+use Illuminate\View\View;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
+
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class PeminjamanGuruController extends Controller
 {
-    /**
-     * Menampilkan daftar peminjaman untuk guru
-     */
-    public function index()
+    use AuthorizesRequests;
+
+    public function __construct()
     {
-        $user = Auth::user();
-
-        $peminjaman = Peminjaman::with(['detailPeminjaman.barang', 'detailPeminjaman.ruanganAsal', 'detailPeminjaman.ruanganTujuan'])
-            ->where('id_peminjam', $user->id)
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
-
-        return view('guru.peminjaman.index', compact('peminjaman'));
+        // Middleware untuk memastikan hanya guru yang bisa akses
+        // $this->middleware('isGuru');
     }
 
     /**
-     * Menampilkan form untuk membuat peminjaman baru
+     * Menampilkan daftar peminjaman yang dibuat oleh guru yang sedang login.
      */
-    public function create()
+    public function index(Request $request): View
     {
-        $ruangan = Ruangan::all();
-        $barang = Barang::all();
-        return view('guru.peminjaman.create', compact('ruangan', 'barang'));
+        $this->authorize('viewAnyGuru', Peminjaman::class);
+
+        $user = Auth::user();
+        /** @var \App\Models\User $user */
+
+        $query = Peminjaman::with([
+            'detailPeminjaman.barangQrCode.barang.kategori',
+            'detailPeminjaman.barangQrCode.ruangan',
+            'operatorProses'
+        ])
+            ->where('id_guru', $user->id)
+            ->orderBy('tanggal_pengajuan', 'desc');
+
+        // Perbaiki nama kolom status
+        if ($request->filled('status_peminjaman')) {
+            $query->where('status', $request->status_peminjaman);
+        }
+
+        if ($request->filled('search')) {
+            $searchTerm = $request->search;
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('tujuan_peminjaman', 'like', "%{$searchTerm}%")
+                    ->orWhereHas('detailPeminjaman.barangQrCode.barang', function ($subq) use ($searchTerm) {
+                        $subq->where('nama_barang', 'like', "%{$searchTerm}%");
+                    })
+                    ->orWhereHas('detailPeminjaman.barangQrCode', function ($subq) use ($searchTerm) {
+                        $subq->where('kode_inventaris_sekolah', 'like', "%{$searchTerm}%");
+                    });
+            });
+        }
+
+        $peminjamans = $query->paginate(10)->withQueryString();
+        $statusOptions = Peminjaman::getPossibleStatuses();
+
+        return view('guru.peminjaman.index', compact('peminjamans', 'statusOptions'));
     }
 
     /**
-     * Menyimpan peminjaman baru ke database (DIUBAH UNTUK PEMISAHAN OTOMATIS)
+     * Menampilkan form untuk membuat pengajuan peminjaman baru.
      */
-    public function store(Request $request)
+    public function create(): View
     {
-        // Mengambil data 'items' yang dikirimkan sebagai string JSON
-        $items = json_decode($request->input('items'), true);
+        $this->authorize('create', Peminjaman::class);
 
-        // Jika json_decode gagal (data tidak valid), kita bisa memberi pesan error
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            return back()->with('error', 'Data items tidak valid.');
-        }
+        $ruanganList = Ruangan::orderBy('nama_ruangan')->get();
+        return view('guru.peminjaman.create', compact('ruanganList'));
+    }
 
-        // Validasi minimal untuk memastikan item ada
-        if (empty($items)) {
-            return back()->with('error', 'Tidak ada barang yang dipilih untuk dipinjam.');
-        }
-
+    /**
+     * Menyimpan pengajuan peminjaman baru ke database.
+     */
+    public function store(Request $request): RedirectResponse
+    {
+        $this->authorize('create', Peminjaman::class);
         $user = Auth::user();
+        /** @var \App\Models\User $user */
 
-        // Kelompokkan item berdasarkan ruangan asal
-        $itemsGrouped = collect($items)->groupBy('ruangan_asal');
+        $validated = $request->validate([
+            'tujuan_peminjaman' => 'required|string|max:1000',
+            'tanggal_rencana_pinjam' => 'required|date|after_or_equal:today',
+            'tanggal_rencana_kembali' => 'required|date|after_or_equal:tanggal_rencana_pinjam',
+            'id_ruangan_tujuan_peminjaman' => 'required|exists:ruangans,id',
+            'catatan_peminjam' => 'nullable|string|max:500',
+            'selected_items' => 'required|array|min:1',
+            'selected_items.*' => 'required|integer|exists:barang_qr_codes,id',
+        ], [
+            'tujuan_peminjaman.required' => 'Tujuan peminjaman harus diisi.',
+            'tanggal_rencana_pinjam.required' => 'Tanggal rencana pinjam harus diisi.',
+            'tanggal_rencana_pinjam.after_or_equal' => 'Tanggal rencana pinjam tidak boleh sebelum hari ini.',
+            'tanggal_rencana_kembali.required' => 'Tanggal rencana kembali harus diisi.',
+            'tanggal_rencana_kembali.after_or_equal' => 'Tanggal rencana kembali harus setelah atau sama dengan tanggal pinjam.',
+            'id_ruangan_tujuan_peminjaman.required' => 'Ruangan tujuan peminjaman harus dipilih.',
+            'selected_items.required' => 'Minimal satu unit barang harus dipilih untuk dipinjam.',
+            'selected_items.*.exists' => 'Salah satu unit barang yang dipilih tidak valid.',
+        ]);
 
-        // Get the keterangan from the request
-        $keterangan = $request->input('keterangan');
-
-        DB::beginTransaction();
         try {
-            foreach ($itemsGrouped as $ruanganId => $groupedItems) {
-                $first = $groupedItems->first(); // Asumsi satu tanggal pinjam/kembali per peminjaman
+            DB::beginTransaction();
 
-                // Buat peminjaman untuk setiap ruangan
-                $peminjaman = Peminjaman::create([
-                    'id_peminjam' => $user->id,
-                    'tanggal_pengajuan' => now(),
-                    'status_persetujuan' => 'menunggu_verifikasi', // Status awal
-                    'status_pengambilan' => 'belum_diambil', // Status pengambilan awal
-                    'status_pengembalian' => 'belum_dikembalikan', // Status pengembalian awal
-                    'pengajuan_disetujui_oleh' => null,
-                    'keterangan' => $keterangan, // Set the keterangan value from form
-                ]);
-
-                // Proses detail peminjaman untuk setiap item
-                foreach ($groupedItems as $item) {
-                    DetailPeminjaman::create([
-                        'id_peminjaman' => $peminjaman->id,
-                        'id_barang' => $item['barang_id'],
-                        'jumlah_dipinjam' => $item['jumlah'],
-                        'status_persetujuan' => 'menunggu_verifikasi', // Status persetujuan awal
-                        'status_pengambilan' => 'belum_diambil', // Status pengambilan awal
-                        'status_pengembalian' => 'dipinjam', // Status pengembalian awal
-                        'ruangan_asal' => $item['ruangan_asal'],
-                        'ruangan_tujuan' => $item['ruangan_tujuan'],
-                        'tanggal_pinjam' => $item['tanggal_pinjam'],
-                        'tanggal_kembali' => $item['tanggal_kembali'],
-                        'durasi_pinjam' => $item['durasi_pinjam'],
-                        'dapat_diperpanjang' => true, // Default: bisa diperpanjang
-                        'diperpanjang' => false,
-                    ]);
+            // Cek ketersediaan semua unit yang dipilih
+            $selectedUnits = BarangQrCode::whereIn('id', $validated['selected_items'])->get();
+            foreach ($selectedUnits as $unit) {
+                if ($unit->status !== BarangQrCode::STATUS_TERSEDIA) {
+                    throw new \Exception("Unit barang '{$unit->kode_inventaris_sekolah} ({$unit->barang->nama_barang})' tidak tersedia saat ini (Status: {$unit->status}).");
                 }
             }
 
+            $peminjaman = Peminjaman::create([
+                'id_guru' => $user->id,
+                'tanggal_pengajuan' => now(),
+                'tujuan_peminjaman' => $validated['tujuan_peminjaman'],
+                'status' => Peminjaman::STATUS_DIAJUKAN, // Gunakan kolom status yang benar
+                'catatan_peminjam' => $validated['catatan_peminjam'],
+                'tanggal_rencana_pinjam' => $validated['tanggal_rencana_pinjam'],
+                'tanggal_rencana_kembali' => $validated['tanggal_rencana_kembali'],
+                'id_ruangan_tujuan_peminjaman' => $validated['id_ruangan_tujuan_peminjaman'],
+            ]);
+
+            foreach ($validated['selected_items'] as $barangQrCodeId) {
+                $unit = $selectedUnits->find($barangQrCodeId);
+                DetailPeminjaman::create([
+                    'id_peminjaman' => $peminjaman->id,
+                    'id_barang_qr_code' => $barangQrCodeId,
+                    'status_item' => DetailPeminjaman::STATUS_ITEM_DIAJUKAN,
+                    'kondisi_saat_pinjam' => $unit->kondisi,
+                ]);
+            }
+
+            // Log aktivitas
+            LogAktivitas::create([
+                'user_id' => $user->id,
+                'aktivitas' => 'Mengajukan peminjaman baru',
+                'deskripsi' => "Peminjaman ID {$peminjaman->id} - {$peminjaman->tujuan_peminjaman}",
+                'created_at' => now()
+            ]);
+
             DB::commit();
             return redirect()->route('guru.peminjaman.index')->with('success', 'Pengajuan peminjaman berhasil dikirim.');
-        } catch (\Throwable $th) {
+        } catch (\Exception $e) {
             DB::rollBack();
-            report($th);
-            return back()->with('error', 'Terjadi kesalahan saat mengajukan peminjaman: ' . $th->getMessage());
+            Log::error('Gagal mengajukan peminjaman oleh guru: ' . $e->getMessage() . ' - Line: ' . $e->getLine() . ' - File: ' . $e->getFile());
+            return redirect()->back()->with('error', 'Gagal mengajukan peminjaman: ' . $e->getMessage())->withInput();
         }
     }
 
-    private function calculateDurasi($tanggalPinjam, $tanggalKembali)
-    {
-        $date1 = Carbon::parse($tanggalPinjam);
-        $date2 = Carbon::parse($tanggalKembali);
-
-        return $date1->diffInDays($date2);
-    }
-
     /**
-     * Menampilkan detail peminjaman
+     * Menampilkan detail peminjaman.
      */
-    public function show($id)
+    public function show(Peminjaman $peminjaman): View
     {
-        $peminjaman = Peminjaman::with(['peminjam', 'detailPeminjaman.barang', 'detailPeminjaman.ruanganAsal', 'detailPeminjaman.ruanganTujuan', 'pengajuanDisetujuiOleh'])
-            ->findOrFail($id);
+        $this->authorize('view', $peminjaman);
+
+        $peminjaman->load([
+            'detailPeminjaman.barangQrCode.barang.kategori',
+            'detailPeminjaman.barangQrCode.ruangan',
+            'detailPeminjaman.operatorSetuju',
+            'detailPeminjaman.operatorVerifikasiKembali',
+            'operatorProses',
+            'guru',
+            'ruanganTujuanPeminjaman' // Tambahan relasi yang diperlukan
+        ]);
 
         return view('guru.peminjaman.show', compact('peminjaman'));
     }
 
     /**
-     * Menghapus item dari peminjaman (hanya jika statusnya "menunggu_verifikasi")
+     * Membatalkan pengajuan peminjaman (oleh Guru, jika status masih 'Diajukan').
      */
-    public function destroy($id, Request $request)
+    // public function destroy(Peminjaman $peminjaman, Request $request): RedirectResponse
+    // {
+    //     $this->authorize('delete', $peminjaman);
+
+    //     // Perbaiki pengecekan status
+    //     if ($peminjaman->status !== Peminjaman::STATUS_DIAJUKAN) {
+    //         return redirect()->back()->with('error', 'Peminjaman tidak dapat dibatalkan karena sudah diproses atau statusnya bukan diajukan.');
+    //     }
+
+    //     try {
+    //         DB::beginTransaction();
+
+    //         $peminjaman->detailPeminjaman()->update(['status_item' => DetailPeminjaman::STATUS_ITEM_DIBATALKAN]);
+    //         $peminjaman->status = Peminjaman::STATUS_DIBATALKAN; // Gunakan kolom status yang benar
+    //         $peminjaman->save();
+
+    //         // Log aktivitas
+    //         LogAktivitas::create([
+    //             'user_id' => Auth::id(),
+    //             'aktivitas' => 'Membatalkan peminjaman',
+    //             'deskripsi' => "Peminjaman ID {$peminjaman->id} dibatalkan oleh peminjam",
+    //             'created_at' => now()
+    //         ]);
+
+    //         DB::commit();
+    //         return redirect()->route('guru.peminjaman.index')->with('success', 'Pengajuan peminjaman berhasil dibatalkan.');
+    //     } catch (\Exception $e) {
+    //         DB::rollBack();
+    //         Log::error('Gagal membatalkan peminjaman: ' . $e->getMessage());
+    //         return redirect()->back()->with('error', 'Gagal membatalkan peminjaman: ' . $e->getMessage());
+    //     }
+    // }
+
+    /**
+     * Menampilkan daftar peminjaman yang sedang berlangsung untuk guru.
+     */
+    public function peminjamanBerlangsung(): View
     {
-        DB::beginTransaction();
-        try {
-            $user = Auth::user();
-            $detailId = $request->input('detail_id');
-
-            $detail = DetailPeminjaman::findOrFail($detailId);
-            $peminjaman = Peminjaman::findOrFail($detail->id_peminjaman);
-
-            if ($peminjaman->status_persetujuan != 'menunggu_verifikasi') {
-                throw new \Exception('Hanya dapat menghapus item dari peminjaman dengan status menunggu_verifikasi.');
-            }
-
-            if (!$user || ($peminjaman->id_peminjam != $user->id && !in_array($user->role, [User::ROLE_ADMIN, User::ROLE_OPERATOR]))) {
-                throw new \Exception('Anda tidak berhak menghapus item dari peminjaman ini.');
-            }
-
-            $barang = Barang::find($detail->id_barang);
-            $barang->stok_tersedia += $detail->jumlah_dipinjam;
-            $barang->save();
-
-            $detail->delete();
-
-            // Jika semua detail peminjaman telah dihapus, hapus peminjaman
-            if ($peminjaman->detailPeminjaman()->count() === 0) {
-                $peminjaman->delete();
-                DB::commit();
-                return redirect()->route('guru.peminjaman.index')->with('success', 'Peminjaman berhasil dihapus karena tidak ada lagi item.');
-            }
-
-            DB::commit();
-            return redirect()->route('guru.peminjaman.show', $id)->with('success', 'Item berhasil dihapus dari peminjaman.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()->with('error', 'Gagal menghapus item: ' . $e->getMessage());
-        }
-    }
-
-    public function peminjamanBerlangsung()
-    {
+        $this->authorize('viewAnyGuru', Peminjaman::class);
         $user = Auth::user();
+        /** @var \App\Models\User $user */
 
-        $peminjamanBerlangsung = Peminjaman::where('id_peminjam', $user->id)
-            ->where(function ($query) {
-                $query->where('status_persetujuan', 'disetujui')
-                    ->orWhere('status_persetujuan', 'menunggu_verifikasi');
-            })
-            ->with(['detailPeminjaman.barang', 'detailPeminjaman.ruanganTujuan'])
-            ->paginate(10, ['*'], 'peminjamanBerlangsungPage');
+        $peminjamanBerlangsung = Peminjaman::where('id_guru', $user->id)
+            ->where('status', Peminjaman::STATUS_SEDANG_DIPINJAM) // Perbaiki nama kolom
+            ->with(['detailPeminjaman.barangQrCode.barang', 'ruanganTujuanPeminjaman'])
+            ->orderBy('tanggal_rencana_kembali', 'asc')
+            ->paginate(10);
 
-        $peminjamanTerlambat = Peminjaman::where('id_peminjam', $user->id)
-            ->whereHas('detailPeminjaman', function ($query) {
-                $query->where('status_pengembalian', 'dipinjam')
-                    ->where('tanggal_kembali', '<', now());
-            })
-            ->with(['detailPeminjaman.barang', 'detailPeminjaman.ruanganTujuan'])
-            ->paginate(10, ['*'], 'peminjamanTerlambatPage');
-
-        return view('guru.peminjaman.sedang-berlangsung', compact('peminjamanBerlangsung', 'peminjamanTerlambat'));
+        return view('guru.peminjaman.sedang-berlangsung', compact('peminjamanBerlangsung'));
     }
 
-    public function ajukanPengembalian($id)
+    /**
+     * Guru mengajukan pengembalian untuk semua item dalam satu peminjaman.
+     */
+    // public function ajukanPengembalian(Request $request, Peminjaman $peminjaman): RedirectResponse
+    // {
+    //     $this->authorize('ajukanPengembalian', $peminjaman);
+
+    //     if ($peminjaman->status !== Peminjaman::STATUS_SEDANG_DIPINJAM) {
+    //         return redirect()->back()->with('error', 'Pengembalian hanya dapat diajukan untuk peminjaman yang sedang berlangsung.');
+    //     }
+
+    //     $validated = $request->validate([
+    //         'catatan_pengembalian_guru' => 'nullable|string|max:500',
+    //         'kondisi_item_kembali.*' => ['required', Rule::in(BarangQrCode::getValidKondisi())],
+    //     ]);
+
+    //     try {
+    //         DB::beginTransaction();
+    //         $semuaItemDiajukanKembali = true;
+
+    //         foreach ($peminjaman->detailPeminjaman as $detail) {
+    //             if (in_array($detail->status_item, [DetailPeminjaman::STATUS_ITEM_DIAMBIL, DetailPeminjaman::STATUS_ITEM_TERLAMBAT])) {
+    //                 $kondisiSetelahDipakai = $validated['kondisi_item_kembali'][$detail->id_barang_qr_code] ?? $detail->barangQrCode->kondisi;
+
+    //                 $detail->status_item = DetailPeminjaman::STATUS_ITEM_MENUNGGU_VERIFIKASI_KEMBALI;
+    //                 $detail->kondisi_saat_kembali_diajukan = $kondisiSetelahDipakai;
+    //                 $detail->catatan_pengembalian_peminjam = $request->catatan_pengembalian_guru;
+    //                 $detail->tanggal_diajukan_kembali = now();
+    //                 $detail->save();
+    //             } elseif (!in_array($detail->status_item, [DetailPeminjaman::STATUS_ITEM_DIKEMBALIKAN, DetailPeminjaman::STATUS_ITEM_DITOLAK])) {
+    //                 $semuaItemDiajukanKembali = false;
+    //             }
+    //         }
+
+    //         if ($semuaItemDiajukanKembali && $peminjaman->detailPeminjaman()->whereIn('status_item', [DetailPeminjaman::STATUS_ITEM_DIAMBIL, DetailPeminjaman::STATUS_ITEM_TERLAMBAT])->count() == 0) {
+    //             $peminjaman->status = Peminjaman::STATUS_MENUNGGU_VERIFIKASI_KEMBALI;
+    //             $peminjaman->save();
+    //         } else if ($peminjaman->detailPeminjaman()->where('status_item', DetailPeminjaman::STATUS_ITEM_MENUNGGU_VERIFIKASI_KEMBALI)->exists()) {
+    //             $peminjaman->status = Peminjaman::STATUS_SEBAGIAN_DIAJUKAN_KEMBALI;
+    //             $peminjaman->save();
+    //         }
+
+    //         // Log aktivitas
+    //         LogAktivitas::create([
+    //             'user_id' => Auth::id(),
+    //             'aktivitas' => 'Mengajukan pengembalian',
+    //             'deskripsi' => "Peminjaman ID {$peminjaman->id} - pengajuan pengembalian",
+    //             'created_at' => now()
+    //         ]);
+
+    //         DB::commit();
+    //         return redirect()->route('guru.peminjaman.show', $peminjaman->id)->with('success', 'Pengajuan pengembalian berhasil dikirim.');
+    //     } catch (\Exception $e) {
+    //         DB::rollBack();
+    //         Log::error('Gagal mengajukan pengembalian oleh guru: ' . $e->getMessage());
+    //         return redirect()->back()->with('error', 'Gagal mengajukan pengembalian: ' . $e->getMessage());
+    //     }
+    // }
+
+    /**
+     * Menampilkan riwayat peminjaman guru.
+     */
+    public function riwayat(Request $request): View
     {
-        try {
-            DB::beginTransaction();
+        $this->authorize('viewAnyGuru', Peminjaman::class);
+        $user = Auth::user();
+        /** @var \App\Models\User $user */
 
-            $detailPeminjaman = DetailPeminjaman::findOrFail($id);
+        $query = Peminjaman::where('id_guru', $user->id)
+            ->whereIn('status', [Peminjaman::STATUS_SELESAI, Peminjaman::STATUS_DITOLAK, Peminjaman::STATUS_DIBATALKAN]) // Perbaiki nama kolom
+            ->with(['detailPeminjaman.barangQrCode.barang', 'operatorProses'])
+            ->orderBy('tanggal_proses', 'desc');
 
-            if ($detailPeminjaman->status_pengembalian != 'dipinjam') {
-                throw new \Exception("Pengembalian hanya dapat diajukan untuk item yang sedang dipinjam.");
-            }
-
-            // Menggunakan metode yang ada di model DetailPeminjaman
-            $detailPeminjaman->ajukanPengembalian();
-
-            DB::commit();
-
-            return redirect()->back()->with('success', 'Pengajuan pengembalian berhasil.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()->with('error', 'Gagal mengajukan pengembalian: ' . $e->getMessage());
+        if ($request->filled('status_peminjaman')) {
+            $query->where('status', $request->status_peminjaman); // Perbaiki nama kolom
         }
-    }
 
-    public function ajukanPerpanjangan($id)
-    {
-        try {
-            DB::beginTransaction();
-
-            $detailPeminjaman = DetailPeminjaman::findOrFail($id);
-
-            if ($detailPeminjaman->status_pengembalian != 'dipinjam') {
-                throw new \Exception("Perpanjangan hanya dapat diajukan untuk item yang sedang dipinjam.");
-            }
-
-            if (!$detailPeminjaman->dapat_diperpanjang) {
-                throw new \Exception("Item ini tidak dapat diperpanjang.");
-            }
-
-            // Ubah status pengajuan perpanjangan
-            $detailPeminjaman->status_pengembalian = 'menunggu_verifikasi';
-            $detailPeminjaman->diperpanjang = true; // Menandai bahwa ini adalah permintaan perpanjangan
-            $detailPeminjaman->save();
-
-            // Update status peminjaman induk
-            $detailPeminjaman->peminjaman->updateStatusPengembalian();
-
-            DB::commit();
-
-            return redirect()->back()->with('success', 'Pengajuan perpanjangan berhasil.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()->with('error', 'Gagal mengajukan perpanjangan: ' . $e->getMessage());
+        if ($request->filled('search')) {
+            $searchTerm = $request->search;
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('tujuan_peminjaman', 'like', "%{$searchTerm}%")
+                    ->orWhereHas('detailPeminjaman.barangQrCode.barang', function ($subq) use ($searchTerm) {
+                        $subq->where('nama_barang', 'like', "%{$searchTerm}%");
+                    });
+            });
         }
+
+        $riwayatPeminjaman = $query->paginate(10)->withQueryString();
+        $statusOptions = Peminjaman::getPossibleStatuses();
+
+        return view('guru.peminjaman.riwayat', compact('riwayatPeminjaman', 'statusOptions'));
     }
 
-    public function getBarangByRuangan($ruanganId)
+    /**
+     * Mengambil daftar barang (unit) yang tersedia berdasarkan ruangan untuk form create peminjaman.
+     */
+    public function getBarangUnitsByRuangan(Request $request, Ruangan $ruangan): JsonResponse
     {
-        $barang = Barang::where('ruangan_id', $ruanganId)->get();
-        return response()->json($barang);
+        $searchTerm = $request->input('q', '');
+
+        $units = BarangQrCode::where('id_ruangan', $ruangan->id)
+            ->where('status', BarangQrCode::STATUS_TERSEDIA)
+            ->whereNull('deleted_at')
+            ->whereHas('barang', function ($query) use ($searchTerm) {
+                $query->where('nama_barang', 'like', "%{$searchTerm}%")
+                    ->orWhere('kode_barang', 'like', "%{$searchTerm}%")
+                    ->orWhere('merk_model', 'like', "%{$searchTerm}%");
+            })
+            ->with('barang:id,nama_barang,kode_barang,merk_model')
+            ->select('id', 'kode_inventaris_sekolah', 'no_seri_pabrik', 'id_barang')
+            ->take(20)
+            ->get()
+            ->map(function ($unit) {
+                $merk_model_display = $unit->barang->merk_model ?? 'N/A';
+                $no_seri_display = $unit->no_seri_pabrik ? " (SN: {$unit->no_seri_pabrik})" : "";
+
+                return [
+                    'id' => $unit->id,
+                    // Gabungkan string dengan cara yang lebih aman
+                    'text' => "{$unit->kode_inventaris_sekolah} - {$unit->barang->nama_barang} ({$merk_model_display}){$no_seri_display}",
+                    'nama_barang' => $unit->barang->nama_barang,
+                    'kode_inventaris' => $unit->kode_inventaris_sekolah,
+                    'no_seri' => $unit->no_seri_pabrik,
+                    'kondisi' => $unit->kondisi, // Mengirimkan kondisi unit
+                    'merk_model' => $merk_model_display // Mengirimkan merk/model yang sudah diproses
+                ];
+            });
+
+        return response()->json($units);
     }
 }

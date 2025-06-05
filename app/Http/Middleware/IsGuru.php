@@ -10,7 +10,7 @@ class IsGuru
 {
     public function handle(Request $request, Closure $next)
     {
-        if (Auth::check() && Auth::user()->role === 'Guru') {
+        if (Auth::check() && Auth::user()->role === \App\Models\User::ROLE_GURU) {
             return $next($request);
         }
 

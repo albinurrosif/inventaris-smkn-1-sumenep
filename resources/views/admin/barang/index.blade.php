@@ -1,24 +1,31 @@
 @extends('layouts.app')
 
-@section('title', 'Daftar Barang')
+@section('title', 'Daftar Jenis Barang')
+
+@push('styles')
+@endpush
 
 @section('content')
+    {{-- Notifikasi untuk kegagalan import --}}
     @if (session('failures'))
         <script>
             document.addEventListener('DOMContentLoaded', function() {
-                let failureMessages = '';
+                let failureMessages = '<ul class="text-start ps-3">';
                 @foreach (session('failures') as $failure)
-                    failureMessages += `• Baris {{ $failure->row() }}: {{ implode(', ', $failure->errors()) }}<br>`;
+                    failureMessages +=
+                        `<li class="mb-1">Baris {{ $failure->row() }}: {{ implode(', ', $failure->errors()) }}</li>`;
                 @endforeach
+                failureMessages += '</ul>';
 
                 Swal.fire({
                     icon: 'error',
                     title: 'Import Gagal',
                     html: failureMessages,
-                    showConfirmButton: false,
-                    timer: 5000, // Lebih lama karena pesan mungkin panjang
-                    position: 'top',
-                    toast: true
+                    showConfirmButton: true,
+                    position: 'center',
+                    customClass: {
+                        htmlContainer: 'text-start'
+                    }
                 });
             });
         </script>
@@ -28,307 +35,439 @@
         <div class="row">
             <div class="col-12">
                 <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0">Daftar Jenis Barang (Induk)</h4>
                     <div class="page-title-right">
                         <ol class="breadcrumb m-0">
                             <li class="breadcrumb-item"><a href="{{ route('redirect-dashboard') }}">Dashboard</a></li>
-                            <li class="breadcrumb-item active">Daftar Barang</li>
+                            <li class="breadcrumb-item active">Daftar Jenis Barang</li>
                         </ol>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h4 class="card-title mb-0">Data Barang (Agregat)</h4>
-                        <div class="d-flex align-items-center gap-2">
-                            <form method="GET" action="#" class="d-flex align-items-center gap-2">
-                                <input type="hidden" name="id_ruangan" value="{{ request('id_ruangan') }}">
-                                <input type="hidden" name="id_kategori" value="{{ request('id_kategori') }}">
-                                <input type="hidden" name="status" value="{{ request('status') }}">
-                                <input type="hidden" name="keadaan_barang" value="{{ request('keadaan_barang') }}">
-                                <input type="hidden" name="tahun" value="{{ request('tahun') }}">
+        {{-- Card Filter --}}
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="fas fa-filter me-2"></i>Filter & Pencarian Jenis Barang</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{{ route('barang.index') }}" id="filterFormJenisBarang">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label for="id_kategori_filter" class="form-label mb-1">Kategori</label>
+                            <select name="id_kategori" id="id_kategori_filter" class="form-control" {{-- Choices.js akan menggantikan ini --}}
+                                data-choices-removeItemButton="true"
+                                onchange="document.getElementById('filterFormJenisBarang').submit()">
+                                <option value="">-- Semua Kategori --</option>
+                                @foreach ($kategoriList as $kategori)
+                                    <option value="{{ $kategori->id }}"
+                                        {{ ($kategoriId ?? '') == $kategori->id ? 'selected' : '' }}>
+                                        {{ $kategori->nama_kategori }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
 
-                                <a href="{{ route('barang-qr-code.export.excel', request()->query()) }}"
-                                    class="btn btn-success">
-                                    <i class="mdi mdi-file-excel"></i> Export Excel
-                                </a>
+                        <div class="col-md-3">
+                            <label for="id_ruangan_filter" class="form-label mb-1">Ruangan (Unit)</label>
+                            <select name="id_ruangan" id="id_ruangan_filter" class="form-control" {{-- Choices.js akan menggantikan ini --}}
+                                data-choices-removeItemButton="true"
+                                onchange="document.getElementById('filterFormJenisBarang').submit()">
+                                <option value="">-- Semua Ruangan --</option>
+                                @foreach ($ruanganList as $ruanganItem)
+                                    <option value="{{ $ruanganItem->id }}"
+                                        {{ ($ruanganId ?? '') == $ruanganItem->id ? 'selected' : '' }}>
+                                        {{ $ruanganItem->nama_ruangan }} ({{ $ruanganItem->kode_ruangan }})
+                                    </option>
+                                @endforeach
+                                <option value="tanpa-ruangan"
+                                    {{ ($ruanganId ?? '') == 'tanpa-ruangan' ? 'selected' : '' }}>
+                                    Tanpa Ruangan (Dipegang Personal/Baru)
+                                </option>
+                            </select>
+                        </div>
 
-                                <a href="{{ route('barang-qr-code.export.pdf', array_merge(request()->query(), ['pisah_per_ruangan' => false])) }}"
-                                    class="btn btn-danger">
-                                    <i class="mdi mdi-file-pdf-box"></i> Export PDF
-                                </a>
-
-                                {{-- Tambahan: pisah per ruangan --}}
-                                <a href="{{ route('barang-qr-code.export.pdf', array_merge(request()->query(), ['pisah_per_ruangan' => true])) }}"
-                                    class="btn btn-outline-danger">
-                                    <i class="mdi mdi-file-pdf-box"></i> PDF (Per Ruangan)
-                                </a>
-
-                                <button type="button" class="btn btn-info"
-                                    onclick="document.getElementById('fileInput').click();">
-                                    <i class="mdi mdi-upload"></i> Import
+                        <div class="col-md-4">
+                            <label for="search_filter" class="form-label mb-1">Pencarian</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" name="search" id="search_filter" class="form-control"
+                                    placeholder="Nama, Kode, Merk/Model..." value="{{ $searchTerm ?? '' }}">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-search"></i>
                                 </button>
+                            </div>
+                        </div>
 
-                                <a href="{{ route('barang.create') }}" class="btn btn-primary">
-                                    <i class="mdi mdi-plus"></i> Tambah Barang
-                                </a>
-
-                            </form>
-                            <form id="importForm" action="{{ route('barang.import') }}" method="POST"
-                                enctype="multipart/form-data" class="d-none">
-                                @csrf
-                                <input type="file" name="file" id="fileInput" accept=".csv,.xlsx"
-                                    onchange="document.getElementById('importForm').submit()" hidden>
-                            </form>
-                            {{-- <button type="button" class="btn btn-info"
-                                onclick="document.getElementById('fileInput').click();"><i class="mdi mdi-upload"></i>
-                                Import</button>
-                            <button id="btnTambahBarang" class="btn btn-primary"><i class="mdi mdi-plus"></i> Tambah
-                                Barang</button> --}}
+                        <div class="col-md-2 d-grid">
+                            <label for="btn_reset_filter_barang" class="form-label mb-1">&nbsp;</label>
+                            {{-- Label kosong untuk alignment --}}
+                            <a href="{{ route('barang.index') }}" id="btn_reset_filter_barang"
+                                class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-sync-alt me-1"></i> Reset
+                            </a>
                         </div>
                     </div>
+                </form>
+            </div>
+        </div>
 
-                    <div class="card-body">
-                        <form method="GET" action="{{ route('barang.index') }}" class="row g-3 align-items-center mb-3">
-                            <div class="col-auto">
-                                <label for="id_ruangan" class="col-form-label">Filter Ruangan:</label>
-                            </div>
-                            <div class="col-auto">
-                                <select name="id_ruangan" id="id_ruangan" class="form-select form-select-sm"
-                                    onchange="this.form.submit()">
-                                    <option value="">-- Semua Ruangan --</option>
-                                    @foreach ($ruanganList as $ruanganItem)
-                                        <option value="{{ $ruanganItem->id }}"
-                                            {{ $ruanganId == $ruanganItem->id ? 'selected' : '' }}>
-                                            {{ $ruanganItem->nama_ruangan }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="col-auto ms-auto">
-                                <label for="globalSearch" class="visually-hidden">Cari</label>
-                                <input type="text" id="globalSearch" class="form-control form-control-sm"
-                                    placeholder="Cari di semua kolom...">
-                            </div>
-                        </form>
+        {{-- Tombol Aksi Global & Tambah --}}
+        <div class="mb-3 d-flex justify-content-end align-items-center">
+            <div class="d-flex align-items-center gap-2">
+                @can('export', App\Models\BarangQrCode::class)
+                    <a href="{{ route('barang-qr-code.export-excel', array_merge(request()->query(), ['search' => $searchTerm ?? null, 'id_ruangan' => $ruanganId ?? null, 'id_kategori' => $kategoriId ?? null])) }}"
+                        class="btn btn-outline-success btn-sm">
+                        <i class="mdi mdi-file-excel me-1"></i>Export Excel (Unit)
+                    </a>
+                    <a href="{{ route('barang-qr-code.export-pdf', array_merge(request()->query(), ['search' => $searchTerm ?? null, 'id_ruangan' => $ruanganId ?? null, 'id_kategori' => $kategoriId ?? null, 'pisah_per_ruangan' => false])) }}"
+                        class="btn btn-outline-danger btn-sm">
+                        <i class="mdi mdi-file-pdf-box me-1"></i> Export PDF (Unit Semua)
+                    </a>
+                    <a href="{{ route('barang-qr-code.export-pdf', array_merge(request()->query(), ['search' => $searchTerm ?? null, 'id_ruangan' => $ruanganId ?? null, 'id_kategori' => $kategoriId ?? null, 'pisah_per_ruangan' => true])) }}"
+                        class="btn btn-danger btn-sm">
+                        <i class="mdi mdi-file-pdf-box me-1"></i> Export PDF (Unit Per Ruangan)
+                    </a>
+                @endcan
+                @can('import', App\Models\Barang::class)
+                    <button type="button" class="btn btn-outline-info btn-sm"
+                        onclick="document.getElementById('fileInputImportBarang').click();">
+                        <i class="mdi mdi-upload me-1"></i> Import Barang
+                    </button>
+                    <form id="importFormBarang" action="{{ route('barang.import.all') }}" method="POST"
+                        enctype="multipart/form-data" class="d-none">
+                        @csrf
+                        <input type="file" name="file" id="fileInputImportBarang" accept=".csv,.xlsx"
+                            onchange="document.getElementById('importFormBarang').submit()">
+                    </form>
+                @endcan
+                @can('create', App\Models\Barang::class)
+                    <a href="{{ route('barang.create') }}" class="btn btn-success btn-sm">
+                        <i class="mdi mdi-plus me-1"></i> Tambah Jenis Barang
+                    </a>
+                @endcan
+            </div>
+        </div>
 
-                        <div class="table-responsive">
-                            <table id="barangTable" class="table table-bordered dt-responsive nowrap w-100 table-hover">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Nama</th>
-                                        <th>Kode</th>
-                                        <th>Merk/Model</th>
-                                        <th>Ukuran</th>
-                                        <th>Bahan</th>
-                                        <th>Tahun</th>
-                                        <th>Jumlah</th>
-                                        <th>Harga</th>
-                                        <th>Sumber</th>
-                                        <th>Keadaan</th>
-                                        <th>Ruangan</th>
-                                        <th>Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tfoot>
-                                    <tr>
-                                        <th><input type="text" placeholder="Filter No"
-                                                class="form-control form-control-sm"></th>
-                                        <th><input type="text" placeholder="Filter Nama"
-                                                class="form-control form-control-sm"></th>
-                                        <th><input type="text" placeholder="Filter Kode"
-                                                class="form-control form-control-sm"></th>
-                                        <th><input type="text" placeholder="Filter Merk / Model"
-                                                class="form-control form-control-sm"></th>
-                                        <th><input type="text" placeholder="Filter Ukuran"
-                                                class="form-control form-control-sm"></th>
-                                        <th><input type="text" placeholder="Filter Bahan"
-                                                class="form-control form-control-sm"></th>
-                                        <th><input type="text" placeholder="Filter Tahun"
-                                                class="form-control form-control-sm"></th>
-                                        <th><input type="text" placeholder="Filter Jumlah"
-                                                class="form-control form-control-sm"></th>
-                                        <th><input type="text" placeholder="Filter Harga"
-                                                class="form-control form-control-sm"></th>
-                                        <th><input type="text" placeholder="Filter Sumber"
-                                                class="form-control form-control-sm"></th>
-                                        <th><input type="text" placeholder="Filter Keadaan"
-                                                class="form-control form-control-sm"></th>
-                                        <th><input type="text" placeholder="Filter Ruangan"
-                                                class="form-control form-control-sm"></th>
-                                        <th>Aksi</th>
-                                    </tr>
-                                </tfoot>
-                                <tbody>
-                                    @foreach ($barang as $index => $item)
-                                        <tr>
-                                            <td>{{ $index + 1 }}</td>
-                                            {{-- <td>{{ $item->nama_barang }}</td> --}}
-                                            <td>
-                                                <a
-                                                    href="{{ route('barang.show', $item->id) }}">{{ $item->nama_barang }}</a>
-                                            </td>
-                                            <td>{{ $item->kode_barang }}</td>
-                                            <td>{{ $item->merk_model ?? '-' }}</td>
-                                            <td>{{ $item->ukuran ?? '-' }}</td>
-                                            <td>{{ $item->bahan ?? '-' }}</td>
-                                            <td>{{ $item->tahun_pembuatan_pembelian ?? '-' }}</td>
-                                            <td>{{ $item->jumlah_barang }}</td>
-                                            <td>{{ $item->harga_beli ? 'Rp' . number_format($item->harga_beli, 0, ',', '.') : '-' }}
-                                            </td>
-                                            <td>{{ $item->sumber ?? '-' }}</td>
-                                            <td><span
-                                                    class="badge bg-{{ $item->keadaan_barang == 'Baik' ? 'success' : ($item->keadaan_barang == 'Kurang Baik' ? 'warning' : 'danger') }}">{{ $item->keadaan_barang }}</span>
-                                            </td>
-                                            <td>
-                                                @if ($item->qrCodes->isNotEmpty())
-                                                    {{ $item->qrCodes->first()->ruangan->nama_ruangan ?? '-' }}
-                                                @else
-                                                    -
-                                                @endif
-                                            </td>
-                                            <td>
+        {{-- Card Tabel Data --}}
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-0"><i class="mdi mdi-format-list-bulleted me-2"></i>Data Jenis Barang</h4>
+            </div>
+            <div class="card-body">
+                @if ($operatorTidakAdaRuangan ?? false)
+                    <div class="alert alert-warning text-center" role="alert">
+                        Anda adalah Operator dan saat ini tidak ditugaskan untuk mengelola ruangan manapun. <br> Tidak ada
+                        jenis barang yang dapat ditampilkan sesuai lingkup Anda. Silakan hubungi Admin.
+                    </div>
+                @endif
+                <div class="table-responsive">
+                    <table id="barangTable" class="table table-hover table-striped dt-responsive align-middle nowrap w-100">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Nama Barang</th>
+                                <th>Kode</th>
+                                <th>Kategori</th>
+                                <th>Merk/Model</th>
+                                <th>Tahun</th>
+                                <th class="text-center">Jml. Unit Aktif</th>
+                                <th class="text-end">Harga Induk (Rp)</th>
+                                <th>Sumber Induk</th>
+                                <th style="width: 120px;" class="text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse ($barangs as $index => $item)
+                                <tr>
+                                    <td>{{ $barangs->firstItem() + $index }}</td>
+                                    <td>
+                                        <a href="{{ route('barang.show', $item->id) }}"
+                                            class="fw-medium">{{ $item->nama_barang }}</a>
+                                        <small class="d-block text-muted">
+                                            {{ $item->menggunakan_nomor_seri ? 'Perlu No. Seri Unit' : 'Tidak Perlu No. Seri Unit' }}
+                                        </small>
+                                    </td>
+                                    <td>{{ $item->kode_barang }}</td>
+                                    <td>{{ $item->kategori->nama_kategori ?? '-' }}</td>
+                                    <td>{{ $item->merk_model ?? '-' }}</td>
+                                    <td>{{ $item->tahun_pembuatan ?? '-' }}</td>
+                                    <td class="text-center">{{ $item->active_qr_codes_count }}</td>
+                                    <td class="text-end">
+                                        {{ $item->harga_perolehan_induk ? number_format($item->harga_perolehan_induk, 0, ',', '.') : '-' }}
+                                    </td>
+                                    <td>{{ $item->sumber_perolehan_induk ?? '-' }}</td>
+                                    <td>
+                                        <div class="d-flex gap-1 justify-content-center">
+                                            @can('view', $item)
                                                 <a href="{{ route('barang.show', $item->id) }}"
-                                                    class="btn btn-info btn-sm" title="Lihat Detail">
+                                                    class="btn btn-outline-info btn-sm" title="Lihat Detail & Unit">
                                                     <i class="fas fa-eye"></i>
                                                 </a>
-                                                <button type="button" class="btn btn-warning btn-sm btn-edit-barang"
-                                                    data-barang='@json($item)'>
+                                            @endcan
+                                            {{-- @can('update', $item)
+                                                <a href="{{ route('barang.edit', $item->id) }}"
+                                                    class="btn btn-outline-warning btn-sm" title="Edit Info Induk">
                                                     <i class="fas fa-edit"></i>
+                                                </a>
+                                            @endcan
+                                            @can('delete', $item)
+                                                <button type="button" class="btn btn-outline-danger btn-sm btn-delete-barang"
+                                                    data-id="{{ $item->id }}" data-nama="{{ $item->nama_barang }}"
+                                                    data-route="{{ route('barang.destroy', $item->id) }}"
+                                                    title="Hapus Jenis Barang & Arsipkan Unitnya">
+                                                    <i class="fas fa-trash"></i>
                                                 </button>
-
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                                            @endcan --}}
+                                        </div>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="10" class="text-center py-4">
+                                        @if ($operatorTidakAdaRuangan ?? false)
+                                            <i class="fas fa-folder-open fs-3 text-muted mb-2"></i><br>
+                                            Anda tidak memiliki akses ke jenis barang manapun karena tidak ada ruangan yang
+                                            dikelola.
+                                        @else
+                                            <i class="fas fa-folder-open fs-3 text-muted mb-2"></i><br>
+                                            Jenis barang tidak ditemukan. Silakan coba dengan filter lain atau tambahkan
+                                            jenis barang baru.
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
                 </div>
+                {{-- @if ($barangs->hasPages())
+                    <div class="mt-3 d-flex justify-content-center">
+                        {{ $barangs->links() }}
+                    </div>
+                @endif --}}
             </div>
         </div>
     </div>
-
-    @include('admin.barang.partials.modal_edit')
-
 @endsection
 
 @push('scripts')
     <script>
-        $(document).ready(function() {
-            // Hancurkan instance DataTables jika sudah ada
+        document.addEventListener('DOMContentLoaded', function() {
+            const kategoriFilterEl = document.getElementById('id_kategori_filter');
+            if (kategoriFilterEl) {
+                new Choices(kategoriFilterEl, {
+                    removeItemButton: true,
+                    searchPlaceholderValue: "Cari kategori...",
+
+                    allowHTML: true,
+                    noResultsText: 'Tidak ada hasil ditemukan',
+                    noChoicesText: 'Tidak ada pilihan untuk dipilih'
+                });
+            }
+
+            const ruanganFilterEl = document.getElementById('id_ruangan_filter');
+            if (ruanganFilterEl) {
+                new Choices(ruanganFilterEl, {
+                    removeItemButton: true,
+                    searchPlaceholderValue: "Cari ruangan...",
+                    allowHTML: true,
+                    noResultsText: 'Tidak ada hasil ditemukan',
+                    noChoicesText: 'Tidak ada pilihan untuk dipilih'
+                });
+            }
+
+            // DataTable Initialization
             if ($.fn.DataTable.isDataTable('#barangTable')) {
                 $('#barangTable').DataTable().destroy();
             }
+            if ($('#barangTable tbody tr').length > 0 && !$('#barangTable tbody tr td[colspan="10"]').length) {
+                $('#barangTable').DataTable({
+                    responsive: true,
+                    dom: 'lrtip', // Menyembunyikan length dan search global
+                    language: { // Opsi untuk melokalisasi DataTables ke Bahasa Indonesia
+                        sEmptyTable: "Tidak ada data yang tersedia pada tabel ini",
+                        sProcessing: "Sedang memproses...",
+                        sLengthMenu: "Tampilkan _MENU_ entri",
+                        sZeroRecords: "Tidak ditemukan data yang sesuai",
+                        sInfo: "Menampilkan _START_ sampai _END_ dari _TOTAL_ entri",
+                        sInfoEmpty: "Menampilkan 0 sampai 0 dari 0 entri",
+                        sInfoFiltered: "(disaring dari _MAX_ entri keseluruhan)",
+                        sInfoPostFix: "",
+                        sSearch: "Cari:",
+                        sUrl: "",
+                        oPaginate: {
+                            sFirst: "Pertama",
+                            sPrevious: "Sebelumnya",
+                            sNext: "Selanjutnya",
+                            sLast: "Terakhir"
+                        }
+                    },
+                    order: [1, 'asc'], // Biarkan server-side ordering
+                    //     paging: false, // Matikan Paging DataTables
+                    //     info: false, // Matikan Info DataTables
+                    //     searching: false // Matikan Search DataTables
+                });
+            }
 
-            // Inisialisasi ulang DataTables
-            let table = $('#barangTable').DataTable({
-                responsive: true,
-                dom: 'lrtip',
-                //buttons: ['copy', 'csv', 'excel', 'pdf', 'print'],
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/id.json'
-                },
-                order: [
-                    [0, 'asc']
-                ],
-                initComplete: function() {
-                    this.api().columns().every(function() {
-                        let column = this;
-                        $('input', column.footer()).on('keyup change clear', function() {
-                            if (column.search() !== this.value) {
-                                column.search(this.value).draw();
+            // Delete Button Logic
+            document.addEventListener('click', function(e) {
+                const deleteBtn = e.target.closest('.btn-delete-barang');
+                if (deleteBtn) {
+                    e.preventDefault();
+                    const barangNama = deleteBtn.getAttribute('data-nama');
+                    const actionUrl = deleteBtn.getAttribute('data-route');
+
+                    Swal.fire({
+                        title: 'Hapus Jenis Barang: ' + barangNama + '?',
+                        html: `
+                        <p class="text-danger mb-2 text-start">Perhatian: Menghapus jenis barang ini akan otomatis mengarsipkan semua unit fisik aktif yang terkait dengannya.</p>
+                        <form id="swalFormDeleteBarang" class="text-start">
+                           <input type="hidden" name="_token" value="{{ csrf_token() }}">
+                           <input type="hidden" name="_method" value="DELETE">
+                            <div class="mb-2">
+                                <label for="swal_jenis_penghapusan" class="form-label">Jenis Penghapusan Unit<span class="text-danger">*</span>:</label>
+                                <select name="jenis_penghapusan" id="swal_jenis_penghapusan" class="form-select form-select-sm" required>
+                                    <option value="">-- Pilih Jenis --</option>
+                                    @foreach (\App\Models\ArsipBarang::getValidJenisPenghapusan() as $key => $value)
+                                        <option value="{{ $key }}">{{ $value }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label for="swal_alasan_penghapusan" class="form-label">Alasan Penghapusan Unit<span class="text-danger">*</span>:</label>
+                                <textarea name="alasan_penghapusan" id="swal_alasan_penghapusan" class="form-control form-control-sm" rows="2" placeholder="Alasan mengapa semua unit dari jenis ini dihapus/diarsipkan" required></textarea>
+                            </div>
+                            <div class="mb-2">
+                                <label for="swal_berita_acara_path" class="form-label">Berita Acara (Opsional):</label>
+                                <input type="file" name="berita_acara_path" id="swal_berita_acara_path" class="form-control form-control-sm" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                            </div>
+                            <div class="mb-2">
+                                <label for="swal_foto_bukti_path" class="form-label">Foto Bukti (Opsional):</label>
+                                <input type="file" name="foto_bukti_path" id="swal_foto_bukti_path" class="form-control form-control-sm" accept=".jpg,.jpeg,.png">
+                            </div>
+                            <div class="mb-1">
+                                <label for="swal_konfirmasi_hapus_semua" class="form-label">Ketik <strong class="text-danger">HAPUS SEMUA</strong> untuk konfirmasi<span class="text-danger">*</span>:</label>
+                                <input type="text" name="konfirmasi_hapus_semua" id="swal_konfirmasi_hapus_semua" class="form-control form-control-sm" required autocomplete="off" placeholder="HAPUS SEMUA">
+                            </div>
+                        </form>`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#d33',
+                        cancelButtonColor: '#6c757d',
+                        confirmButtonText: 'Ya, Hapus & Arsipkan Unit!',
+                        cancelButtonText: 'Batal',
+                        customClass: {
+                            popup: 'swal2-sm',
+                            htmlContainer: 'text-start',
+                        },
+                        focusConfirm: false,
+                        preConfirm: () => {
+                            const swalForm = Swal.getPopup().querySelector(
+                                '#swalFormDeleteBarang');
+                            const jenis = swalForm.querySelector(
+                                    '#swal_jenis_penghapusan')
+                                .value;
+                            const alasan = swalForm.querySelector(
+                                    '#swal_alasan_penghapusan')
+                                .value;
+                            const konfirmasi = swalForm.querySelector(
+                                '#swal_konfirmasi_hapus_semua').value;
+                            if (!jenis) {
+                                Swal.showValidationMessage(
+                                    `Jenis penghapusan wajib dipilih.`);
+                                return false;
                             }
-                        });
+                            if (!alasan) {
+                                Swal.showValidationMessage(
+                                    `Alasan penghapusan wajib diisi.`);
+                                return false;
+                            }
+                            if (konfirmasi.toUpperCase() !== 'HAPUS SEMUA') {
+                                Swal.showValidationMessage(
+                                    `Ketik "HAPUS SEMUA" dengan benar untuk konfirmasi.`
+                                );
+                                return false;
+                            }
+                            return new FormData(swalForm);
+                        }
+                    }).then((result) => {
+                        if (result.isConfirmed && result.value instanceof FormData) {
+                            const formData = result.value;
+                            Swal.fire({
+                                title: 'Memproses...',
+                                text: 'Mohon tunggu sebentar.',
+                                allowOutsideClick: false,
+                                didOpen: () => {
+                                    Swal.showLoading();
+                                }
+                            });
+
+                            fetch(actionUrl, {
+                                method: 'POST',
+                                body: formData,
+                                headers: {
+                                    'X-CSRF-TOKEN': document.querySelector(
+                                        'meta[name="csrf-token"]').getAttribute(
+                                        'content')
+                                }
+                            }).then(response => {
+                                if (response.headers.get("content-type") && response
+                                    .headers
+                                    .get("content-type").indexOf(
+                                        "application/json") !== -1
+                                ) {
+                                    return response.json().then(data => ({
+                                        status: response.status,
+                                        ok: response.ok,
+                                        body: data,
+                                        redirected: response.redirected,
+                                        url: response.url
+                                    }));
+                                } else {
+                                    return {
+                                        status: response.status,
+                                        ok: response.ok,
+                                        body: null,
+                                        redirected: response.redirected,
+                                        url: response.url
+                                    };
+                                }
+                            }).then(res => {
+                                if (res.ok) {
+                                    if (res.redirected) {
+                                        window.location.href = res.url;
+                                    } else if (res.body && res.body.success) {
+                                        Swal.fire('Berhasil!', res.body.message ||
+                                            'Jenis barang dan unitnya telah diarsipkan.',
+                                            'success').then(() => location
+                                            .reload());
+                                    } else if (res.body && !res.body.success) {
+                                        Swal.fire('Gagal!', res.body.message ||
+                                            'Terjadi kesalahan saat menghapus.',
+                                            'error'
+                                        );
+                                    } else {
+                                        Swal.fire('Berhasil!', 'Proses selesai.',
+                                                'success')
+                                            .then(() => location.reload());
+                                    }
+                                } else {
+                                    const errorMessage = res.body && res.body
+                                        .message ? res
+                                        .body.message :
+                                        `Gagal menghapus. Status: ${res.status}`;
+                                    Swal.fire('Gagal!', errorMessage, 'error');
+                                }
+                            }).catch(error => {
+                                Swal.fire('Error!',
+                                    'Terjadi kesalahan jaringan atau sistem.',
+                                    'error');
+                                console.error('Fetch error:', error);
+                            });
+                        }
                     });
                 }
             });
-            // Hubungkan input global ke pencarian DataTables
-            $('#globalSearch').on('keyup', function() {
-                table.search(this.value).draw();
-            });
-        });
-
-        // Event listener untuk tombol tambah barang
-        document.addEventListener('DOMContentLoaded', function() {
-            const btnTambahBarang = document.getElementById('btnTambahBarang');
-            const modalElement = document.getElementById('modalTambahBarang');
-
-            if (btnTambahBarang && modalElement) {
-                const modalTambahBarang = new bootstrap.Modal(modalElement);
-
-                btnTambahBarang.addEventListener('click', function() {
-                    modalTambahBarang.show();
-                });
-            }
-
-            // Inisialisasi Bootstrap tooltip
-            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            tooltipTriggerList.map(function(tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl);
-            });
-        });
-
-
-        // Event listener untuk tombol hapus
-        document.addEventListener('click', function(e) {
-            const deleteBtn = e.target.closest('.btn-delete-barang');
-            if (deleteBtn) {
-                const barangId = deleteBtn.getAttribute('data-id');
-                const barangNama = deleteBtn.getAttribute('data-nama');
-
-                Swal.fire({
-                    title: 'Apakah Anda yakin?',
-                    text: `Barang "${barangNama}" akan dihapus secara permanen.`,
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#d33',
-                    cancelButtonColor: '#3085d6',
-                    confirmButtonText: 'Ya, hapus!',
-                    cancelButtonText: 'Batal'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        const form = document.getElementById('formDeleteBarang');
-                        form.action = `/barang/${barangId}`;
-                        form.submit();
-                    }
-                });
-            }
-        });
-
-        document.getElementById('btnAutoGenerate').addEventListener('click', function() {
-            const inputs = document.querySelectorAll('input[name^="kode_unit"]');
-            inputs.forEach((input, index) => {
-                input.value = `UNIT-${String(index + 1).padStart(3, '0')}`;
-            });
-        });
-    </script>
-    @if (session('showInputSeriModal'))
-        @php $barang = \App\Models\Barang::find(session('barang_id')); @endphp
-        @include('barang.partials.modal_input_seri', ['barang' => $barang])
-        <script>
-            var myModal = new bootstrap.Modal(document.getElementById('modalInputSeri'));
-            myModal.show();
-        </script>
-    @endif
-
-    <script>
-        document.addEventListener('click', function(e) {
-            if (e.target.closest('.btn-edit-barang')) {
-                const data = JSON.parse(e.target.closest('.btn-edit-barang').dataset.barang);
-
-                document.getElementById('editNamaBarang').value = data.nama_barang ?? '';
-                document.getElementById('editMerkModel').value = data.merk_model ?? '';
-                document.getElementById('editUkuran').value = data.ukuran ?? '';
-                document.getElementById('editBahan').value = data.bahan ?? '';
-
-                document.getElementById('formEditBarang').action = `/barang/${data.id}`;
-                const modal = new bootstrap.Modal(document.getElementById('modalEditBarang'));
-                modal.show();
-            }
         });
     </script>
 @endpush

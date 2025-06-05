@@ -67,6 +67,11 @@
 
     <!-- SweetAlert2 -->
     <link href="{{ asset('assets/libs/sweetalert2/sweetalert2.min.css') }}" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
+
+    {{-- Choices.js CSS --}}
+    <link href="{{ asset('assets/libs/choices.js/public/assets/styles/choices.min.css') }}" rel="stylesheet"
+        type="text/css" />
 
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
@@ -102,6 +107,47 @@
             background-repeat: no-repeat;
             background-position: right calc(0.375em + 0.1875rem) center;
             background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+        }
+
+        /* Custom styles untuk Choices.js agar konsisten dengan ukuran form-select-sm */
+        .choices__inner {
+            min-height: calc(1.5em + .5rem + 2px);
+            /* Mirip form-select-sm */
+            padding: .25rem .5rem;
+            font-size: .875rem;
+            line-height: 1.5;
+        }
+
+        .choices[data-type*="select-one"] .choices__inner {
+            padding-bottom: .25rem;
+        }
+
+        .choices__list--dropdown .choices__item--selectable,
+        .choices__list--dropdown .choices__item--choice {
+            font-size: .875rem;
+            padding: .35rem .75rem;
+            /* Sedikit padding agar nyaman */
+        }
+
+        .choices__input {
+            font-size: .875rem;
+            /* Samakan font size input search */
+        }
+
+        /* Pastikan label form di SweetAlert rata kiri jika diperlukan */
+        .swal2-popup .swal2-html-container .form-label {
+            text-align: left !important;
+            display: block;
+        }
+
+        .swal2-popup .swal2-html-container .form-select-sm,
+        .swal2-popup .swal2-html-container .form-control-sm {
+            font-size: 0.875rem;
+        }
+
+        .table th,
+        .table td {
+            vertical-align: middle;
         }
     </style>
     @stack('styles')
@@ -197,7 +243,12 @@
     <!-- SweetAlert2 -->
     <script src="{{ asset('assets/libs/sweetalert2/sweetalert2.min.js') }}"></script>
 
+    {{-- Choices.js JS --}}
+    <script src="{{ asset('assets/libs/choices.js/public/assets/scripts/choices.min.js') }}"></script>
+
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
 
     {{-- <script src="{{ asset('assets/js/preloader.min.js') }}"></script> --}}
     <script>
@@ -240,7 +291,7 @@
                 title: '{{ session('success') ? 'Berhasil' : 'Gagal' }}',
                 text: '{{ session('success') ?? session('error') }}',
                 showConfirmButton: false,
-                timer: 3000,
+                timer: 5000,
                 position: 'top',
                 toast: true
             });
@@ -592,7 +643,8 @@
         });
     </script>
 
-    @stack('scripts')
+    @stack('scripts');
+
 </body>
 
 </html>

@@ -10,7 +10,9 @@ class IsAdmin
 {
     public function handle(Request $request, Closure $next)
     {
-        if (Auth::check() && Auth::user()->role === 'Admin') {
+        // Pastikan User model dan konstanta role sudah benar
+        // Menggunakan konstanta dari model User lebih aman
+        if (Auth::check() && Auth::user()->role === \App\Models\User::ROLE_ADMIN) { // Perubahan di sini
             return $next($request);
         }
 

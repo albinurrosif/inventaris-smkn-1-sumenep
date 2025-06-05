@@ -3,226 +3,289 @@
 namespace App\Http\Controllers;
 
 use App\Models\KategoriBarang;
+use App\Models\LogAktivitas;
+use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
-use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\View\View;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\DB;
 
 class KategoriBarangController extends Controller
 {
-    /**
-     * Menampilkan daftar semua kategori barang
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function index(Request $request)
+    use AuthorizesRequests;
+
+    public function index(Request $request): View
     {
-        // Proses filter atau pencarian jika ada
+        $this->authorize('viewAny', KategoriBarang::class);
+
+        $searchTerm = $request->get('search');
+        $statusFilter = $request->get('status', 'aktif');
+
         $query = KategoriBarang::query();
 
-        $kategoriBarang = KategoriBarang::query()
-            ->when($request->has('search'), function ($query) use ($request) {
-                $query->search($request->search);
-            })
-            ->orderBy($request->input('sort', 'nama_kategori'), $request->input('direction', 'asc'))
-            ->paginate($request->input('per_page', 10));
-
-        // Tambahkan informasi jumlah barang untuk setiap kategori
-        // Pastikan $kategoriBarang adalah instance dari LengthAwarePaginator sebelum memanggil getCollection()
-        if ($kategoriBarang instanceof LengthAwarePaginator) {
-            $kategoriBarang->getCollection()->transform(function ($kategori) {
-                $kategori->jumlah_item = $kategori->getItemCount();
-                $kategori->jumlah_unit = $kategori->getTotalUnitCount();
-                $kategori->unit_aktif = $kategori->getActiveUnitCount();
-                $kategori->nilai_total = $kategori->getTotalValue();
-                return $kategori;
-            });
-        } else {
-            // Handle jika $kategoriBarang bukan instance yang diharapkan.  Ini penting
-            // untuk mencegah error jika terjadi sesuatu yang tidak terduga.  Misalnya:
-            // Log::error('kategoriBarang bukan instance LengthAwarePaginator'); // Jika Anda menggunakan logging
-            // Atau, kembalikan response error:
-            return response()->json(['error' => 'Terjadi kesalahan: Data kategori barang tidak valid.'], 500);
+        if ($statusFilter === 'arsip') {
+            $query->onlyTrashed();
+        } elseif ($statusFilter === 'semua') {
+            $query->withTrashed();
         }
 
-        // Load the view, passing the paginated data.
-        return view('admin.kategori.index', compact('kategoriBarang'));
+        // Hanya hitung jenis barang (Barang) yang aktif untuk jumlah_item_induk
+        $query->withCount(['barangs as jumlah_item_induk' => function ($q_barang) {
+            $q_barang->whereNull('deleted_at');
+        }]);
+
+        if ($searchTerm) {
+            $query->where(function ($q_search) use ($searchTerm) {
+                $q_search->where('nama_kategori', 'LIKE', "%{$searchTerm}%")
+                    ->orWhere('slug', 'LIKE', "%{$searchTerm}%");
+            });
+        }
+
+        $kategoriBarangList = $query->orderBy('nama_kategori', 'asc')
+            ->paginate(10)->withQueryString(); // withQueryString() agar filter terbawa saat paginasi
+
+        // Data agregat tetap dihitung berdasarkan status kategori yang ditampilkan
+        foreach ($kategoriBarangList as $kategori) {
+            // Untuk akurasi, metode di model harus menghormati status 'trashed' jika diperlukan
+            $kategori->agregat_total_unit = $kategori->getTotalUnitCount(); // Jumlah total unit dari barang aktif di kategori ini
+            $kategori->agregat_unit_tersedia = $kategori->getAvailableUnitCount(); // Jumlah unit tersedia dari barang aktif
+            $kategori->agregat_nilai_total = $kategori->getTotalValue(); // Nilai total dari barang aktif
+        }
+
+        $viewPath = 'admin.kategori.index';
+        return view($viewPath, [
+            'kategoriBarangList' => $kategoriBarangList,
+            'searchTerm' => $searchTerm,
+            'statusFilter' => $statusFilter,
+        ]);
     }
 
-    /**
-     * Menampilkan form untuk membuat kategori barang baru
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function create()
+    public function create(): View
     {
+        $this->authorize('create', KategoriBarang::class);
         return view('admin.kategori.create');
     }
 
-    /**
-     * Menyimpan kategori barang baru ke database
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
-        // Validasi input
-        $validator = Validator::make($request->all(), [
-            'nama_kategori' => 'required|string|max:255|unique:kategori_barang,nama_kategori',
-            'deskripsi' => 'nullable|string'
+        $this->authorize('create', KategoriBarang::class);
+        $validated = $request->validate([
+            'nama_kategori' => 'required|string|max:255|unique:kategori_barangs,nama_kategori',
+        ], [], [
+            'nama_kategori' => 'Nama Kategori' // Custom attribute name untuk pesan validasi
         ]);
 
-        if ($validator->fails()) {
-            return redirect()->route('kategori-barang.create')
-                ->withErrors($validator)
-                ->withInput();
+        try {
+            DB::beginTransaction();
+            $kategoriBarang = KategoriBarang::create($validated);
+            LogAktivitas::create([
+                'id_user' => Auth::id(),
+                'aktivitas' => 'Tambah Kategori Barang',
+                'deskripsi' => "Menambahkan kategori: {$kategoriBarang->nama_kategori} (ID: {$kategoriBarang->id})",
+                'model_terkait' => KategoriBarang::class,
+                'id_model_terkait' => $kategoriBarang->id,
+                'data_baru' => $kategoriBarang->toArray(),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+            DB::commit();
+            return redirect()->route($this->getRedirectRouteName('kategori-barang.index', 'admin.kategori-barang.index'))
+                ->with('success', 'Kategori barang berhasil ditambahkan.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            return redirect()->back()
+                ->withErrors($e->validator, 'storeKategoriErrors') // Error bag spesifik
+                ->withInput()
+                ->with('error_form_type', 'create'); // Flag untuk JS
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Gagal menyimpan kategori barang: " . $e->getMessage(), ['exception' => $e]);
+            return redirect()->back()->with('error', 'Gagal menambahkan kategori barang. Terjadi kesalahan sistem.')->withInput();
         }
-
-        // Buat kategori baru
-        $kategori = KategoriBarang::create([
-            'nama_kategori' => $request->nama_kategori,
-            'deskripsi' => $request->deskripsi
-        ]);
-
-        return redirect()->route('kategori-barang.index')
-            ->with('success', 'Kategori barang berhasil ditambahkan.');
     }
 
-    /**
-     * Menampilkan data kategori barang tertentu
-     *
-     * @param  \App\Models\KategoriBarang  $kategoriBarang
-     * @return \Illuminate\Http\Response
-     */
-    public function show(KategoriBarang $kategoriBarang)
+    public function show($id): View // Menggunakan ID agar bisa fetch withTrashed
     {
-        // Tambahkan informasi jumlah barang dalam kategori
-        $itemCount = $kategoriBarang->getItemCount();
-        $totalUnit = $kategoriBarang->getTotalUnitCount();
-        $activeUnit = $kategoriBarang->getActiveUnitCount();
-        $totalValue = $kategoriBarang->getTotalValue();
+        $kategoriBarang = KategoriBarang::withTrashed()->findOrFail($id);
+        $this->authorize('view', $kategoriBarang);
 
-        // Dapatkan daftar barang dalam kategori ini
-        $barangList = $kategoriBarang->getAllItems();
+        $kategoriBarang->jumlah_item_induk = $kategoriBarang->getItemCount(true); // true untuk menghitung item aktif saja
+        $kategoriBarang->jumlah_unit_total = $kategoriBarang->getTotalUnitCount(true); // true untuk unit dari item aktif
+        $kategoriBarang->jumlah_unit_tersedia = $kategoriBarang->getAvailableUnitCount(true); // true untuk unit tersedia dari item aktif
+        $kategoriBarang->nilai_total_estimasi = $kategoriBarang->getTotalValue(true); // true untuk nilai dari item aktif
 
-        return view('admin.kategori.show', compact(
-            'kategoriBarang',
-            'itemCount',
-            'totalUnit',
-            'activeUnit',
-            'totalValue',
-            'barangList'
-        ));
+        // Load barang (induk) yang aktif saja
+        $kategoriBarang->load(['barangs' => function ($query) {
+            $query->whereNull('deleted_at')
+                ->withCount(['qrCodes as jumlah_unit_aktif_per_barang' => function ($q_qr) {
+                    $q_qr->whereNull('deleted_at');
+                }])->orderBy('nama_barang');
+        }]);
+        return view('admin.kategori.show', compact('kategoriBarang'));
     }
 
-    /**
-     * Menampilkan form untuk mengedit kategori barang
-     *
-     * @param  \App\Models\KategoriBarang  $kategoriBarang
-     * @return \Illuminate\Http\Response
-     */
-    public function edit(KategoriBarang $kategoriBarang)
+    public function edit(KategoriBarang $kategoriBarang): View
     {
+        $this->authorize('update', $kategoriBarang);
         return view('admin.kategori.edit', compact('kategoriBarang'));
     }
 
-    /**
-     * Mengupdate data kategori barang di database
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\KategoriBarang  $kategoriBarang
-     * @return \Illuminate\Http\Response
-     */
-    public function update(Request $request, KategoriBarang $kategoriBarang)
+    public function update(Request $request, KategoriBarang $kategoriBarang): RedirectResponse
     {
-        // Validasi input
-        $validator = Validator::make($request->all(), [
-            'nama_kategori' => [
-                'required',
-                'string',
-                'max:255',
-                Rule::unique('kategori_barang')->ignore($kategoriBarang->id)
-            ],
-            'deskripsi' => 'nullable|string'
-        ]);
+        $this->authorize('update', $kategoriBarang);
+        $validated = $request->validate([
+            'nama_kategori' => ['required', 'string', 'max:255', Rule::unique('kategori_barangs')->ignore($kategoriBarang->id)],
+        ], [], ['nama_kategori' => 'Nama Kategori']);
 
-        if ($validator->fails()) {
-            return redirect()->route('kategori-barang.edit', $kategoriBarang->id)
-                ->withErrors($validator)
-                ->withInput();
+        try {
+            DB::beginTransaction();
+            $dataLama = $kategoriBarang->getOriginal();
+            $kategoriBarang->update($validated);
+            LogAktivitas::create([
+                'id_user' => Auth::id(),
+                'aktivitas' => 'Update Kategori Barang',
+                'deskripsi' => "Memperbarui kategori: {$kategoriBarang->nama_kategori} (ID: {$kategoriBarang->id})",
+                'model_terkait' => KategoriBarang::class,
+                'id_model_terkait' => $kategoriBarang->id,
+                'data_lama' => array_intersect_key($dataLama, $validated),
+                'data_baru' => $kategoriBarang->fresh()->only(array_keys($validated)),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+            DB::commit();
+            return redirect()->route($this->getRedirectRouteName('kategori-barang.index', 'admin.kategori-barang.index'))
+                ->with('success', 'Kategori barang berhasil diperbarui.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+            return redirect()->back()
+                ->withErrors($e->validator, 'updateKategoriErrors')
+                ->withInput()
+                ->with('error_form_type', 'edit')
+                ->with('error_kategori_id', $kategoriBarang->id);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Gagal memperbarui kategori barang {$kategoriBarang->id}: " . $e->getMessage(), ['exception' => $e]);
+            return redirect()->back()->with('error', 'Gagal memperbarui kategori barang. Terjadi kesalahan sistem.')->withInput();
+        }
+    }
+
+    public function destroy(KategoriBarang $kategoriBarang): RedirectResponse
+    {
+        $this->authorize('delete', $kategoriBarang);
+        if ($kategoriBarang->barangs()->whereNull('deleted_at')->exists()) {
+            return redirect()->route($this->getRedirectRouteName('kategori-barang.index', 'admin.kategori-barang.index'))
+                ->with('error', "Kategori {$kategoriBarang->nama_kategori} tidak dapat diarsipkan karena masih digunakan oleh beberapa jenis barang aktif. Harap pindahkan atau arsipkan jenis barang tersebut terlebih dahulu.");
         }
 
-        // Update kategori
-        $kategoriBarang->update([
-            'nama_kategori' => $request->nama_kategori,
-            'deskripsi' => $request->deskripsi
-        ]);
-
-        return redirect()->route('kategori-barang.index')
-            ->with('success', 'Kategori barang berhasil diperbarui.');
-    }
-
-    /**
-     * Menghapus kategori barang dari database
-     *
-     * @param  \App\Models\KategoriBarang  $kategoriBarang
-     * @return \Illuminate\Http\Response
-     */
-    public function destroy(KategoriBarang $kategoriBarang)
-    {
-        // Cek apakah kategori memiliki barang
-        if ($kategoriBarang->hasItems()) {
-            return redirect()->route('kategori-barang.index')
-                ->with('error', 'Kategori tidak dapat dihapus karena masih memiliki barang terkait.');
+        try {
+            DB::beginTransaction();
+            $namaKategoriDihapus = $kategoriBarang->nama_kategori;
+            $idKategoriDihapus = $kategoriBarang->id;
+            $dataLama = $kategoriBarang->toArray();
+            $kategoriBarang->delete(); // Ini akan memicu event 'deleting' untuk soft delete Barang terkait
+            LogAktivitas::create([
+                'id_user' => Auth::id(),
+                'aktivitas' => 'Arsipkan Kategori Barang',
+                'deskripsi' => "Mengarsipkan kategori: {$namaKategoriDihapus} (ID: {$idKategoriDihapus})",
+                'model_terkait' => KategoriBarang::class,
+                'id_model_terkait' => $idKategoriDihapus,
+                'data_lama' => $dataLama,
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+            ]);
+            DB::commit();
+            return redirect()->route($this->getRedirectRouteName('kategori-barang.index', 'admin.kategori-barang.index'))
+                ->with('success', "Kategori barang {$namaKategoriDihapus} berhasil diarsipkan.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Gagal mengarsipkan kategori barang {$kategoriBarang->id}: " . $e->getMessage(), ['exception' => $e]);
+            return redirect()->route($this->getRedirectRouteName('kategori-barang.index', 'admin.kategori-barang.index'))
+                ->with('error', 'Gagal mengarsipkan kategori barang. Terjadi kesalahan sistem.');
         }
-
-        // Hapus kategori
-        $kategoriBarang->delete();
-
-        return redirect()->route('kategori-barang.index')
-            ->with('success', 'Kategori barang berhasil dihapus.');
     }
 
-    /**
-     * Menampilkan daftar barang dalam kategori tertentu (API)
-     *
-     * @param  \App\Models\KategoriBarang  $kategoriBarang
-     * @return \Illuminate\Http\Response
-     */
-    public function getItems(KategoriBarang $kategoriBarang)
+    public function restore(Request $request, $id): RedirectResponse
     {
-        $barangList = $kategoriBarang->getAllItems();
+        $kategoriBarang = KategoriBarang::onlyTrashed()->findOrFail($id);
+        $this->authorize('restore', $kategoriBarang);
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $barangList
-        ]);
+        try {
+            DB::beginTransaction();
+            $kategoriBarang->restore(); // Ini akan memicu event 'restoring' di model KategoriBarang & Barang
+
+            LogAktivitas::create([
+                'id_user' => Auth::id(),
+                'aktivitas' => 'Pulihkan Kategori Barang',
+                'deskripsi' => "Kategori barang '{$kategoriBarang->nama_kategori}' (ID: {$kategoriBarang->id}) berhasil dipulihkan.",
+                'model_terkait' => KategoriBarang::class,
+                'id_model_terkait' => $kategoriBarang->id,
+                'data_baru' => $kategoriBarang->toArray(),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+            DB::commit();
+
+            return redirect()->route($this->getRedirectRouteName('kategori-barang.index', 'admin.kategori-barang.index'), ['status' => 'arsip'])
+                ->with('success', "Kategori barang {$kategoriBarang->nama_kategori} berhasil dipulihkan.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Gagal memulihkan kategori barang {$id}: " . $e->getMessage(), ['exception' => $e]);
+            return redirect()->route($this->getRedirectRouteName('kategori-barang.index', 'admin.kategori-barang.index'), ['status' => 'arsip'])
+                ->with('error', 'Gagal memulihkan kategori barang. Terjadi kesalahan sistem.');
+        }
     }
 
-    /**
-     * Mendapatkan data statistik kategori
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function getStatistics()
+    public function getItems(KategoriBarang $kategoriBarang): JsonResponse
     {
-        $kategoris = KategoriBarang::all();
+        $this->authorize('view', $kategoriBarang);
+        $barangList = $kategoriBarang->barangs()
+            ->whereNull('deleted_at')
+            ->select('id', 'nama_barang', 'kode_barang')
+            ->orderBy('nama_barang')
+            ->get();
+        return response()->json(['status' => 'success', 'data' => $barangList]);
+    }
 
+    public function getStatistics(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', KategoriBarang::class);
+        $kategoris = KategoriBarang::whereNull('deleted_at')->orderBy('nama_kategori')->get();
         $stats = $kategoris->map(function ($kategori) {
             return [
                 'id' => $kategori->id,
-                'nama' => $kategori->nama_kategori,
-                'jumlah_item' => $kategori->getItemCount(),
-                'jumlah_unit' => $kategori->getTotalUnitCount(),
-                'unit_aktif' => $kategori->getActiveUnitCount(),
-                'nilai_total' => $kategori->getTotalValue()
+                'nama_kategori' => $kategori->nama_kategori,
+                'slug' => $kategori->slug,
+                'jumlah_item_induk' => $kategori->getItemCount(true), // Hanya item aktif
+                'jumlah_unit_total' => $kategori->getTotalUnitCount(true), // Hanya unit dari item aktif
+                'jumlah_unit_tersedia' => $kategori->getAvailableUnitCount(true), // Hanya unit tersedia dari item aktif
+                'nilai_total_estimasi' => (float) $kategori->getTotalValue(true) // Hanya nilai dari item aktif
             ];
         });
+        return response()->json(['status' => 'success', 'data' => $stats]);
+    }
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $stats
-        ]);
+    private function getRedirectRouteName(string $baseRouteName, string $adminFallbackRouteName): string
+    {
+        $user = Auth::user();
+        /** @var \App\Models\User $user */
+
+        if (!$user) return $adminFallbackRouteName;
+        $rolePrefix = '';
+        if ($user->hasRole(User::ROLE_ADMIN)) {
+            $rolePrefix = 'admin.';
+        }
+        if (!empty($rolePrefix) && Route::has($rolePrefix . $baseRouteName)) {
+            return $rolePrefix . $baseRouteName;
+        }
+        if (Route::has($baseRouteName)) {
+            return $baseRouteName;
+        }
+        return Route::has($adminFallbackRouteName) ? $adminFallbackRouteName : $baseRouteName;
     }
 }

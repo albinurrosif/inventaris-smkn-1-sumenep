@@ -13,45 +13,45 @@ class UserSeeder extends Seeder
         User::firstOrCreate(
             ['email' => 'admin@smkn1sumenep.sch.id'],
             [
-                'name' => 'Admin',
-                'password' => Hash::make('password'), // sesuaikan
-                'role' => 'Admin',
+                'username' => 'admin', // Ditambahkan [cite: 16]
+                'password' => Hash::make('password'),
+                'role' => User::ROLE_ADMIN, // Menggunakan konstanta [cite: 147]
             ]
         );
 
         User::firstOrCreate(
             ['email' => 'operator@smkn1sumenep.sch.id'],
             [
-                'name' => 'Operator 1',
-                'password' => Hash::make('password'), // sesuaikan
-                'role' => 'Operator',
+                'username' => 'operator1', // Ditambahkan [cite: 16]
+                'password' => Hash::make('password'),
+                'role' => User::ROLE_OPERATOR, // Menggunakan konstanta [cite: 148]
             ]
         );
 
         User::firstOrCreate(
             ['email' => 'operator2@smkn1sumenep.sch.id'],
             [
-                'name' => 'Operator 2',
-                'password' => Hash::make('password'), // sesuaikan
-                'role' => 'Operator',
+                'username' => 'operator2', // Ditambahkan [cite: 16]
+                'password' => Hash::make('password'),
+                'role' => User::ROLE_OPERATOR, // Menggunakan konstanta [cite: 148]
             ]
         );
 
         User::firstOrCreate(
             ['email' => 'guru@smkn1sumenep.sch.id'],
             [
-                'name' => 'Guru 1',
-                'password' => Hash::make('password'), // sesuaikan
-                'role' => 'Guru',
+                'username' => 'guru1', // Ditambahkan [cite: 16]
+                'password' => Hash::make('password'),
+                'role' => User::ROLE_GURU, // Menggunakan konstanta [cite: 149]
             ]
         );
 
         User::firstOrCreate(
             ['email' => 'guru2@smkn1sumenep.sch.id'],
             [
-                'name' => 'Guru 2',
-                'password' => Hash::make('password'), // sesuaikan
-                'role' => 'Guru',
+                'username' => 'guru2', // Ditambahkan [cite: 16]
+                'password' => Hash::make('password'),
+                'role' => User::ROLE_GURU, // Menggunakan konstanta [cite: 149]
             ]
         );
     }
