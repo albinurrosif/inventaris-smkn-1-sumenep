@@ -100,6 +100,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/logout-confirmation', [AuthenticatedSessionController::class, 'showLogoutConfirmation'])->name('logout.show'); // Contoh
 
+    // Rute logout standar menggunakan metode POST
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 
 
