@@ -20,7 +20,7 @@ class UserSeeder extends Seeder
         );
 
         User::firstOrCreate(
-            ['email' => 'operator@smkn1sumenep.sch.id'],
+            ['email'=>  'operator@smkn1sumenep.sch.id'],
             [
                 'username' => 'operator1', // Ditambahkan [cite: 16]
                 'password' => Hash::make('password'),

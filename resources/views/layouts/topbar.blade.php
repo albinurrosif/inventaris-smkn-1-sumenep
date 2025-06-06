@@ -110,9 +110,9 @@
                         <i class="mdi mdi-account-circle me-1"></i> Profil
                     </a>
                     <div class="dropdown-divider"></div>
-                    <a class="dropdown-item text-danger" href="{{ route('logout.show') }}">
+                    {{-- <a class="dropdown-item text-danger" href="{{ route('logout.show') }}">
                         <i class="mdi mdi-logout me-1"></i> Logout
-                    </a>
+                    </a> --}}
                     <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
                         @csrf
                     </form>
