@@ -5,11 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\Barang;
 use App\Models\Peminjaman;
 use App\Models\User;
-use App\Models\BarangQrCode; // Ditambahkan untuk query unit
-use Illuminate\Http\Request; // Ditambahkan jika Anda akan menggunakannya
+use App\Models\BarangQrCode;
+use App\Models\KategoriBarang; // Tambahkan ini
+use App\Models\Pemeliharaan; // Tambahkan ini
+use App\Models\LogAktivitas; // Tambahkan ini
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\View\View; // Ditambahkan untuk return type hinting
-use Illuminate\Http\RedirectResponse; // Ditambahkan untuk return type hinting
+use Illuminate\View\View;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB; // Untuk query yang lebih kompleks
+use Carbon\Carbon; // Untuk manipulasi tanggal
 
 class DashboardController extends Controller
 {
@@ -22,119 +27,97 @@ class DashboardController extends Controller
      */
     public function admin(): View
     {
-        // Jumlah jenis barang (induk)
+        // --- Statistik Utama (Cards) ---
         $jumlahJenisBarang = Barang::count();
-        // Jumlah unit barang fisik
-        $jumlahUnitBarang = BarangQrCode::count();
+        $jumlahUnitBarang = BarangQrCode::whereNull('deleted_at')->count(); // Hanya unit aktif
+        $jumlahUnitDipinjam = BarangQrCode::where('status', BarangQrCode::STATUS_DIPINJAM)->whereNull('deleted_at')->count();
+        $jumlahUnitDalamPemeliharaan = BarangQrCode::where('status', BarangQrCode::STATUS_DALAM_PEMELIHARAAN)->whereNull('deleted_at')->count();
         $jumlahUser = User::count();
-        // Tambahkan data lain yang relevan untuk admin dashboard
-        // Misalnya: jumlah peminjaman menunggu persetujuan, jumlah barang rusak, dll.
         $peminjamanMenunggu = Peminjaman::where('status', Peminjaman::STATUS_MENUNGGU_PERSETUJUAN)->count();
+        $pemeliharaanMenungguPersetujuan = Pemeliharaan::where('status_pengajuan', Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN)->whereNull('deleted_at')->count();
+
+        // --- Data untuk Grafik ---
+        // 1. Barang per Kategori (untuk Pie Chart)
+        $barangPerKategori = KategoriBarang::withCount(['barangs as jumlah_barang_aktif' => function ($query) {
+            $query->whereNull('deleted_at');
+        }])
+            ->having('jumlah_barang_aktif', '>', 0) // Hanya kategori yang punya barang
+            ->orderBy('jumlah_barang_aktif', 'desc')
+            ->take(5) // Ambil top 5 kategori atau sesuaikan
+            ->get(['nama_kategori', 'jumlah_barang_aktif']);
+
+        // 2. Tren Peminjaman (misalnya, 6 bulan terakhir) (untuk Line Chart)
+        $trenPeminjaman = Peminjaman::select(
+            DB::raw('YEAR(tanggal_pengajuan) as tahun'),
+            DB::raw('MONTH(tanggal_pengajuan) as bulan_angka'),
+            DB::raw('COUNT(*) as jumlah')
+        )
+            ->where('tanggal_pengajuan', '>=', Carbon::now()->subMonths(5)->startOfMonth()) // 6 bulan termasuk bulan ini
+            ->groupBy('tahun', 'bulan_angka')
+            ->orderBy('tahun', 'asc')
+            ->orderBy('bulan_angka', 'asc')
+            ->get()
+            ->map(function ($item) {
+                // Mengubah angka bulan menjadi nama bulan
+                $item->bulan = Carbon::create()->month($item->bulan_angka)->locale('id')->monthName;
+                return $item;
+            });
+
+        // 3. Status Unit Barang (untuk Bar Chart atau Donut Chart)
+        $statusUnitBarang = BarangQrCode::whereNull('deleted_at')
+            ->select('status', DB::raw('COUNT(*) as jumlah'))
+            ->groupBy('status')
+            ->pluck('jumlah', 'status'); // Hasilnya: ['Tersedia' => 10, 'Dipinjam' => 5, ...]
+
+        // 4. Kondisi Unit Barang
+        $kondisiUnitBarang = BarangQrCode::whereNull('deleted_at')
+            ->select('kondisi', DB::raw('COUNT(*) as jumlah'))
+            ->groupBy('kondisi')
+            ->pluck('jumlah', 'kondisi');
 
 
-        return view('admin.dashboard', compact('jumlahJenisBarang', 'jumlahUnitBarang', 'jumlahUser', 'peminjamanMenunggu'));
+        // --- Daftar Ringkas ---
+        // 5. Peminjaman Terbaru Menunggu Persetujuan
+        $peminjamanTerbaruMenunggu = Peminjaman::where('status', Peminjaman::STATUS_MENUNGGU_PERSETUJUAN)
+            ->with('guru', 'detailPeminjaman')
+            ->latest('tanggal_pengajuan')
+            ->take(5)
+            ->get();
+
+        // 6. Laporan Pemeliharaan Terbaru yang Diajukan
+        $pemeliharaanTerbaruDiajukan = Pemeliharaan::where('status_pengajuan', Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN)
+            ->whereNull('deleted_at')
+            ->with('barangQrCode.barang', 'pengaju')
+            ->latest('tanggal_pengajuan')
+            ->take(5)
+            ->get();
+
+        // 7. Aktivitas Sistem Terbaru
+        $logAktivitasTerbaru = LogAktivitas::with('user')
+            ->latest()
+            ->take(7)
+            ->get();
+
+
+        return view('admin.dashboard', compact(
+            'jumlahJenisBarang',
+            'jumlahUnitBarang',
+            'jumlahUnitDipinjam',
+            'jumlahUnitDalamPemeliharaan',
+            'jumlahUser',
+            'peminjamanMenunggu',
+            'pemeliharaanMenungguPersetujuan',
+            'barangPerKategori',
+            'trenPeminjaman',
+            'statusUnitBarang',
+            'kondisiUnitBarang',
+            'peminjamanTerbaruMenunggu',
+            'pemeliharaanTerbaruDiajukan',
+            'logAktivitasTerbaru'
+        ));
     }
 
-    // =========================================================================
-    //  Dashboard Operator
-    // =========================================================================
-
-    /**
-     * Menampilkan dashboard untuk operator.
-     */
-    public function operator(): View|RedirectResponse
-    {
-        $user = Auth::user();
-        /** @var \App\Models\User $user */
-
-        if ($user && $user->hasRole(User::ROLE_OPERATOR)) {
-            // Ambil semua ruangan yang dikelola oleh operator ini
-            // Menggunakan nama relasi yang benar: ruanganYangDiKelola
-            $ruanganDikelola = $user->ruanganYangDiKelola; // Ini akan mengambil collection Ruangan
-
-            if ($ruanganDikelola->isNotEmpty()) {
-                $ruanganIds = $ruanganDikelola->pluck('id')->toArray();
-
-                // Jumlah JENIS BARANG yang memiliki UNIT di ruangan yang dikelola operator
-                $jumlahJenisBarangDiRuanganOperator = Barang::whereHas('qrCodes', function ($query) use ($ruanganIds) {
-                    $query->whereIn('id_ruangan', $ruanganIds)->whereNull('deleted_at'); // Hanya unit aktif
-                })->count();
-
-                // Jumlah UNIT BARANG FISIK di ruangan yang dikelola operator
-                $jumlahUnitBarangDiRuanganOperator = BarangQrCode::whereIn('id_ruangan', $ruanganIds)
-                    ->whereNull('deleted_at') // Hanya unit aktif
-                    ->count();
-
-                // Riwayat peminjaman yang perlu diproses/disetujui oleh operator ini
-                // Ini mungkin perlu logika yang lebih kompleks, misalnya peminjaman yang unitnya ada di ruangan operator
-                // Untuk contoh sederhana, kita ambil peminjaman yang statusnya menunggu dan unitnya ada di ruangan operator
-                $peminjamanMenungguOperator = Peminjaman::where('status', Peminjaman::STATUS_MENUNGGU_PERSETUJUAN)
-                    ->whereHas('detailPeminjaman.barangQrCode', function ($query) use ($ruanganIds) {
-                        $query->whereIn('id_ruangan', $ruanganIds);
-                    })
-                    ->latest()
-                    ->take(5)
-                    ->get();
-
-                return view('operator.dashboard', compact(
-                    'jumlahJenisBarangDiRuanganOperator',
-                    'jumlahUnitBarangDiRuanganOperator',
-                    'peminjamanMenungguOperator',
-                    'ruanganDikelola' // Kirim juga daftar ruangan yang dikelola jika perlu ditampilkan
-                ));
-            } else {
-                // Operator tidak mengelola ruangan sama sekali
-                return view('operator.dashboard', [
-                    'jumlahJenisBarangDiRuanganOperator' => 0,
-                    'jumlahUnitBarangDiRuanganOperator' => 0,
-                    'peminjamanMenungguOperator' => collect(), // Collection kosong
-                    'ruanganDikelola' => collect()
-                ]);
-            }
-        } else {
-            // Jika bukan operator atau user tidak ditemukan, redirect atau tampilkan error
-            Auth::logout(); // Contoh: logout jika role tidak sesuai
-            return redirect()->route('login')->with('error', 'Akses tidak sah.');
-        }
-    }
-
-    // =========================================================================
-    //  Dashboard Guru
-    // =========================================================================
-
-    /**
-     * Menampilkan dashboard untuk guru.
-     */
-    public function guru(): View|RedirectResponse
-    {
-        $user = Auth::user();
-        /** @var \App\Models\User $user */
-
-        if ($user && $user->hasRole(User::ROLE_GURU)) {
-            // Jumlah peminjaman yang sedang aktif (status 'Sedang Dipinjam') oleh guru ini
-            $jumlahPeminjamanAktif = Peminjaman::where('id_guru', $user->id)
-                ->where('status', Peminjaman::STATUS_SEDANG_DIPINJAM)
-                ->count();
-            // Jumlah pengajuan peminjaman yang menunggu persetujuan oleh guru ini
-            $jumlahPengajuanMenunggu = Peminjaman::where('id_guru', $user->id)
-                ->where('status', Peminjaman::STATUS_MENUNGGU_PERSETUJUAN)
-                ->count();
-            // Riwayat 5 peminjaman terakhir
-            $riwayatPeminjamanGuru = Peminjaman::where('id_guru', $user->id)
-                ->latest()
-                ->take(5)
-                ->get();
-
-            return view('guru.dashboard', compact(
-                'jumlahPeminjamanAktif',
-                'jumlahPengajuanMenunggu',
-                'riwayatPeminjamanGuru'
-            ));
-        } else {
-            Auth::logout();
-            return redirect()->route('login')->with('error', 'Akses tidak sah.');
-        }
-    }
+    // ... (metode operator() dan guru() Anda) ...
 
     /**
      * Mengarahkan pengguna ke dashboard yang sesuai berdasarkan peran mereka.
@@ -152,11 +135,10 @@ class DashboardController extends Controller
             } elseif ($user->hasRole(User::ROLE_GURU)) {
                 return redirect()->route('guru.dashboard');
             } else {
-                // Role tidak dikenal, logout dan redirect ke login
                 Auth::logout();
                 return redirect()->route('login')->with('error', 'Peran pengguna tidak valid.');
             }
         }
-        return redirect()->route('login'); // Jika tidak ada user, ke login
+        return redirect()->route('login');
     }
 }

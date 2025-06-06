@@ -368,4 +368,21 @@ class Peminjaman extends Model
     {
         return self::getValidStatuses();
     }
+
+    // app/Models/Peminjaman.php
+    public static function statusColor(string $status): string
+    {
+        return match (strtolower($status)) {
+            strtolower(self::STATUS_MENUNGGU_PERSETUJUAN) => 'warning text-dark',
+            strtolower(self::STATUS_DISETUJUI) => 'info',
+            strtolower(self::STATUS_SEDANG_DIPINJAM) => 'primary',
+            strtolower(self::STATUS_SELESAI) => 'success',
+            strtolower(self::STATUS_DITOLAK) => 'danger',
+            strtolower(self::STATUS_TERLAMBAT) => 'danger',
+            strtolower(self::STATUS_DIBATALKAN) => 'secondary',
+            strtolower(self::STATUS_MENUNGGU_VERIFIKASI_KEMBALI) => 'info',
+            strtolower(self::STATUS_SEBAGIAN_DIAJUKAN_KEMBALI) => 'primary',
+            default => 'light text-dark',
+        };
+    }
 }

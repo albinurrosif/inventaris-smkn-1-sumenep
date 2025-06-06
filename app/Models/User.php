@@ -115,41 +115,27 @@ class User extends Authenticatable
         'deleted_at' => 'datetime',
     ];
 
+
     /**
      * Mendapatkan prefix nama rute berdasarkan peran pengguna.
-     * Contoh: 'admin.', 'operator.', 'guru.', atau string kosong untuk peran default/global.
+     * Contoh: 'admin.', 'operator.', 'guru.', atau string kosong jika tidak ada peran yang cocok.
      *
      * @return string
      */
     public function getRolePrefix(): string
     {
-        // Asumsikan Anda memiliki atribut 'role' pada model User
-        // yang menyimpan nama peran (misal: 'admin', 'operator', 'guru')
-        // dan Anda memiliki konstanta untuk peran tersebut di model User.
-        // Jika tidak, sesuaikan cara mendapatkan nama peran.
+        $role = $this->role; // Ambil peran pengguna (seharusnya 'Admin', 'Operator', atau 'Guru')
 
-        $role = strtolower($this->role ?? ''); // Ambil nama peran, pastikan lowercase
-
-        // Mapping peran ke prefix
-        // Pastikan konstanta User::ROLE_ADMIN, dll., sudah terdefinisi di model User ini
-        // atau ganti dengan string peran langsung.
-        // Contoh jika konstanta belum ada:
-        // define('App\Models\User::ROLE_ADMIN', 'admin');
-        // define('App\Models\User::ROLE_OPERATOR', 'operator');
-        // define('App\Models\User::ROLE_GURU', 'guru');
-
-        if (defined('self::ROLE_ADMIN') && $role === self::ROLE_ADMIN) {
+        // Perbandingan case-sensitive dengan konstanta yang sudah ada
+        if ($role === self::ROLE_ADMIN) {
             return 'admin.';
-        } elseif (defined('self::ROLE_OPERATOR') && $role === self::ROLE_OPERATOR) {
+        } elseif ($role === self::ROLE_OPERATOR) {
             return 'operator.';
-        } elseif (defined('self::ROLE_GURU') && $role === self::ROLE_GURU) {
+        } elseif ($role === self::ROLE_GURU) {
             return 'guru.';
         }
 
-        // Fallback jika peran tidak dikenal atau tidak ada prefix khusus
-        // Bisa juga mengembalikan string kosong jika tidak ada prefix default
-        // atau prefix untuk peran yang tidak terdaftar secara eksplisit
-        return ''; // Atau 'admin.' jika admin adalah default yang paling umum
+        return ''; // Fallback jika peran tidak dikenal
     }
 
     /**

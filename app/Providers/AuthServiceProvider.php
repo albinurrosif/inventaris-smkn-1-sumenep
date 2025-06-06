@@ -13,8 +13,9 @@ use App\Models\BarangQrCode;
 use App\Policies\BarangQrCodePolicy;
 use App\Models\KategoriBarang;
 use App\Models\Peminjaman;
-use App\Policies\KategoriBarangPolicy;
 use App\Policies\PeminjamanPolicy;
+use App\Policies\KategoriBarangPolicy;
+
 use App\Policies\UserPolicy;
 use App\Models\ArsipBarang;
 use App\Policies\ArsipBarangPolicy;

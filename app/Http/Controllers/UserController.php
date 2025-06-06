@@ -162,52 +162,90 @@ class UserController extends Controller
     public function update(Request $request, User $user): RedirectResponse
     {
         $this->authorize('update', $user); // Ini sudah memvalidasi sesuai policy
-    
+
+        // Simpan data lama sebelum diupdate untuk logging
+        $oldData = $user->makeHidden('password')->toArray();
+
         // Aturan validasi dasar untuk semua user
         $validationRules = [
             'username' => ['required', 'string', 'max:100', Rule::unique('users')->ignore($user->id)],
             'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
             'password' => 'nullable|string|min:6|confirmed',
         ];
-    
+
         // Hanya admin yang boleh mengubah role
         if (auth()->user()->hasRole(User::ROLE_ADMIN)) {
             $validationRules['role'] = ['required', Rule::in(User::getRoles())];
         }
-    
+
         $validatedData = $request->validate($validationRules);
-    
+
         // Data yang akan diupdate
         $updateData = [
             'username' => $validatedData['username'],
             'email' => $validatedData['email'],
         ];
-    
+
         // Hanya admin yang boleh update role, itupun bukan role sendiri
         if (auth()->user()->hasRole(User::ROLE_ADMIN)) {
             // Blokir jika admin mencoba mengubah role sendiri
             if (auth()->user()->id === $user->id && $validatedData['role'] !== User::ROLE_ADMIN) {
                 return back()->with('error', 'Anda tidak bisa mengubah role akun sendiri');
             }
-            
+
             $updateData['role'] = $validatedData['role'];
         }
-    
+
         // Update password jika diisi
         if ($request->filled('password')) {
             $updateData['password'] = Hash::make($validatedData['password']);
         }
-    
+
+        // Di dalam method update, setelah update password
+        if ($request->filled('password')) {
+            $updateData['password'] = Hash::make($validatedData['password']);
+
+            // Log khusus perubahan password
+            LogAktivitas::create([
+                'id_user' => Auth::id(),
+                'aktivitas' => 'Update Password',
+                'deskripsi' => "Password pengguna {$user->username} (ID: {$user->id}) telah direset",
+                'model_terkait' => User::class,
+                'id_model_terkait' => $user->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+        }
+
         // Simpan perubahan
         try {
+            DB::beginTransaction();
+
             $user->update($updateData);
-            
+
             // Log activity
-            LogAktivitas::create([...]); // Sesuaikan dengan kebutuhan logging
-            
+            LogAktivitas::create([
+                'id_user' => Auth::id(),
+                'aktivitas' => 'Update Pengguna',
+                'deskripsi' => "Data pengguna {$user->username} (ID: {$user->id}) berhasil diperbarui",
+                'model_terkait' => User::class,
+                'id_model_terkait' => $user->id,
+                'data_lama' => $oldData,
+                'data_baru' => $user->makeHidden('password')->toArray(),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            DB::commit();
+
             return redirect()->route('admin.users.index')->with('success', 'Profil berhasil diperbarui');
         } catch (\Exception $e) {
-            return back()->with('error', 'Gagal memperbarui profil');
+            DB::rollBack();
+            Log::error("Gagal memperbarui pengguna {$user->id}: " . $e->getMessage(), [
+                'exception' => $e,
+                'request_data' => $request->all()
+            ]);
+            return back()->with('error', 'Gagal memperbarui profil. Terjadi kesalahan sistem.');
         }
     }
 
@@ -325,6 +363,40 @@ class UserController extends Controller
             DB::rollBack();
             Log::error("Gagal memulihkan pengguna {$id}: " . $e->getMessage(), ['exception' => $e]);
             return redirect()->route('admin.users.index', ['status' => 'arsip'])->with('error', 'Gagal memulihkan pengguna. Terjadi kesalahan sistem.');
+        }
+    }
+
+    public function forceDelete(Request $request, $id): RedirectResponse
+    {
+        $user = User::onlyTrashed()->findOrFail($id);
+        $this->authorize('forceDelete', $user);
+
+        try {
+            DB::beginTransaction();
+            $oldData = $user->makeHidden('password')->toArray();
+            $username = $user->username;
+
+            $user->forceDelete();
+
+            LogAktivitas::create([
+                'id_user' => Auth::id(),
+                'aktivitas' => 'Hapus Permanen Pengguna',
+                'deskripsi' => "Pengguna {$username} (ID: {$id}) dihapus permanen dari sistem",
+                'model_terkait' => User::class,
+                'id_model_terkait' => $id,
+                'data_lama' => $oldData,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('admin.users.index', ['status' => 'arsip'])
+                ->with('success', "Pengguna {$username} berhasil dihapus permanen.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Gagal menghapus permanen pengguna {$id}: " . $e->getMessage());
+            return back()->with('error', 'Gagal menghapus permanen. Terjadi kesalahan sistem.');
         }
     }
 }

@@ -2,149 +2,254 @@
 
 namespace App\Policies;
 
-use App\Models\DetailPeminjaman;
 use App\Models\Peminjaman;
 use App\Models\User;
+use App\Models\DetailPeminjaman;
 use Illuminate\Auth\Access\HandlesAuthorization;
 
-class DetailPeminjamanPolicy
+class PeminjamanPolicy
 {
     use HandlesAuthorization;
 
     /**
-     * Memberikan hak akses super-user kepada Admin untuk semua aksi terkait DetailPeminjaman.
+     * Memberikan hak akses super-user kepada Admin untuk semua aksi.
+     *
+     * @param \App\Models\User $user
+     * @param string $ability
+     * @return bool|null
      */
     public function before(User $user, string $ability): ?bool
     {
         if ($user->hasRole(User::ROLE_ADMIN)) {
             return true;
         }
-        return null;
+        return null; // Biarkan metode policy lain yang memutuskan
     }
 
     /**
-     * Menentukan apakah pengguna dapat melihat daftar detail peminjaman (jarang digunakan secara langsung).
-     * Biasanya detail dilihat dalam konteks Peminjaman induk.
+     * Menentukan apakah pengguna dapat melihat daftar peminjaman.
+     * Admin sudah true dari before(). Operator dan Guru bisa melihat (data difilter di controller).
+     *
+     * @param \App\Models\User $user
+     * @return bool
      */
     public function viewAny(User $user): bool
     {
-        // Admin sudah true. Mungkin Operator untuk debugging atau laporan tertentu.
-        return $user->hasRole(User::ROLE_OPERATOR);
+        return $user->hasAnyRole([User::ROLE_OPERATOR, User::ROLE_GURU]);
     }
 
     /**
-     * Menentukan apakah pengguna dapat melihat detail peminjaman spesifik.
+     * Menentukan apakah pengguna dapat melihat detail peminjaman.
+     *
+     * @param \App\Models\User $user
+     * @param \App\Models\Peminjaman $peminjaman
+     * @return bool
      */
-    public function view(User $user, DetailPeminjaman $detailPeminjaman): bool
+    public function view(User $user, Peminjaman $peminjaman): bool
     {
-        // Admin sudah true.
-        // Operator bisa lihat jika dia terkait dengan ruangan barang pada detail ini.
+        // Admin sudah true dari before()
         if ($user->hasRole(User::ROLE_OPERATOR)) {
-            $barangQr = $detailPeminjaman->barangQrCode;
-            if ($barangQr && $barangQr->id_ruangan) {
-                return $user->ruanganYangDiKelola()->where('id', $barangQr->id_ruangan)->exists();
-            }
-            // Jika barang dipegang personal oleh operator saat pengajuan (kasus jarang untuk detail peminjaman)
-            if ($barangQr && $barangQr->id_pemegang_personal === $user->id) {
+            // Operator bisa lihat jika ada item dalam peminjaman yang terkait ruangannya
+            // atau jika peminjaman ditujukan ke ruangannya (untuk pengajuan baru yang belum ada itemnya)
+            $ruanganOperatorIds = $user->ruanganYangDiKelola()->pluck('id');
+            if ($peminjaman->id_ruangan_tujuan_peminjaman && $ruanganOperatorIds->contains($peminjaman->id_ruangan_tujuan_peminjaman)) {
                 return true;
             }
+            // Jika tidak ada detail item, dan bukan ruangan tujuan operator, maka operator tidak bisa lihat.
+            if ($peminjaman->detailPeminjaman()->count() === 0 && !($peminjaman->id_ruangan_tujuan_peminjaman && $ruanganOperatorIds->contains($peminjaman->id_ruangan_tujuan_peminjaman))) {
+                return false;
+            }
+            return $peminjaman->detailPeminjaman()
+                ->whereHas('barangQrCode', function ($query) use ($ruanganOperatorIds) {
+                    $query->whereIn('id_ruangan', $ruanganOperatorIds);
+                })->exists();
         }
-        // Guru bisa lihat jika itu adalah bagian dari peminjamannya.
         if ($user->hasRole(User::ROLE_GURU)) {
-            return $detailPeminjaman->peminjaman->id_guru === $user->id;
+            return $peminjaman->id_guru === $user->id;
         }
         return false;
     }
 
     /**
-     * Menentukan apakah pengguna dapat menambahkan item ke peminjaman.
-     * Dilakukan saat Peminjaman dibuat atau diedit (jika status memungkinkan).
-     * Otorisasi utama ada di PeminjamanPolicy::create atau PeminjamanPolicy::update.
-     * Policy ini bisa digunakan untuk validasi tambahan jika diperlukan.
+     * Menentukan apakah pengguna dapat membuat pengajuan peminjaman.
+     * Hanya Guru yang bisa. Admin bisa via fitur lain jika diperlukan.
+     *
+     * @param \App\Models\User $user
+     * @return bool
      */
-    public function create(User $user, Peminjaman $peminjaman): bool // Terima Peminjaman induk
+    public function create(User $user): bool
     {
+        return $user->hasRole(User::ROLE_GURU);
+    }
+
+    /**
+     * Menentukan apakah pengguna dapat mengupdate peminjaman.
+     *
+     * @param \App\Models\User $user
+     * @param \App\Models\Peminjaman $peminjaman
+     * @return bool
+     */
+    public function update(User $user, Peminjaman $peminjaman): bool
+    {
+        // Admin sudah true dari before()
         if ($user->hasRole(User::ROLE_GURU)) {
             return $peminjaman->id_guru === $user->id &&
-                   in_array($peminjaman->status, [Peminjaman::STATUS_MENUNGGU_PERSETUJUAN]);
+                $peminjaman->status === Peminjaman::STATUS_MENUNGGU_PERSETUJUAN;
         }
-        return false; // Admin sudah true
-    }
-
-    /**
-     * Menentukan apakah pengguna dapat mengupdate detail item peminjaman.
-     * Misalnya, mengubah catatan pada item (jarang terjadi, biasanya status yang diubah).
-     * Untuk perubahan status (Diambil, Dikembalikan), gunakan ability yang lebih spesifik.
-     */
-    public function update(User $user, DetailPeminjaman $detailPeminjaman): bool
-    {
-        // Admin sudah true.
-        // Guru mungkin bisa edit jika Peminjaman miliknya dan status masih 'Menunggu Persetujuan'.
-        if ($user->hasRole(User::ROLE_GURU)) {
-            return $detailPeminjaman->peminjaman->id_guru === $user->id &&
-                   $detailPeminjaman->peminjaman->status === Peminjaman::STATUS_MENUNGGU_PERSETUJUAN;
-        }
-        // Operator mungkin bisa update catatan jika terkait dengan barangnya.
         if ($user->hasRole(User::ROLE_OPERATOR)) {
-             $barangQr = $detailPeminjaman->barangQrCode;
-             if ($barangQr && $barangQr->id_ruangan && $user->ruanganYangDiKelola()->where('id', $barangQr->id_ruangan)->exists()) {
-                 return in_array($detailPeminjaman->peminjaman->status, [Peminjaman::STATUS_MENUNGGU_PERSETUJUAN, Peminjaman::STATUS_DISETUJUI, Peminjaman::STATUS_SEDANG_DIPINJAM]);
-             }
+            // Operator diizinkan update jika peminjaman masih menunggu atau sudah disetujui (misalnya untuk menambah catatan)
+            // dan Operator terkait dengan peminjaman tersebut.
+            if (in_array($peminjaman->status, [Peminjaman::STATUS_MENUNGGU_PERSETUJUAN, Peminjaman::STATUS_DISETUJUI])) {
+                return $this->isOperatorRelatedToPeminjaman($user, $peminjaman);
+            }
         }
         return false;
     }
 
     /**
-     * Menentukan apakah pengguna dapat menghapus item dari peminjaman.
-     * Biasanya dilakukan saat Peminjaman masih 'Menunggu Persetujuan'.
+     * Menentukan apakah pengguna dapat menghapus (soft delete/archive) peminjaman.
+     * Admin bisa (via before).
+     *
+     * @param \App\Models\User $user
+     * @param \App\Models\Peminjaman $peminjaman
+     * @return bool
      */
-    public function delete(User $user, DetailPeminjaman $detailPeminjaman): bool
+    public function delete(User $user, Peminjaman $peminjaman): bool
     {
-        // Admin sudah true.
-        if ($user->hasRole(User::ROLE_GURU)) {
-            return $detailPeminjaman->peminjaman->id_guru === $user->id &&
-                   $detailPeminjaman->peminjaman->status === Peminjaman::STATUS_MENUNGGU_PERSETUJUAN;
+        // Admin sudah true via before().
+        // Hanya peminjaman yang sudah final (Selesai, Ditolak, Dibatalkan) yang boleh diarsipkan.
+        return in_array($peminjaman->status, [
+            Peminjaman::STATUS_SELESAI,
+            Peminjaman::STATUS_DITOLAK,
+            Peminjaman::STATUS_DIBATALKAN
+        ]);
+    }
+
+    /**
+     * Menentukan apakah pengguna dapat memulihkan peminjaman yang diarsipkan.
+     * Admin bisa (via before).
+     *
+     * @param \App\Models\User $user
+     * @param \App\Models\Peminjaman $peminjaman
+     * @return bool
+     */
+    public function restore(User $user, Peminjaman $peminjaman): bool
+    {
+        // Admin sudah true via before(). Operator/Guru tidak bisa.
+        return false;
+    }
+
+    /**
+     * Menentukan apakah pengguna (Admin/Operator) dapat me-manage (approve/reject) peminjaman.
+     *
+     * @param \App\Models\User $user
+     * @param \App\Models\Peminjaman $peminjaman
+     * @return bool
+     */
+    public function manage(User $user, Peminjaman $peminjaman): bool
+    {
+        // Admin sudah true via before()
+        if (!in_array($peminjaman->status, [Peminjaman::STATUS_MENUNGGU_PERSETUJUAN])) {
+            return false;
+        }
+        if ($user->hasRole(User::ROLE_OPERATOR)) {
+            return $this->isOperatorRelatedToPeminjaman($user, $peminjaman);
         }
         return false;
     }
 
     /**
-     * Menentukan apakah pengguna (Operator) dapat memproses penyerahan (handover) item ini.
+     * Menentukan apakah pengguna (Admin/Operator) dapat memproses penyerahan (handover) item.
+     * Dipanggil dengan Peminjaman induk, validasi spesifik item ada di DetailPeminjamanPolicy.
+     *
+     * @param \App\Models\User $user
+     * @param \App\Models\Peminjaman $peminjaman
+     * @return bool
      */
-    public function processHandover(User $user, DetailPeminjaman $detailPeminjaman): bool
+    public function processHandover(User $user, Peminjaman $peminjaman): bool
     {
-        if (!$user->hasRole(User::ROLE_OPERATOR)) {
+        // Admin sudah true via before()
+        if ($peminjaman->status !== Peminjaman::STATUS_DISETUJUI) {
             return false;
         }
-        // Item harus dalam status 'Disetujui' dan Peminjaman induk juga 'Disetujui'
-        if ($detailPeminjaman->status_unit !== DetailPeminjaman::STATUS_ITEM_DISETUJUI ||
-            $detailPeminjaman->peminjaman->status !== Peminjaman::STATUS_DISETUJUI) {
-            return false;
+        if ($user->hasRole(User::ROLE_OPERATOR)) {
+            // Operator harus terkait dengan setidaknya satu item dalam peminjaman ini
+            return $this->isOperatorRelatedToPeminjaman($user, $peminjaman);
         }
-        // Operator harus bertanggung jawab atas ruangan tempat barang berasal
-        $barangQr = $detailPeminjaman->barangQrCode;
-        return $barangQr && $barangQr->id_ruangan && $user->ruanganYangDiKelola()->where('id', $barangQr->id_ruangan)->exists();
+        return false;
     }
 
     /**
-     * Menentukan apakah pengguna (Operator) dapat memproses pengembalian (return) item ini.
+     * Menentukan apakah pengguna (Admin/Operator) dapat memproses pengembalian (return) item.
+     * Dipanggil dengan Peminjaman induk, validasi spesifik item ada di DetailPeminjamanPolicy.
+     *
+     * @param \App\Models\User $user
+     * @param \App\Models\Peminjaman $peminjaman
+     * @return bool
      */
-    public function processReturn(User $user, DetailPeminjaman $detailPeminjaman): bool
+    public function processReturn(User $user, Peminjaman $peminjaman): bool
     {
-        if (!$user->hasRole(User::ROLE_OPERATOR)) {
+        // Admin sudah true via before()
+        if (!in_array($peminjaman->status, [Peminjaman::STATUS_SEDANG_DIPINJAM, Peminjaman::STATUS_TERLAMBAT])) {
             return false;
         }
-        // Item harus dalam status 'Diambil' atau 'Rusak Saat Dipinjam'
-        if (!in_array($detailPeminjaman->status_unit, [DetailPeminjaman::STATUS_ITEM_DIAMBIL, DetailPeminjaman::STATUS_ITEM_RUSAK_SAAT_DIPINJAM])) {
-            return false;
+        if ($user->hasRole(User::ROLE_OPERATOR)) {
+            return $this->isOperatorRelatedToPeminjaman($user, $peminjaman);
         }
-        // Peminjaman induk harus 'Sedang Dipinjam' atau 'Terlambat'
-        if (!in_array($detailPeminjaman->peminjaman->status, [Peminjaman::STATUS_SEDANG_DIPINJAM, Peminjaman::STATUS_TERLAMBAT])) {
-            return false;
+        return false;
+    }
+
+    /**
+     * Menentukan apakah pengguna (Guru atau Admin) dapat membatalkan pengajuannya.
+     *
+     * @param \App\Models\User $user
+     * @param \App\Models\Peminjaman $peminjaman
+     * @return bool
+     */
+    public function cancelByUser(User $user, Peminjaman $peminjaman): bool
+    {
+        // Admin sudah true via before()
+        if ($user->id === $peminjaman->id_guru) {
+            // Guru bisa batal jika masih Menunggu Persetujuan ATAU Disetujui TAPI belum ada barang yang diambil
+            if ($peminjaman->status === Peminjaman::STATUS_MENUNGGU_PERSETUJUAN) {
+                return true;
+            }
+            if ($peminjaman->status === Peminjaman::STATUS_DISETUJUI) {
+                // Cek apakah ada item yang sudah diambil
+                return !$peminjaman->detailPeminjaman()->where('status_unit', DetailPeminjaman::STATUS_ITEM_DIAMBIL)->exists();
+            }
         }
-        // Operator harus bertanggung jawab atas ruangan tempat barang berasal (atau ruangan tujuan pengembalian jika ditentukan)
-        // Untuk kesederhanaan, kita cek ruangan asal barang
-        $barangQr = $detailPeminjaman->barangQrCode;
-        return $barangQr && $barangQr->id_ruangan && $user->ruanganYangDiKelola()->where('id', $barangQr->id_ruangan)->exists();
+        return false;
+    }
+
+    /**
+     * Helper untuk cek apakah operator terkait dengan item-item dalam peminjaman.
+     * Operator dianggap terkait jika setidaknya satu item barang dalam peminjaman
+     * berada di ruangan yang dikelolanya, ATAU jika peminjaman diajukan
+     * ke salah satu ruangannya (untuk pengajuan baru yang mungkin belum ada itemnya saat dicek).
+     *
+     * @param \App\Models\User $operator
+     * @param \App\Models\Peminjaman $peminjaman
+     * @return bool
+     */
+    private function isOperatorRelatedToPeminjaman(User $operator, Peminjaman $peminjaman): bool
+    {
+        $ruanganOperatorIds = $operator->ruanganYangDiKelola()->pluck('id');
+
+        // Jika peminjaman ditujukan ke ruangan yang dikelola operator (penting untuk pengajuan baru)
+        if ($peminjaman->id_ruangan_tujuan_peminjaman && $ruanganOperatorIds->contains($peminjaman->id_ruangan_tujuan_peminjaman)) {
+            return true;
+        }
+
+        // Jika ada detail item, cek apakah salah satu item berada di ruangan yang dikelola operator
+        if ($peminjaman->detailPeminjaman()->count() > 0) {
+            return $peminjaman->detailPeminjaman()
+                ->whereHas('barangQrCode', function ($query) use ($ruanganOperatorIds) {
+                    $query->whereIn('id_ruangan', $ruanganOperatorIds);
+                })->exists();
+        }
+
+        // Jika tidak ada detail item dan ruangan tujuan juga bukan milik operator, maka tidak terkait
+        return false;
     }
 }

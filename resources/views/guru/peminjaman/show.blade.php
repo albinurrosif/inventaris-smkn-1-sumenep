@@ -1,271 +1,270 @@
-@extends('layouts.app')
+{{-- File: resources/views/guru/peminjaman/show.blade.php --}}
+@extends('layouts.app') {{-- Sesuaikan dengan layout guru Anda --}}
 
-@section('title', 'Detail Peminjaman')
+@section('title', 'Detail Pengajuan Peminjaman')
+
+@push('styles')
+    <style>
+        .item-card {
+            border-left-width: 5px;
+        }
+
+        .border-left-diajukan {
+            border-left-color: #0dcaf0;
+        }
+
+        .border-left-disetujui {
+            border-left-color: #0d6efd;
+        }
+
+        .border-left-diambil {
+            border-left-color: #6f42c1;
+        }
+
+        .border-left-dikembalikan {
+            border-left-color: #198754;
+        }
+
+        .border-left-rusak {
+            border-left-color: #dc3545;
+        }
+
+        .border-left-hilang {
+            border-left-color: #212529;
+        }
+    </style>
+@endpush
 
 @section('content')
     <div class="container-fluid">
-        <h4 class="mb-3">Detail Pengajuan Peminjaman</h4>
-
-        <div class="card mb-4">
-            <div class="card-body">
-                <h5 class="card-title">Informasi Pengajuan</h5>
-                <p class="card-text"><strong>Peminjam:</strong> {{ $peminjaman->peminjam->name }}</p>
-                <p class="card-text"><strong>Tanggal Pengajuan:</strong>
-                    {{ \Carbon\Carbon::parse($peminjaman->tanggal_pengajuan)->translatedFormat('d M Y H:i') }}</p>
-                <p class="card-text"><strong>Status Pengajuan:</strong>
-                    @if ($peminjaman->status_persetujuan === 'menunggu_verifikasi')
-                        <span class="badge bg-warning text-dark">Menunggu Verifikasi</span>
-                    @elseif ($peminjaman->status_persetujuan === 'diproses')
-                        <span class="badge bg-info">Diproses</span>
-                    @elseif ($peminjaman->status_persetujuan === 'disetujui')
-                        <span class="badge bg-success">Disetujui</span>
-                    @elseif ($peminjaman->status_persetujuan === 'ditolak')
-                        <span class="badge bg-danger">Ditolak</span>
-                    @elseif ($peminjaman->status_persetujuan === 'sebagian_disetujui')
-                        <span class="badge bg-info">Sebagian Disetujui</span>
-                    @endif
-                </p>
-
-                @if ($peminjaman->status_pengambilan !== 'belum_diambil')
-                    <p class="card-text"><strong>Status Pengambilan:</strong>
-                        @if ($peminjaman->status_pengambilan === 'sebagian_diambil')
-                            <span class="badge bg-info">Sebagian Diambil</span>
-                        @elseif ($peminjaman->status_pengambilan === 'sudah_diambil')
-                            <span class="badge bg-success">Sudah Diambil</span>
-                            @if ($peminjaman->tanggal_semua_diambil)
-                                ({{ \Carbon\Carbon::parse($peminjaman->tanggal_semua_diambil)->translatedFormat('d M Y') }})
-                            @endif
-                        @endif
-                    </p>
-                @endif
-
-                @if ($peminjaman->status_pengembalian !== 'belum_dikembalikan')
-                    <p class="card-text"><strong>Status Pengembalian:</strong>
-                        @if ($peminjaman->status_pengembalian === 'sebagian_dikembalikan')
-                            <span class="badge bg-info">Sebagian Dikembalikan</span>
-                        @elseif ($peminjaman->status_pengembalian === 'sudah_dikembalikan')
-                            <span class="badge bg-success">Sudah Dikembalikan</span>
-                            @if ($peminjaman->tanggal_selesai)
-                                ({{ \Carbon\Carbon::parse($peminjaman->tanggal_selesai)->translatedFormat('d M Y') }})
-                            @endif
-                        @endif
-                    </p>
-                @endif
-
-                @if ($peminjaman->pengajuanDisetujuiOleh)
-                    <p class="card-text"><strong>Diproses Oleh:</strong> {{ $peminjaman->pengajuanDisetujuiOleh->name }}</p>
-                @endif
-
-                @if ($peminjaman->keterangan)
-                    <p class="card-text"><strong>Keterangan Pengajuan:</strong> {{ $peminjaman->keterangan }}</p>
-                @endif
-
-                {{-- Tombol Batalkan Pengajuan hanya jika statusnya masih menunggu_verifikasi --}}
-                @if ($peminjaman->status_persetujuan === 'menunggu_verifikasi' && Auth::id() == $peminjaman->id_peminjam)
-                    <button type="button" class="btn btn-danger" data-bs-toggle="modal"
-                        data-bs-target="#batalModal">Batalkan Pengajuan</button>
-                @endif
-            </div>
-        </div>
-
-        <h5 class="mt-4">Detail Barang yang Diajukan</h5>
-        @if ($peminjaman->detailPeminjaman->isNotEmpty())
-            <div class="table-responsive">
-                <table id="detailPeminjamanTable" class="table table-bordered align-middle">
-                    <thead class="table-light">
-                        <tr>
-                            <th>#</th>
-                            <th>Nama Barang</th>
-                            <th>Jumlah</th>
-                            <th>Ruangan Asal</th>
-                            <th>Ruangan Tujuan</th>
-                            <th>Tanggal Pinjam</th>
-                            <th>Tanggal Kembali</th>
-                            <th>Durasi (Hari)</th>
-                            <th>Status Item</th>
-                            @if ($peminjaman->status_persetujuan !== 'ditolak')
-                                <th>Aksi</th>
-                            @endif
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($peminjaman->detailPeminjaman as $key => $detail)
-                            <tr>
-                                <td>{{ $key + 1 }}</td>
-                                <td>{{ $detail->barang->nama_barang }}</td>
-                                <td>
-                                    {{ $detail->jumlah_dipinjam }}
-                                    @if ($detail->jumlah_terverifikasi && $detail->jumlah_terverifikasi != $detail->jumlah_dipinjam)
-                                        <br><small class="text-muted">(Terverifikasi:
-                                            {{ $detail->jumlah_terverifikasi }})</small>
-                                    @endif
-                                </td>
-                                <td>{{ $detail->ruanganAsal->nama_ruangan }}</td>
-                                <td>{{ $detail->ruanganTujuan->nama_ruangan }}</td>
-                                <td>{{ \Carbon\Carbon::parse($detail->tanggal_pinjam)->translatedFormat('d M Y') }}</td>
-                                <td>{{ \Carbon\Carbon::parse($detail->tanggal_kembali)->translatedFormat('d M Y') }}</td>
-                                <td>{{ $detail->durasi_pinjam }}</td>
-                                <td>
-                                    @if ($detail->status_persetujuan === 'menunggu_verifikasi')
-                                        <span class="badge bg-warning text-dark">Menunggu Verifikasi</span>
-                                    @elseif ($detail->status_persetujuan === 'disetujui')
-                                        <span class="badge bg-success">Disetujui</span>
-                                    @elseif ($detail->status_persetujuan === 'ditolak')
-                                        <span class="badge bg-danger">Ditolak</span>
-                                    @endif
-
-                                    @if ($detail->status_pengambilan === 'sudah_diambil')
-                                        <br><span class="badge bg-info">Sudah Diambil</span>
-                                    @elseif ($detail->status_pengambilan === 'sebagian_diambil')
-                                        <br><span class="badge bg-info">Sebagian Diambil</span>
-                                    @endif
-
-                                    @if ($detail->status_pengembalian === 'dipinjam')
-                                        <br><span class="badge bg-primary">Dipinjam</span>
-                                        @if ($detail->terlambat)
-                                            <br><span class="badge bg-danger">Terlambat
-                                                {{ $detail->jumlah_hari_terlambat }} hari</span>
-                                        @endif
-                                    @elseif ($detail->status_pengembalian === 'menunggu_verifikasi')
-                                        <br><span class="badge bg-secondary">Menunggu Verifikasi</span>
-                                    @elseif ($detail->status_pengembalian === 'dikembalikan')
-                                        <br><span class="badge bg-success">Dikembalikan</span>
-                                    @elseif ($detail->status_pengembalian === 'rusak')
-                                        <br><span class="badge bg-danger">Rusak</span>
-                                    @elseif ($detail->status_pengembalian === 'hilang')
-                                        <br><span class="badge bg-danger">Hilang</span>
-                                    @endif
-
-                                    @if ($detail->disetujui_oleh)
-                                        <br><small>Disetujui oleh: {{ $detail->disetujuiOleh->name ?? 'Operator' }}</small>
-                                    @endif
-
-                                    @if ($detail->ditolak_oleh)
-                                        <br><small>Ditolak oleh: {{ $detail->ditolakOleh->name ?? 'Operator' }}</small>
-                                    @endif
-
-                                    @if ($detail->pengambilan_dikonfirmasi_oleh)
-                                        <br><small>Pengambilan dikonfirmasi oleh:
-                                            {{ $detail->pengambilanDikonfirmasiOleh->name ?? 'Operator' }}</small>
-                                    @endif
-
-                                    @if ($detail->diverifikasi_oleh_pengembalian)
-                                        <br><small>Diverifikasi oleh:
-                                            {{ $detail->diverifikasiOlehPengembalian->name ?? 'Operator' }}</small>
-                                    @endif
-                                </td>
-                                @if ($peminjaman->status_persetujuan !== 'ditolak')
-                                    <td>
-                                        {{-- Tombol untuk ajukan pengembalian --}}
-                                        @if (
-                                            $detail->status_persetujuan === 'disetujui' &&
-                                                in_array($detail->status_pengambilan, ['sudah_diambil', 'sebagian_diambil']) &&
-                                                $detail->status_pengembalian === 'dipinjam')
-                                            <form action="{{ route('guru.peminjaman.ajukanPengembalian', $detail->id) }}"
-                                                method="POST" class="mb-2">
-                                                @csrf
-                                                <button type="submit" class="btn btn-sm btn-primary">Ajukan
-                                                    Pengembalian</button>
-                                            </form>
-                                        @endif
-
-                                        {{-- Tombol untuk ajukan perpanjangan --}}
-                                        @if (
-                                            $detail->status_persetujuan === 'disetujui' &&
-                                                in_array($detail->status_pengambilan, ['sudah_diambil', 'sebagian_diambil']) &&
-                                                $detail->status_pengembalian === 'dipinjam' &&
-                                                $detail->dapat_diperpanjang &&
-                                                !$detail->diperpanjang)
-                                            <form action="{{ route('guru.peminjaman.ajukanPerpanjangan', $detail->id) }}"
-                                                method="POST">
-                                                @csrf
-                                                <button type="submit" class="btn btn-sm btn-info">Ajukan
-                                                    Perpanjangan</button>
-                                            </form>
-                                        @endif
-
-                                        {{-- Tombol untuk hapus item (hanya untuk status menunggu_verifikasi) --}}
-                                        @if ($detail->status_persetujuan === 'menunggu_verifikasi')
-                                            <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal"
-                                                data-bs-target="#hapusItemModal{{ $detail->id }}">Hapus Item</button>
-
-                                            {{-- Modal Hapus Item --}}
-                                            <div class="modal fade" id="hapusItemModal{{ $detail->id }}" tabindex="-1"
-                                                aria-hidden="true">
-                                                <div class="modal-dialog">
-                                                    <div class="modal-content">
-                                                        <div class="modal-header">
-                                                            <h5 class="modal-title">Hapus Item Peminjaman</h5>
-                                                            <button type="button" class="btn-close" data-bs-dismiss="modal"
-                                                                aria-label="Close"></button>
-                                                        </div>
-                                                        <form
-                                                            action="{{ route('guru.peminjaman.destroy', $peminjaman->id) }}"
-                                                            method="POST">
-                                                            @csrf
-                                                            @method('DELETE')
-                                                            <input type="hidden" name="detail_id"
-                                                                value="{{ $detail->id }}">
-                                                            <div class="modal-body">
-                                                                <p>Anda yakin ingin menghapus item
-                                                                    {{ $detail->barang->nama_barang }} dari pengajuan
-                                                                    peminjaman ini?</p>
-                                                            </div>
-                                                            <div class="modal-footer">
-                                                                <button type="button" class="btn btn-secondary"
-                                                                    data-bs-dismiss="modal">Batal</button>
-                                                                <button type="submit" class="btn btn-danger">Hapus</button>
-                                                            </div>
-                                                        </form>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        @endif
-                                    </td>
-                                @endif
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        @else
-            <p>Tidak ada detail barang yang diajukan.</p>
-        @endif
-
-        {{-- Modal Batalkan Peminjaman --}}
-        <div class="modal fade" id="batalModal" tabindex="-1" aria-labelledby="batalModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="batalModalLabel">Batalkan Pengajuan Peminjaman</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <h4 class="mb-sm-0">Detail Pengajuan: PMJ-{{ str_pad($peminjaman->id, 5, '0', STR_PAD_LEFT) }}</h4>
+                    <div class="page-title-right">
+                        <ol class="breadcrumb m-0">
+                            <li class="breadcrumb-item"><a href="{{ route('guru.dashboard') }}">Dashboard</a></li>
+                            <li class="breadcrumb-item"><a
+                                    href="{{ route('guru.peminjaman.index', request()->query()) }}">Peminjaman Saya</a>
+                            </li>
+                            <li class="breadcrumb-item active">Detail Pengajuan</li>
+                        </ol>
                     </div>
-                    <form action="{{ route('guru.peminjaman.destroy', $peminjaman->id) }}" method="POST">
-                        @csrf
-                        @method('DELETE')
-                        <div class="modal-body">
-                            <p>Anda yakin ingin membatalkan pengajuan peminjaman ini?</p>
-                            <p class="text-danger">Semua item yang diajukan akan dihapus.</p>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                            <button type="submit" class="btn btn-danger">Batalkan</button>
-                        </div>
-                    </form>
                 </div>
             </div>
+        </div>
+        @if (session('success'))
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                {{ session('success') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
+        @if (session('error'))
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                {{ session('error') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
+
+        <div class="row">
+            <div class="col-xl-4 col-lg-5">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Informasi Pengajuan</h5>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>ID Peminjaman:</strong> PMJ-{{ str_pad($peminjaman->id, 5, '0', STR_PAD_LEFT) }}</p>
+                        <p><strong>Tujuan Peminjaman:</strong> {{ $peminjaman->tujuan_peminjaman }}</p>
+                        <p><strong>Tanggal Pengajuan:</strong>
+                            {{ $peminjaman->tanggal_pengajuan ? $peminjaman->tanggal_pengajuan->format('d M Y, H:i') : '-' }}
+                        </p>
+                        <p><strong>Rencana Pinjam:</strong>
+                            {{ $peminjaman->tanggal_rencana_pinjam ? $peminjaman->tanggal_rencana_pinjam->format('d M Y') : '-' }}
+                        </p>
+                        <p><strong>Harus Kembali:</strong>
+                            {{ $peminjaman->tanggal_harus_kembali ? $peminjaman->tanggal_harus_kembali->format('d M Y') : '-' }}
+                        </p>
+                        <p><strong>Status Peminjaman:</strong>
+                            <span
+                                class="badge bg-{{ App\Models\Peminjaman::statusColor($peminjaman->status) }}">{{ $peminjaman->status }}</span>
+                            @if ($peminjaman->ada_item_terlambat && $peminjaman->status !== App\Models\Peminjaman::STATUS_SELESAI)
+                                <span class="badge bg-danger ms-1">Terlambat</span>
+                            @endif
+                        </p>
+                        <p><strong>Ruangan Tujuan Penggunaan:</strong>
+                            {{ $peminjaman->ruanganTujuanPeminjaman->nama_ruangan ?? '-' }}</p>
+                        <p><strong>Catatan Anda:</strong> {{ $peminjaman->catatan_peminjam ?: '-' }}</p>
+                        @if ($peminjaman->disetujuiOlehUser)
+                            <p><strong>Disetujui Oleh:</strong> {{ $peminjaman->disetujuiOlehUser->username }}
+                                @if ($peminjaman->tanggal_disetujui)
+                                    (pada {{ $peminjaman->tanggal_disetujui->format('d M Y, H:i') }})
+                                @endif
+                            </p>
+                        @endif
+                        @if ($peminjaman->ditolakOlehUser)
+                            <p><strong>Ditolak Oleh:</strong> {{ $peminjaman->ditolakOlehUser->username }}
+                                @if ($peminjaman->tanggal_ditolak)
+                                    (pada {{ $peminjaman->tanggal_ditolak->format('d M Y, H:i') }})
+                                @endif
+                            </p>
+                        @endif
+                        @if ($peminjaman->catatan_operator)
+                            <p><strong>Catatan Operator:</strong> {{ $peminjaman->catatan_operator }}</p>
+                        @endif
+                    </div>
+                    <div class="card-footer text-end">
+                        @can('update', $peminjaman)
+                            @if ($peminjaman->status === App\Models\Peminjaman::STATUS_MENUNGGU_PERSETUJUAN)
+                                <a href="{{ route('guru.peminjaman.edit', $peminjaman->id) }}"
+                                    class="btn btn-sm btn-warning me-1"><i data-feather="edit-2" class="me-1"></i>Edit
+                                    Pengajuan</a>
+                            @endif
+                        @endcan
+                        @can('cancelByUser', $peminjaman)
+                            @if (in_array($peminjaman->status, [
+                                    App\Models\Peminjaman::STATUS_MENUNGGU_PERSETUJUAN,
+                                    App\Models\Peminjaman::STATUS_DISETUJUI,
+                                ]) &&
+                                    !$peminjaman->detailPeminjaman()->where('status_unit', App\Models\DetailPeminjaman::STATUS_ITEM_DIAMBIL)->exists())
+                                <button class="btn btn-sm btn-danger btn-cancel-by-user-guru"
+                                    data-id="{{ $peminjaman->id }}"><i data-feather="slash" class="me-1"></i>Batalkan
+                                    Pengajuan</button>
+                            @endif
+                        @endcan
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-8 col-lg-7">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Item Barang Diajukan ({{ $peminjaman->detailPeminjaman->count() }}
+                            item)</h5>
+                    </div>
+                    <div class="card-body">
+                        @if ($peminjaman->detailPeminjaman->isEmpty())
+                            <p class="text-center">Tidak ada item barang dalam pengajuan ini.</p>
+                        @else
+                            @foreach ($peminjaman->detailPeminjaman as $detail)
+                                @php $barangQr = $detail->barangQrCode; @endphp
+                                <div
+                                    class="card mb-3 item-card 
+                            @if ($detail->status_unit === App\Models\DetailPeminjaman::STATUS_ITEM_DIAJUKAN) border-left-diajukan
+                            @elseif($detail->status_unit === App\Models\DetailPeminjaman::STATUS_ITEM_DISETUJUI) border-left-disetujui
+                            @elseif($detail->status_unit === App\Models\DetailPeminjaman::STATUS_ITEM_DIAMBIL) border-left-diambil
+                            @elseif($detail->status_unit === App\Models\DetailPeminjaman::STATUS_ITEM_DIKEMBALIKAN) border-left-dikembalikan
+                            @elseif(in_array($detail->status_unit, [App\Models\DetailPeminjaman::STATUS_ITEM_RUSAK_SAAT_DIPINJAM])) border-left-rusak
+                            @elseif($detail->status_unit === App\Models\DetailPeminjaman::STATUS_ITEM_HILANG_SAAT_DIPINJAM) border-left-hilang @endif">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            {{ $barangQr->barang->nama_barang ?? 'N/A' }}
+                                            <small
+                                                class="text-muted">({{ $barangQr->kode_inventaris_sekolah ?? 'N/A' }})</small>
+                                        </h6>
+                                        <p class="card-text mb-1">
+                                            <small>
+                                                No. Seri Pabrik: {{ $barangQr->no_seri_pabrik ?: '-' }} <br>
+                                                Lokasi Asal:
+                                                {{ $barangQr->ruangan->nama_ruangan ?? ($barangQr->id_pemegang_personal ? 'Pemegang: ' . optional($barangQr->pemegangPersonal)->username : 'Tidak Diketahui') }}
+                                                <br>
+                                                Kondisi Saat Diajukan: {{ $detail->kondisi_sebelum ?? $barangQr->kondisi }}
+                                            </small>
+                                        </p>
+                                        <p class="card-text mb-1">
+                                            <strong>Status Unit:</strong>
+                                            <span
+                                                class="badge 
+                                        @if ($detail->status_unit === App\Models\DetailPeminjaman::STATUS_ITEM_DIAJUKAN) bg-info
+                                        @elseif($detail->status_unit === App\Models\DetailPeminjaman::STATUS_ITEM_DISETUJUI) bg-primary
+                                        @elseif($detail->status_unit === App\Models\DetailPeminjaman::STATUS_ITEM_DIAMBIL) bg-purple
+                                        @elseif($detail->status_unit === App\Models\DetailPeminjaman::STATUS_ITEM_DIKEMBALIKAN) bg-success
+                                        @elseif(in_array($detail->status_unit, [App\Models\DetailPeminjaman::STATUS_ITEM_RUSAK_SAAT_DIPINJAM])) bg-danger
+                                        @elseif($detail->status_unit === App\Models\DetailPeminjaman::STATUS_ITEM_HILANG_SAAT_DIPINJAM) bg-dark
+                                        @else bg-secondary @endif">
+                                                {{ $detail->status_unit }}
+                                            </span>
+                                            @if ($detail->terlambat)
+                                                <span class="badge bg-danger ms-1">Terlambat</span>
+                                            @endif
+                                        </p>
+                                        @if ($detail->tanggal_diambil)
+                                            <p class="card-text mb-1"><small>Diambil:
+                                                    {{ $detail->tanggal_diambil->format('d M Y, H:i') }}</small></p>
+                                        @endif
+                                        @if ($detail->tanggal_dikembalikan)
+                                            <p class="card-text mb-1"><small>Dikembalikan:
+                                                    {{ $detail->tanggal_dikembalikan->format('d M Y, H:i') }} | Kondisi
+                                                    Setelah: {{ $detail->kondisi_setelah ?? '-' }}</small></p>
+                                        @endif
+                                        @if ($detail->catatan_unit)
+                                            <p class="card-text mb-0"><small>Catatan Unit:
+                                                    {{ $detail->catatan_unit }}</small></p>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Modal untuk Pembatalan --}}
+    <div class="modal fade" id="cancelByUserModalGuruShow" tabindex="-1" aria-labelledby="cancelByUserModalGuruShowLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <form id="cancelByUserFormGuruShow" method="POST"> {{-- Action akan di-set oleh JS --}}
+                @csrf
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="cancelByUserModalGuruShowLabel">Batalkan Pengajuan Peminjaman</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Anda yakin ingin membatalkan pengajuan peminjaman ID: <strong
+                                id="cancelPeminjamanIdTextGuruShow"></strong>?</p>
+                        <div class="mb-3">
+                            <label for="alasan_pembatalan_guru_show" class="form-label">Alasan Pembatalan
+                                (Opsional):</label>
+                            <textarea class="form-control" id="alasan_pembatalan_guru_show" name="alasan_pembatalan" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                        <button type="submit" class="btn btn-warning">Ya, Batalkan</button>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
 @endsection
 
 @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        $(document).ready(function() {
-            $('#detailPeminjamanTable').DataTable({
-                responsive: true,
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.10.25/i18n/Indonesian.json'
-                }
+        document.addEventListener('DOMContentLoaded', function() {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+            var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl)
+            })
+
+            const cancelButtonsGuruShow = document.querySelectorAll('.btn-cancel-by-user-guru');
+            const cancelModalElGuruShow = document.getElementById('cancelByUserModalGuruShow');
+            const cancelModalGuruShow = cancelModalElGuruShow ? new bootstrap.Modal(cancelModalElGuruShow) : null;
+            const cancelFormGuruShow = document.getElementById('cancelByUserFormGuruShow');
+            const cancelPeminjamanIdTextGuruShow = document.getElementById('cancelPeminjamanIdTextGuruShow');
+
+            cancelButtonsGuruShow.forEach(button => {
+                button.addEventListener('click', function() {
+                    const peminjamanId = this.dataset.id;
+                    if (cancelFormGuruShow) cancelFormGuruShow.action =
+                        `{{ route('guru.peminjaman.cancelByUser', ['peminjaman' => ':peminjamanId']) }}`
+                        .replace(':peminjamanId', peminjamanId);
+                    if (cancelPeminjamanIdTextGuruShow) cancelPeminjamanIdTextGuruShow.textContent =
+                        `PMJ-${String(peminjamanId).padStart(5, '0')}`;
+                    if (cancelModalGuruShow) cancelModalGuruShow.show();
+                });
             });
         });
     </script>

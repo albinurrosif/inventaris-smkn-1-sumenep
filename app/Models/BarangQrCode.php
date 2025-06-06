@@ -114,6 +114,30 @@ class BarangQrCode extends Model
     public const STATUS_DALAM_PEMELIHARAAN = 'Dalam Pemeliharaan'; // [cite: 136]
     public const STATUS_DIARSIPKAN = 'Diarsipkan/Dihapus'; // BARU: Ditambahkan untuk konsistensi logging di BarangStatus
 
+
+    // Di App\Models\BarangQrCode.php
+    public static function getKondisiColor(string $kondisi): string
+    {
+        return match (strtolower($kondisi)) {
+            strtolower(self::KONDISI_BAIK) => 'success',
+            strtolower(self::KONDISI_KURANG_BAIK) => 'warning text-dark',
+            strtolower(self::KONDISI_RUSAK_BERAT) => 'danger',
+            strtolower(self::KONDISI_HILANG) => 'dark',
+            default => 'secondary',
+        };
+    }
+
+    public static function getStatusColor(string $status): string
+    {
+        return match (strtolower($status)) {
+            strtolower(self::STATUS_TERSEDIA) => 'success',
+            strtolower(self::STATUS_DIPINJAM) => 'primary',
+            strtolower(self::STATUS_DALAM_PEMELIHARAAN) => 'info',
+            strtolower(self::STATUS_DIARSIPKAN) => 'dark',
+            default => 'secondary',
+        };
+    }
+
     /**
      * Mendefinisikan relasi BelongsTo ke model Barang (induk).
      */

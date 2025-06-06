@@ -1,10 +1,9 @@
-{{-- File: resources/views/guru/peminjaman/create.blade.php --}}
+{{-- File: resources/views/guru/peminjaman/edit.blade.php --}}
 @extends('layouts.app') {{-- Sesuaikan dengan layout guru Anda --}}
 
-@section('title', 'Buat Pengajuan Peminjaman Aset')
+@section('title', 'Edit Pengajuan Peminjaman Aset')
 
 @push('styles')
-    {{-- Tambahkan Select2 CSS jika belum ada di layout utama --}}
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <style>
         .select2-container--bootstrap-5 .select2-selection--multiple .select2-selection__choice {
@@ -19,11 +18,6 @@
             margin-right: 5px;
             margin-left: 5px;
         }
-
-        .select2-container--bootstrap-5 .select2-dropdown .select2-results__options .select2-results__option[aria-selected=true] {
-            background-color: #e9ecef;
-            color: #212529;
-        }
     </style>
 @endpush
 
@@ -32,13 +26,13 @@
         <div class="row">
             <div class="col-12">
                 <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                    <h4 class="mb-sm-0">Form Pengajuan Peminjaman Aset</h4>
+                    <h4 class="mb-sm-0">Edit Pengajuan: PMJ-{{ str_pad($peminjaman->id, 5, '0', STR_PAD_LEFT) }}</h4>
                     <div class="page-title-right">
                         <ol class="breadcrumb m-0">
                             <li class="breadcrumb-item"><a href="{{ route('guru.dashboard') }}">Dashboard</a></li>
                             <li class="breadcrumb-item"><a href="{{ route('guru.peminjaman.index') }}">Peminjaman
                                     Saya</a></li>
-                            <li class="breadcrumb-item active">Buat Pengajuan</li>
+                            <li class="breadcrumb-item active">Edit Pengajuan</li>
                         </ol>
                     </div>
                 </div>
@@ -49,7 +43,7 @@
             <div class="col-lg-8 offset-lg-2">
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">Detail Pengajuan</h5>
+                        <h5 class="card-title mb-0">Form Edit Pengajuan</h5>
                     </div>
                     <div class="card-body">
                         @if ($errors->any())
@@ -62,65 +56,68 @@
                             </div>
                         @endif
 
-                        <form action="{{ route('guru.peminjaman.store') }}" method="POST">
+                        <form action="{{ route('guru.peminjaman.update', $peminjaman->id) }}" method="POST">
                             @csrf
+                            @method('PUT')
                             <div class="row">
                                 <div class="col-md-12">
                                     <div class="mb-3">
-                                        <label for="tujuan_peminjaman" class="form-label">Tujuan Peminjaman <span
+                                        <label for="tujuan_peminjaman_edit" class="form-label">Tujuan Peminjaman <span
                                                 class="text-danger">*</span></label>
-                                        <textarea class="form-control" id="tujuan_peminjaman" name="tujuan_peminjaman" rows="3" required>{{ old('tujuan_peminjaman') }}</textarea>
+                                        <textarea class="form-control" id="tujuan_peminjaman_edit" name="tujuan_peminjaman" rows="3" required>{{ old('tujuan_peminjaman', $peminjaman->tujuan_peminjaman) }}</textarea>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="mb-3">
-                                <label for="id_barang_qr_code" class="form-label">Pilih Item Barang (Bisa lebih dari satu)
-                                    <span class="text-danger">*</span></label>
-                                <select class="form-select select2-barang" id="id_barang_qr_code" name="id_barang_qr_code[]"
-                                    multiple="multiple" required>
+                                <label for="id_barang_qr_code_edit" class="form-label">Pilih Item Barang (Bisa lebih dari
+                                    satu) <span class="text-danger">*</span></label>
+                                <select class="form-select select2-barang-edit" id="id_barang_qr_code_edit"
+                                    name="id_barang_qr_code[]" multiple="multiple" required>
                                     @foreach ($barangList as $item)
                                         <option value="{{ $item['id'] }}"
-                                            {{ is_array(old('id_barang_qr_code')) && in_array($item['id'], old('id_barang_qr_code')) ? 'selected' : '' }}>
+                                            {{ is_array(old('id_barang_qr_code', $selectedBarangIds)) && in_array($item['id'], old('id_barang_qr_code', $selectedBarangIds)) ? 'selected' : '' }}>
                                             {{ $item['text'] }}
                                         </option>
                                     @endforeach
                                 </select>
                                 <small class="form-text text-muted">Hanya menampilkan barang yang tersedia dan dalam
-                                    kondisi baik/kurang baik.</small>
+                                    kondisi baik/kurang baik, atau yang sudah dipilih sebelumnya.</small>
                             </div>
 
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label for="tanggal_rencana_pinjam" class="form-label">Tanggal Rencana Pinjam
+                                        <label for="tanggal_rencana_pinjam_edit" class="form-label">Tanggal Rencana Pinjam
                                             <span class="text-danger">*</span></label>
-                                        <input type="date" class="form-control" id="tanggal_rencana_pinjam"
+                                        <input type="date" class="form-control" id="tanggal_rencana_pinjam_edit"
                                             name="tanggal_rencana_pinjam"
-                                            value="{{ old('tanggal_rencana_pinjam', date('Y-m-d')) }}" required
-                                            min="{{ date('Y-m-d') }}">
+                                            value="{{ old('tanggal_rencana_pinjam', $peminjaman->tanggal_rencana_pinjam->format('Y-m-d')) }}"
+                                            required
+                                            min="{{ \Carbon\Carbon::parse($peminjaman->tanggal_rencana_pinjam)->isPast() && !$errors->has('tanggal_rencana_pinjam') ? $peminjaman->tanggal_rencana_pinjam->format('Y-m-d') : date('Y-m-d') }}">
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label for="tanggal_harus_kembali" class="form-label">Tanggal Harus Kembali <span
-                                                class="text-danger">*</span></label>
-                                        <input type="date" class="form-control" id="tanggal_harus_kembali"
-                                            name="tanggal_harus_kembali" value="{{ old('tanggal_harus_kembali') }}"
+                                        <label for="tanggal_harus_kembali_edit" class="form-label">Tanggal Harus Kembali
+                                            <span class="text-danger">*</span></label>
+                                        <input type="date" class="form-control" id="tanggal_harus_kembali_edit"
+                                            name="tanggal_harus_kembali"
+                                            value="{{ old('tanggal_harus_kembali', $peminjaman->tanggal_harus_kembali->format('Y-m-d')) }}"
                                             required>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="mb-3">
-                                <label for="id_ruangan_tujuan_peminjaman" class="form-label">Ruangan Tujuan Penggunaan
-                                    (Opsional)</label>
-                                <select class="form-select select2-ruangan" id="id_ruangan_tujuan_peminjaman"
+                                <label for="id_ruangan_tujuan_peminjaman_edit" class="form-label">Ruangan Tujuan
+                                    Penggunaan (Opsional)</label>
+                                <select class="form-select select2-ruangan-edit" id="id_ruangan_tujuan_peminjaman_edit"
                                     name="id_ruangan_tujuan_peminjaman">
                                     <option value="">Pilih ruangan jika diperlukan</option>
                                     @foreach ($ruanganTujuanList as $ruangan)
                                         <option value="{{ $ruangan->id }}"
-                                            {{ old('id_ruangan_tujuan_peminjaman') == $ruangan->id ? 'selected' : '' }}>
+                                            {{ old('id_ruangan_tujuan_peminjaman', $peminjaman->id_ruangan_tujuan_peminjaman) == $ruangan->id ? 'selected' : '' }}>
                                             {{ $ruangan->nama_ruangan }} ({{ $ruangan->kode_ruangan }})
                                         </option>
                                     @endforeach
@@ -128,13 +125,14 @@
                             </div>
 
                             <div class="mb-3">
-                                <label for="catatan_peminjam" class="form-label">Catatan Tambahan (Opsional)</label>
-                                <textarea class="form-control" id="catatan_peminjam" name="catatan_peminjam" rows="3">{{ old('catatan_peminjam') }}</textarea>
+                                <label for="catatan_peminjam_edit" class="form-label">Catatan Tambahan (Opsional)</label>
+                                <textarea class="form-control" id="catatan_peminjam_edit" name="catatan_peminjam" rows="3">{{ old('catatan_peminjam', $peminjaman->catatan_peminjam) }}</textarea>
                             </div>
 
                             <div class="d-flex justify-content-end">
-                                <a href="{{ route('guru.peminjaman.index') }}" class="btn btn-light me-2">Batal</a>
-                                <button type="submit" class="btn btn-primary">Kirim Pengajuan</button>
+                                <a href="{{ route('guru.peminjaman.show', $peminjaman->id) }}"
+                                    class="btn btn-light me-2">Batal</a>
+                                <button type="submit" class="btn btn-primary">Simpan Perubahan</button>
                             </div>
                         </form>
                     </div>
@@ -145,36 +143,44 @@
 @endsection
 
 @push('scripts')
-    {{-- Tambahkan Select2 JS jika belum ada di layout utama --}}
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> {{-- Select2 memerlukan jQuery --}}
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         $(document).ready(function() {
-            $('.select2-barang').select2({
+            $('.select2-barang-edit').select2({
                 placeholder: "Cari dan pilih item barang...",
                 allowClear: true,
                 theme: "bootstrap-5"
             });
-            $('.select2-ruangan').select2({
+            $('.select2-ruangan-edit').select2({
                 placeholder: "Pilih ruangan tujuan...",
                 allowClear: true,
                 theme: "bootstrap-5",
                 width: '100%'
             });
 
-            // Validasi tanggal harus kembali > tanggal rencana pinjam
-            $('#tanggal_rencana_pinjam').on('change', function() {
-                var tglPinjam = $(this).val();
-                $('#tanggal_harus_kembali').attr('min', tglPinjam);
-                if ($('#tanggal_harus_kembali').val() && $('#tanggal_harus_kembali').val() <= tglPinjam) {
-                    $('#tanggal_harus_kembali').val('');
+            function setMinTanggalKembali() {
+                var tglPinjam = $('#tanggal_rencana_pinjam_edit').val();
+                if (tglPinjam) {
+                    $('#tanggal_harus_kembali_edit').attr('min', tglPinjam);
+                    // Jika tanggal kembali yang sudah ada lebih kecil, kosongkan
+                    if ($('#tanggal_harus_kembali_edit').val() && $('#tanggal_harus_kembali_edit').val() <
+                        tglPinjam) {
+                        // Tidak mengosongkan jika tgl kembali valid, hanya set min
+                    }
+                }
+            }
+
+            $('#tanggal_rencana_pinjam_edit').on('change', function() {
+                setMinTanggalKembali();
+                if ($('#tanggal_harus_kembali_edit').val() && $('#tanggal_harus_kembali_edit').val() <= $(
+                        this).val()) {
+                    $('#tanggal_harus_kembali_edit').val(''); // Kosongkan jika tidak valid
                 }
             });
+
             // Inisialisasi min untuk tanggal_harus_kembali saat load halaman
-            var tglPinjamAwal = $('#tanggal_rencana_pinjam').val();
-            if (tglPinjamAwal) {
-                $('#tanggal_harus_kembali').attr('min', tglPinjamAwal);
-            }
+            setMinTanggalKembali();
         });
     </script>
 @endpush
