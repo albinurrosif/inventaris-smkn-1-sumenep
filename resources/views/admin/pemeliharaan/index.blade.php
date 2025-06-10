@@ -222,7 +222,7 @@
                                     <td class="text-center">{{ $pemeliharaanList->firstItem() + $index }}</td>
                                     <td>
                                         @if ($item->barangQrCode)
-                                            <a href="{{ route('barang-qr-code.show', $item->barangQrCode->id) }}"
+                                            <a href="{{ route('admin.barang-qr-code.show', $item->barangQrCode->id) }}"
                                                 target="_blank" data-bs-toggle="tooltip"
                                                 title="Lihat Detail Unit: {{ $item->barangQrCode->kode_inventaris_sekolah }}">
                                                 <code>{{ $item->barangQrCode->kode_inventaris_sekolah ?? 'N/A' }}</code>

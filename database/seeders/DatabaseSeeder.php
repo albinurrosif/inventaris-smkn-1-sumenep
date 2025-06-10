@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             BarangQrCodeSeeder::class,
             PeminjamanSeeder::class,
             PemeliharaanSeeder::class,
+            PengaturanSeeder::class
         ]);
     }
 }

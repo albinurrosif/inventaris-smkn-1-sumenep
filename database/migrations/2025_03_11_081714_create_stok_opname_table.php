@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('stok_opname', function (Blueprint $table) {
             $table->id();
             $table->foreignId('id_ruangan')->constrained('ruangans')->onDelete('cascade');
-            $table->foreignId('id_operator')->constrained('users')->onDelete('cascade');
+            $table->foreignId('id_operator')->nullable()->constrained('users')->onDelete('set null');
             $table->date('tanggal_opname');
             $table->text('catatan')->nullable();
             $table->enum('status', ['Draft', 'Selesai', 'Dibatalkan'])->default('Draft');

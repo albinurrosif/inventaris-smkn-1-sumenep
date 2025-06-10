@@ -14,7 +14,7 @@
                             @if ($qrCode->barang)
                                 <li class="breadcrumb-item">
                                     <a
-                                        href="{{ route('barang.show', $qrCode->barang->id) }}">{{ Str::limit($qrCode->barang->nama_barang, 20) }}</a>
+                                        href="{{ route('admin.barang.show', $qrCode->barang->id) }}">{{ Str::limit($qrCode->barang->nama_barang, 20) }}</a>
                                 </li>
                             @endif
                             <li class="breadcrumb-item active">{{ $qrCode->kode_inventaris_sekolah ?? 'N/A' }}</li>
@@ -173,7 +173,7 @@
                             <p class="text-muted">QR Code belum tersedia atau gagal dimuat.</p>
                         @endif
                         @can('downloadQr', $qrCode)
-                            <a href="{{ route('barang-qr-code.download', $qrCode) }}"
+                            <a href="{{ route('admin.barang-qr-code.download', $qrCode) }}"
                                 class="btn btn-primary btn-sm w-100 mt-2">
                                 <i class="fas fa-download me-1"></i> Download QR Code
                             </a>
@@ -233,7 +233,7 @@
                                     {{-- CLASS BARU --}} data-bs-toggle="modal" data-bs-target="#modalAssignPersonal"
                                     {{-- TARGET MODAL BARU --}} data-unit-id="{{ $qrCode->id }}"
                                     data-unit-kode="{{ $qrCode->kode_inventaris_sekolah ?? 'N/A' }}"
-                                    data-url-action="{{ route('barang-qr-code.assign-personal', $qrCode->id) }}"
+                                    data-url-action="{{ route('admin.barang-qr-code.assign-personal', $qrCode->id) }}"
                                     title="Serahkan Unit ke Pemegang Personal">
                                     <i class="fas fa-user-plus me-1"></i> Serahkan ke Personal
                                 </button>
@@ -257,7 +257,7 @@
                                     {{-- TARGET MODAL BARU --}} data-unit-id="{{ $qrCode->id }}"
                                     data-unit-kode="{{ $qrCode->kode_inventaris_sekolah ?? 'N/A' }}"
                                     data-unit-pemegang="{{ $qrCode->pemegangPersonal->username ?? 'N/A' }}"
-                                    data-url-action="{{ route('barang-qr-code.return-personal', $qrCode->id) }}"
+                                    data-url-action="{{ route('admin.barang-qr-code.return-personal', $qrCode->id) }}"
                                     title="Kembalikan Unit ke Ruangan">
                                     <i class="fas fa-undo me-1"></i> Kembalikan ke Ruangan
                                 </button>
@@ -281,7 +281,7 @@
                                     {{-- TARGET MODAL BARU --}} data-unit-id="{{ $qrCode->id }}"
                                     data-unit-kode="{{ $qrCode->kode_inventaris_sekolah ?? 'N/A' }}"
                                     data-unit-pemegang-lama="{{ $qrCode->pemegangPersonal->username ?? 'N/A' }}"
-                                    data-url-action="{{ route('barang-qr-code.transfer-personal', $qrCode->id) }}"
+                                    data-url-action="{{ route('admin.barang-qr-code.transfer-personal', $qrCode->id) }}"
                                     title="Transfer Pemegang Personal">
                                     <i class="fas fa-exchange-alt me-1"></i> Transfer Personal
                                 </button>
@@ -300,7 +300,7 @@
                             @can('archive', $qrCode)
                                 <button type="button" class="btn btn-danger btn-sm btn-arsip-unit-trigger"
                                     title="Arsipkan Unit Ini" data-bs-toggle="modal" data-bs-target="#modalArsipUnit"
-                                    data-url="{{ route('barang-qr-code.archive', $qrCode->id) }}"
+                                    data-url="{{ route('admin.barang-qr-code.archive', $qrCode->id) }}"
                                     data-kode="{{ $qrCode->kode_inventaris_sekolah }}">
                                     <i class="fas fa-archive me-1"></i> Arsipkan Unit Ini
                                 </button>
@@ -310,7 +310,7 @@
                         {{-- Tombol Pulihkan dari Arsip (Jika sudah ada record arsip & belum dipulihkan) --}}
                         @if ($qrCode->arsip && $qrCode->arsip->status_arsip !== \App\Models\ArsipBarang::STATUS_ARSIP_DIPULIHKAN)
                             @can('restore', $qrCode)
-                                <form action="{{ route('barang-qr-code.restore', $qrCode->id) }}" method="POST"
+                                <form action="{{ route('admin.barang-qr-code.restore', $qrCode->id) }}" method="POST"
                                     class="d-grid">
                                     @csrf
                                     <button type="submit" class="btn btn-success btn-sm"
@@ -726,7 +726,6 @@
                 });
             }
 
-
             // JavaScript untuk memicu modal mutasi unit
             const mutasiUnitTriggerButtons = document.querySelectorAll(
                 '.btn-mutasi-unit-trigger');
@@ -776,8 +775,6 @@
                             ruanganTujuanSelect.value = '';
                         }
                     }
-                    // form.reset(); // Jangan reset formnya agar pilihan file tidak hilang jika ada
-                    // Hanya reset field tertentu jika perlu, atau biarkan user yang mengaturnya
                     const alasanPemindahan = modalMutasiUnitElement.querySelector(
                         '#mutasiAlasanPemindahan');
                     if (alasanPemindahan) alasanPemindahan.value = '';
@@ -800,7 +797,6 @@
                 $(formElement).find('.is-invalid').removeClass('is-invalid');
                 $(formElement).find('.invalid-feedback').remove();
             }
-
             // Fungsi untuk menampilkan error validasi dari AJAX
             function displayFormErrors(formElement, errors) {
                 $.each(errors, function(key, value) {
@@ -985,15 +981,11 @@
                         clearFormErrors(formTransferPersonal);
                         $('#transferNewIdPemegangPersonal').val(null).trigger(
                             'change'); // Reset Select2
-
                         modalTransferPersonalInstance.show();
                     });
                 });
                 if (formTransferPersonal) handleAjaxFormSubmit(formTransferPersonal, modalTransferPersonalInstance);
             }
-
-            // Inisialisasi Select2 untuk semua modal yang relevan setelah kontennya ada
-            // Pastikan elemen select memiliki class 'select2-basic' atau class yang Anda gunakan
             $('#modalAssignPersonal, #modalReturnPersonal, #modalTransferPersonal').on('shown.bs.modal',
                 function() {
                     $(this).find('.select2-basic').select2({
@@ -1002,14 +994,6 @@
                         allowClear: true
                     });
                 });
-
-            // Reset modal content saat ditutup (opsional, tapi baik untuk performa)
-            // Jika Anda memuat konten dinamis via AJAX ke satu modal umum (#actionModal), maka ini relevan.
-            // Jika setiap modal punya ID sendiri dan kontennya statis di partial, ini kurang relevan.
-            // $('#actionModal').on('hidden.bs.modal', function () {
-            // $(this).find('.modal-content').html('<div class="modal-body text-center"><i class="fas fa-spinner fa-spin fa-3x"></i><p>Memuat...</p></div>');
-            // });
-
         });
     </script>
 @endpush

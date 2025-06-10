@@ -65,7 +65,7 @@
                                 <div class="row">
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label d-block">Kode Unit:</label>
-                                        <a href="{{ route('barang-qr-code.show', $barangQr->id) }}"
+                                        <a href="{{ route('admin.barang-qr-code.show', $barangQr->id) }}"
                                             target="_blank"><code>{{ $barangQr->kode_inventaris_sekolah }}</code></a>
                                     </div>
                                     <div class="col-md-8 mb-3">

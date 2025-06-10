@@ -25,10 +25,11 @@ return new class extends Migration
             $table->string('no_dokumen_perolehan_unit')->nullable(); // No. BAST/SPK/Faktur untuk perolehan unit ini
 
             $table->enum('kondisi', ['Baik', 'Kurang Baik', 'Rusak Berat', 'Hilang'])->default('Baik');
-            $table->enum('status', ['Tersedia', 'Dipinjam', 'Dalam Pemeliharaan'])->default('Tersedia'); // Status ketersediaan
+            $table->enum('status', ['Tersedia', 'Dipinjam', 'Dalam Pemeliharaan', 'Diarsipkan/Dihapus'])->default('Tersedia'); // Status ketersediaan
             $table->string('qr_path')->nullable(); // Path ke gambar QR Code
 
-            $table->unsignedBigInteger('id_pemegang_personal')->nullable(); // FK ke tabel 'users' (pemegang unit ini, bisa guru/pegawai)
+            $table->foreignId('id_pemegang_personal')->nullable()->constrained('users')->onDelete('set null'); // FK ke tabel 'users' (pemegang unit ini, bisa guru/pegawai)
+            $table->foreignId('id_pencatat')->nullable()->constrained('users')->onDelete('set null');
 
 
             $table->timestamps();
@@ -36,7 +37,7 @@ return new class extends Migration
 
             $table->foreign('id_barang')->references('id')->on('barangs')->onDelete('cascade'); // Jika induk terhapus, unit ikut terhapus
             $table->foreign('id_ruangan')->references('id')->on('ruangans')->onDelete('restrict'); // restrict agar ruangan tidak terhapus jika ada barang di dalamnya
-            $table->foreign('id_pemegang_personal')->references('id')->on('users')->onDelete('set null'); // Jika pemegang dihapus, unit tetap ada tapi tanpa pemegang
+
         });
     }
 

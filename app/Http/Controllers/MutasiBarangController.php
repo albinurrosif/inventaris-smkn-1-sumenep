@@ -3,71 +3,66 @@
 namespace App\Http\Controllers;
 
 use App\Models\MutasiBarang;
-use App\Models\BarangQrCode; // Import model BarangQrCode
-use App\Models\Ruangan; // Import model Ruangan
-use App\Models\User; // Import model User
+use App\Models\User;
+use App\Models\Ruangan; // Pastikan ini di-import
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB; // Import untuk transaksi database
+use Illuminate\View\View;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class MutasiBarangController extends Controller
 {
+    // PENYEMPURNAAN: Mengaktifkan fitur otorisasi
+    use AuthorizesRequests;
+
     /**
- * Display a listing of the resource.
- */
-    public function index(Request $request)
+     * Menampilkan daftar riwayat mutasi barang.
+     */
+    public function index(Request $request): View
     {
+        // PERUBAHAN: Menggunakan Policy untuk otorisasi
+        $this->authorize('viewAny', MutasiBarang::class);
         $user = Auth::user();
 
-        // Eager load relasi yang sering digunakan
-        $mutasiBarang = MutasiBarang::with(['barangQrCode', 'ruanganLama', 'ruanganBaru', 'user']);
+        // PENYEMPURNAAN: Eager load dengan nama relasi yang benar dari model
+        $query = MutasiBarang::with(['barangQrCode.barang', 'ruanganAsal', 'ruanganTujuan', 'admin']);
 
-        // Filter berdasarkan ruangan operator jika perlu
-        if ($user->role === 'Operator') {
-            $ruanganYangDiKelola = Ruangan::where('id_operator', $user->id)->pluck('id');
-            $mutasiBarang = $mutasiBarang->whereIn('id_ruangan_lama', $ruanganYangDiKelola)
-                ->orWhereIn('id_ruangan_baru', $ruanganYangDiKelola);
+        // PENYEMPURNAAN: Logika filter untuk Operator yang lebih rapi
+        if ($user->hasRole(User::ROLE_OPERATOR)) {
+            // Menggunakan relasi yang sudah ada di model User
+            $ruanganYangDiKelolaIds = $user->ruanganYangDiKelola()->pluck('id');
+
+            $query->where(function (Builder $q) use ($ruanganYangDiKelolaIds) {
+                $q->whereIn('id_ruangan_asal', $ruanganYangDiKelolaIds)
+                    ->orWhereIn('id_ruangan_tujuan', $ruanganYangDiKelolaIds);
+            });
         }
 
         // Filter berdasarkan id barang qr code jika diberikan
         if ($request->has('id_barang_qr_code')) {
-            $mutasiBarang = $mutasiBarang->where('id_barang_qr_code', $request->id_barang_qr_code);
+            $query->where('id_barang_qr_code', $request->id_barang_qr_code);
         }
 
-        // Order by dan Pagination
-        $mutasiBarang = $mutasiBarang->orderBy('tanggal_mutasi', 'desc')->paginate(10);
+        $riwayatMutasi = $query->latest('tanggal_mutasi')->paginate(20)->withQueryString();
 
-        // Get data untuk dropdown filter
-        $barangQrCodes = BarangQrCode::all(); // Untuk dropdown Barang QR Code
-
-        if ($user->role == 'Admin') {
-            return view('admin.mutasi_barang.index', compact('mutasiBarang', 'barangQrCodes'));
-        } else {
-            return view('operator.mutasi_barang.index', compact('mutasiBarang', 'barangQrCodes'));
-        }
+        // PERUBAHAN: Mengarahkan ke satu view terpadu
+        return view('pages.mutasi.index', compact('riwayatMutasi', 'request'));
     }
-
-
 
     /**
- * Display the specified resource.
- */
-    public function show(string $id)
+     * Menampilkan detail spesifik dari sebuah transaksi mutasi.
+     * PERUBAHAN: Menggunakan Route Model Binding untuk kode yang lebih bersih.
+     */
+    public function show(MutasiBarang $mutasiBarang): View
     {
-        $mutasiBarang = MutasiBarang::with(['barangQrCode', 'ruanganLama', 'ruanganBaru', 'user'])->findOrFail($id);
-        $user = Auth::user();
+        // PERUBAHAN: Menggunakan Policy untuk otorisasi
+        $this->authorize('view', $mutasiBarang);
 
-        // Hanya admin dan operator yang bisa melihat detail mutasi
-        if ($user->role != 'Admin' && $user->role != 'Operator') {
-            abort(403, 'Unauthorized action.');
-        }
+        // Load relasi jika belum ter-load
+        $mutasiBarang->load(['barangQrCode.barang', 'ruanganAsal', 'ruanganTujuan', 'admin']);
 
-        if ($user->role == 'Admin') {
-            return view('admin.mutasi_barang.show', compact('mutasiBarang'));
-        } else {
-            return view('operator.mutasi_barang.show', compact('mutasiBarang'));
-        }
+        // PERUBAHAN: Mengarahkan ke satu view terpadu
+        return view('pages.mutasi.show', compact('mutasiBarang'));
     }
-
-
 }

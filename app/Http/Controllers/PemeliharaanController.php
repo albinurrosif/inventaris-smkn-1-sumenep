@@ -16,6 +16,7 @@ use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 
 class PemeliharaanController extends Controller
 {
@@ -130,8 +131,7 @@ class PemeliharaanController extends Controller
         $statusPemeliharaanList = Pemeliharaan::getStatusListForFilter();
         $prioritasList = Pemeliharaan::getValidPrioritas();
 
-        $viewPath = $this->getViewPathBasedOnRole('admin.pemeliharaan.index', 'operator.pemeliharaan.index', 'guru.pemeliharaan.index');
-        return view($viewPath, compact(
+        return view('pages.pemeliharaan.index', compact(
             'pemeliharaanList',
             'usersList',
             'statusPemeliharaanList',
@@ -169,15 +169,12 @@ class PemeliharaanController extends Controller
                     $barangQrCode->id_pemegang_personal === $user->id;
                 if (!$isAllowed) {
                     $targetRoute = $this->getRedirectRouteName('pemeliharaan.index', 'admin.pemeliharaan.index');
-                    return redirect()->route($targetRoute)
-                        ->with('error', 'Anda tidak diizinkan membuat laporan pemeliharaan untuk unit barang ini.');
+                    $error = 'Anda tidak diizinkan membuat laporan pemeliharaan untuk unit barang ini.';
                 }
             } elseif ($user->hasRole(User::ROLE_GURU) && $barangQrCode && !$error) {
                 $isAllowed = $barangQrCode->id_pemegang_personal === $user->id;
                 if (!$isAllowed) {
-                    $targetRoute = $this->getRedirectRouteName('pemeliharaan.index', 'guru.pemeliharaan.index'); // Asumsi guru punya index pemeliharaan
-                    return redirect()->route($targetRoute)
-                        ->with('error', 'Guru hanya bisa membuat laporan untuk barang yang dipegang secara personal.');
+                    $error = 'Guru hanya bisa membuat laporan untuk barang yang dipegang secara personal.';
                 }
             }
         } else {

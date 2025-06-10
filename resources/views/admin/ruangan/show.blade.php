@@ -123,7 +123,7 @@
                                             @php $firstItem = $items->first(); @endphp
                                             <tr>
                                                 <td>
-                                                    <a href="{{ route('barang.show', $firstItem->barang->id) }}">
+                                                    <a href="{{ route('admin.barang.show', $firstItem->barang->id) }}">
                                                         {{ $namaBarang }}
                                                     </a>
                                                 </td>
@@ -182,12 +182,12 @@
                                             <tr>
                                                 <td>{{ $loop->iteration }}</td>
                                                 <td>
-                                                    <a href="{{ route('barang-qr-code.show', $unit->id) }}">
+                                                    <a href="{{ route('admin.barang-qr-code.show', $unit->id) }}">
                                                         <code>{{ $unit->kode_inventaris_sekolah }}</code>
                                                     </a>
                                                 </td>
                                                 <td>
-                                                    <a href="{{ route('barang.show', $unit->barang->id) }}">
+                                                    <a href="{{ route('admin.barang.show', $unit->barang->id) }}">
                                                         {{ $unit->barang->nama_barang }}
                                                     </a>
                                                     @if ($unit->barang->merk_model)
@@ -219,7 +219,7 @@
                                                     {{ number_format($unit->harga_perolehan_unit, 0, ',', '.') }}
                                                 </td>
                                                 <td class="text-center">
-                                                    <a href="{{ route('barang-qr-code.show', $unit->id) }}"
+                                                    <a href="{{ route('admin.barang-qr-code.show', $unit->id) }}"
                                                         class="btn btn-outline-primary btn-sm" title="Lihat Detail Unit">
                                                         <i class="fas fa-eye"></i>
                                                     </a>
@@ -239,11 +239,11 @@
                                     </tfoot>
                                 </table>
                             </div>
-                            @if ($unitBarang instanceof \Illuminate\Pagination\LengthAwarePaginator)
+                            {{-- @if ($unitBarang instanceof \Illuminate\Pagination\LengthAwarePaginator)
                                 <div class="mt-3 d-flex justify-content-center">
-                                    {{ $unitBarang->appends(request()->query())->links() }} {{-- Menambahkan query string --}}
+                                    {{ $unitBarang->appends(request()->query())->links() }} 
                                 </div>
-                            @endif
+                            @endif --}}
                         </div>
                     </div>
                 </div>

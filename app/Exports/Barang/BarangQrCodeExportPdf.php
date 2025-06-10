@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Exports\barang;
+namespace App\Exports\Barang;
 
 use App\Models\BarangQrCode;
 use App\Models\User;

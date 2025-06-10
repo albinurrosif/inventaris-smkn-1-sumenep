@@ -41,7 +41,10 @@ class StokOpnamePolicy
      */
     public function create(User $user): bool
     {
-        return $user->hasAnyRole([User::ROLE_ADMIN, User::ROLE_OPERATOR]);
+        // Kebijakan sebelumnya mengizinkan Operator, sekarang hanya Admin.
+        // Karena sudah di-handle di before(), method ini bahkan bisa tidak ada atau return false.
+        // Namun, untuk kejelasan, kita eksplisit mengizinkan Admin.
+        return $user->hasRole(User::ROLE_ADMIN);
     }
 
     /**
@@ -50,14 +53,10 @@ class StokOpnamePolicy
      */
     public function update(User $user, StokOpname $stokOpname): bool
     {
-        if ($user->hasRole(User::ROLE_ADMIN)) {
-            return true;
-        }
-        if ($user->hasRole(User::ROLE_OPERATOR)) {
-            return $stokOpname->id_operator === $user->id && $stokOpname->status === StokOpname::STATUS_DRAFT;
-        }
-        return false;
+        return $user->hasRole(User::ROLE_ADMIN) && $stokOpname->status === StokOpname::STATUS_DRAFT;
     }
+
+
 
     /**
      * Determine whether the user can process (input details) of the stok opname.

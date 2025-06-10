@@ -43,6 +43,8 @@
         </div>
 
         <div class="card">
+            
+           
             <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                 <h5 class="card-title mb-0 flex-grow-1"><i class="fas fa-door-open me-2"></i>Data Ruangan</h5>
                 @can('create', App\Models\Ruangan::class)
@@ -66,24 +68,28 @@
                 @if ($errors->updateRuanganErrors->any() && old('form_type') === 'edit' && session('error_ruangan_id'))
                     <script>
                         document.addEventListener('DOMContentLoaded', function() {
-                            const ruanganIdToEdit = '{{ session('error_ruangan_id') }}';
-                            if (ruanganIdToEdit) {
-                                const editButton = document.querySelector(`.btn-edit-ruangan[data-id="${ruanganIdToEdit}"]`);
+                            const ruanganIdOnError = '{{ session('error_ruangan_id') }}';
+                            if (ruanganIdOnError) {
+                                const editButton = document.querySelector(`.btn-edit-ruangan[data-id="${ruanganIdOnError}"]`);
                                 if (editButton) {
-                                    Swal.fire({
-                                        icon: 'error',
-                                        title: 'Validasi Gagal',
-                                        html: 'Periksa kembali data yang Anda masukkan pada form edit.',
-                                        showConfirmButton: true
-                                    });
+                                    // Swal.fire({
+                                    //     icon: 'error',
+                                    //     title: 'Validasi Gagal',
+                                    //     html: 'Periksa kembali data yang Anda masukkan pada form edit.',
+                                    //     showConfirmButton: true
+                                    // });
+                                    editButton.click();
                                 }
                             } else {
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: 'Validasi Gagal',
-                                    html: 'Periksa kembali data yang Anda masukkan.',
-                                    showConfirmButton: true
-                                });
+                                // Swal.fire({
+                                //     icon: 'error',
+                                //     title: 'Validasi Gagal',
+                                //     html: 'Periksa kembali data yang Anda masukkan.',
+                                //     showConfirmButton: true
+                                // });
+                                const modalEditRuangan = new bootstrap.Modal(document.getElementById('modalEditRuangan'));
+                                modalEditRuangan.show();
+
                             }
                         });
                     </script>

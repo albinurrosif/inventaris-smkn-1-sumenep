@@ -119,22 +119,22 @@ class BarangQrCode extends Model
     public static function getKondisiColor(string $kondisi): string
     {
         return match (strtolower($kondisi)) {
-            strtolower(self::KONDISI_BAIK) => 'success',
-            strtolower(self::KONDISI_KURANG_BAIK) => 'warning text-dark',
-            strtolower(self::KONDISI_RUSAK_BERAT) => 'danger',
-            strtolower(self::KONDISI_HILANG) => 'dark',
-            default => 'secondary',
+            strtolower(self::KONDISI_BAIK) => 'text-bg-success',
+            strtolower(self::KONDISI_KURANG_BAIK) => 'text-bg-warning text-dark',
+            strtolower(self::KONDISI_RUSAK_BERAT) => 'text-bg-danger',
+            strtolower(self::KONDISI_HILANG) => 'text-bg-dark',
+            default => 'text-bg-secondary',
         };
     }
 
     public static function getStatusColor(string $status): string
     {
         return match (strtolower($status)) {
-            strtolower(self::STATUS_TERSEDIA) => 'success',
-            strtolower(self::STATUS_DIPINJAM) => 'primary',
-            strtolower(self::STATUS_DALAM_PEMELIHARAAN) => 'info',
-            strtolower(self::STATUS_DIARSIPKAN) => 'dark',
-            default => 'secondary',
+            strtolower(self::STATUS_TERSEDIA) => 'text-bg-success',
+            strtolower(self::STATUS_DIPINJAM) => 'text-bg-primary',
+            strtolower(self::STATUS_DALAM_PEMELIHARAAN) => 'text-bg-info',
+            strtolower(self::STATUS_DIARSIPKAN) => 'text-bg-dark',
+            default => 'text-bg-secondary',
         };
     }
 

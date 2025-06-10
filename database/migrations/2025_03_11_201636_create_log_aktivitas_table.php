@@ -13,7 +13,8 @@ return new class extends Migration
     {
         Schema::create('log_aktivitas', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('id_user')->nullable(); // Siapa yang melakukan aktivitas
+            // KODE BARU
+            $table->foreignId('id_user')->nullable()->constrained('users')->onDelete('set null'); // Siapa yang melakukan aktivitas
             $table->string('aktivitas'); // Deskripsi aktivitas (ex: "Menambah Barang", "Meminjam Laptop X")
             $table->string('model_terkait')->nullable(); // Model yang terkait (ex: 'BarangQrCode', 'Peminjaman')
             $table->unsignedBigInteger('id_model_terkait')->nullable(); // ID dari model yang terkait
@@ -22,8 +23,6 @@ return new class extends Migration
             $table->ipAddress('ip_address')->nullable();
             $table->string('user_agent')->nullable();
             $table->timestamps();
-
-            $table->foreign('id_user')->references('id')->on('users')->onDelete('set null');
         });
     }
 

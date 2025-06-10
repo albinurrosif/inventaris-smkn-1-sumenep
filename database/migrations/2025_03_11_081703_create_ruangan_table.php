@@ -15,11 +15,9 @@ return new class extends Migration
             $table->id();
             $table->string('nama_ruangan')->unique();
             $table->string('kode_ruangan')->unique();
-            $table->unsignedBigInteger('id_operator')->nullable(); // Operator penanggung jawab ruangan
+            $table->foreignId('id_operator')->nullable()->constrained('users')->onDelete('set null'); // Operator penanggung jawab ruangan
             $table->timestamps();
             $table->softDeletes();
-
-            $table->foreign('id_operator')->references('id')->on('users')->onDelete('set null');
         });
     }
 

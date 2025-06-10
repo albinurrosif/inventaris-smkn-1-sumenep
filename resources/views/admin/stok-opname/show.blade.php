@@ -140,7 +140,7 @@
                                     <td class="text-center">{{ $index + 1 }}</td>
                                     <td>
                                         @if ($detail->barangQrCode)
-                                            <a href="{{ route('barang-qr-code.show', $detail->barangQrCode->id) }}"
+                                            <a href="{{ route('admin.barang-qr-code.show', $detail->barangQrCode->id) }}"
                                                 target="_blank" data-bs-toggle="tooltip" title="Lihat detail unit barang">
                                                 <code>{{ $detail->barangQrCode->kode_inventaris_sekolah }}</code>
                                             </a>

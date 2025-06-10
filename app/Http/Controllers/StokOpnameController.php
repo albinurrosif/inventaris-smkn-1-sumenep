@@ -110,8 +110,9 @@ class StokOpnameController extends Controller
         $operatorList = User::where('role', User::ROLE_OPERATOR)->orderBy('username')->get();
         $statusList = StokOpname::getValidStatuses();
 
-        $viewPath = $this->getViewPathBasedOnRole('admin.stok-opname.index', 'operator.stok-opname.index');
-        return view($viewPath, compact(
+        $rolePrefix = $this->getRolePrefix();
+
+        return view('pages.stok-opname.index', compact(
             'stokOpnameList',
             'ruanganList',
             'operatorList',
@@ -123,7 +124,8 @@ class StokOpnameController extends Controller
             'operatorFilter',
             'tanggalMulai',
             'tanggalSelesai',
-            'statusArsipFilter'
+            'statusArsipFilter',
+            'rolePrefix' // tambahkan ini supaya bisa dipakai di view
         ));
     }
 
@@ -269,8 +271,15 @@ class StokOpnameController extends Controller
         $this->authorize('view', $stokOpname);
 
         $kondisiFisikList = DetailStokOpname::getValidKondisiFisik();
-        $viewPath = $this->getViewPathBasedOnRole('admin.stok-opname.show', 'operator.stok-opname.show');
-        return view($viewPath, compact('stokOpname', 'kondisiFisikList'));
+
+
+        $rolePrefix = $this->getRolePrefix();
+
+        return view('pages.stok-opname.show', compact(
+            'stokOpname',
+            'kondisiFisikList',
+            'rolePrefix'
+        ));
     }
 
     public function edit(StokOpname $stokOpname): View
@@ -789,5 +798,26 @@ class StokOpnameController extends Controller
             return $adminView; // Fallback ke admin view jika view spesifik peran tidak ada
         }
         return $viewPath;
+    }
+
+    // ==========================================================
+    // HELPER METHODS
+    // ==========================================================
+
+    private function getRolePrefix(): string
+    {
+        $user = Auth::user();
+        /** @var \App\Models\User $user */
+
+        if (!$user) return '';
+
+        if ($user->hasRole(User::ROLE_ADMIN)) {
+            return 'admin.';
+        } elseif ($user->hasRole(User::ROLE_OPERATOR)) {
+            return 'operator.';
+        } elseif ($user->hasRole(User::ROLE_GURU)) {
+            return 'guru.';
+        }
+        return '';
     }
 }

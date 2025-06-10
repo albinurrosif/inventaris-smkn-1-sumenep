@@ -23,7 +23,7 @@
                     <div class="page-title-right">
                         <ol class="breadcrumb m-0">
                             <li class="breadcrumb-item"><a href="{{ route('redirect-dashboard') }}">Dashboard</a></li>
-                            <li class="breadcrumb-item"><a href="{{ route('barang.index') }}">Daftar Jenis Barang</a></li>
+                            <li class="breadcrumb-item"><a href="{{ route('admin.barang.index') }}">Daftar Jenis Barang</a></li>
                             <li class="breadcrumb-item active">Detail: {{ $barang->nama_barang }}</li>
                         </ol>
                     </div>
@@ -40,18 +40,18 @@
                     @can('update', $barang)
                         <button type="button" class="btn btn-warning btn-sm btn-edit-jenis-barang" data-bs-toggle="modal"
                             data-bs-target="#modalEditJenisBarang" data-barang='@json($barang)'
-                            data-url="{{ route('barang.update', $barang->id) }}">
+                            data-url="{{ route('admin.barang.update', $barang->id) }}">
                             <i class="fas fa-edit me-1"></i> Edit Info Jenis
                         </button>
                     @endcan
                     @can('delete', $barang)
                         <button type="button" class="btn btn-danger btn-sm btn-hapus-jenis-barang" data-bs-toggle="modal"
-                            data-bs-target="#modalHapusJenisBarang" data-url="{{ route('barang.destroy', $barang->id) }}"
+                            data-bs-target="#modalHapusJenisBarang" data-url="{{ route('admin.barang.destroy', $barang->id) }}"
                             data-nama="{{ $barang->nama_barang }}" data-jumlah-unit="{{ $barang->active_qr_codes_count }}">
                             <i class="fas fa-trash-alt me-1"></i> Hapus Jenis & Semua Unit
                         </button>
                     @endcan
-                    <a href="{{ route('barang.index') }}" class="btn btn-secondary btn-sm">
+                    <a href="{{ route('admin.barang.index') }}" class="btn btn-secondary btn-sm">
                         <i class="fas fa-arrow-left me-1"></i> Kembali
                     </a>
                 </div>
@@ -95,7 +95,7 @@
                 @if ($barang->menggunakan_nomor_seri)
                     @can('create', [App\Models\BarangQrCode::class, $barang])
                         <div class="d-flex align-items-center gap-2">
-                            <form action="{{ route('barang-qr-code.create') }}" method="GET"
+                            <form action="{{ route('admin.barang-qr-code.create') }}" method="GET"
                                 class="d-inline-flex align-items-center">
                                 <input type="hidden" name="barang_id" value="{{ $barang->id }}">
                                 <label for="jumlah_unit_to_add" class="form-label me-2 mb-0">Tambah:</label>
@@ -134,7 +134,7 @@
                                 <tr>
                                     <td>{{ $loop->iteration + $qrCodes->firstItem() - 1 }}</td>
                                     <td><a
-                                            href="{{ route('barang-qr-code.show', $unit->id) }}">{{ $unit->kode_inventaris_sekolah }}</a>
+                                            href="{{ route('admin.barang-qr-code.show', $unit->id) }}">{{ $unit->kode_inventaris_sekolah }}</a>
                                     </td>
                                     <td>{{ $unit->no_seri_pabrik ?? '-' }}</td>
                                     <td>
@@ -193,14 +193,14 @@
                                     </td>
                                     <td class="text-center">
                                         @if ($unit->qr_path && Storage::disk('public')->exists($unit->qr_path))
-                                            <a href="{{ route('barang-qr-code.download', $unit->id) }}"
+                                            <a href="{{ route('admin.barang-qr-code.download', $unit->id) }}"
                                                 title="Download QR Code {{ $unit->kode_inventaris_sekolah }}">
                                                 <img src="{{ asset('storage/' . $unit->qr_path) }}"
                                                     alt="QR Code {{ $unit->kode_inventaris_sekolah }}"
                                                     style="width: 40px; height: 40px; cursor:pointer;">
                                             </a>
                                         @else
-                                            <a href="{{ route('barang-qr-code.download', $unit->id) }}"
+                                            <a href="{{ route('admin.barang-qr-code.download', $unit->id) }}"
                                                 class="btn btn-sm btn-outline-secondary"
                                                 title="Generate & Download QR {{ $unit->kode_inventaris_sekolah }}"><i
                                                     class="fas fa-qrcode"></i></a>
@@ -209,7 +209,7 @@
                                     <td>
                                         <div class="d-flex gap-1 flex-wrap">
                                             @can('view', $unit)
-                                                <a href="{{ route('barang-qr-code.show', $unit->id) }}"
+                                                <a href="{{ route('admin.barang-qr-code.show', $unit->id) }}"
                                                     class="btn btn-info btn-sm" title="Lihat Detail Unit"><i
                                                         class="fas fa-eye"></i></a>
                                             @endcan

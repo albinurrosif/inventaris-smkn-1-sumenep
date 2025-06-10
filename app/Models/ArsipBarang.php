@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Auth; // Ditambahkan jika ada interaksi dengan user login di model
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Model ArsipBarang merepresentasikan data barang yang telah diarsipkan atau dihapusbukukan.
@@ -179,6 +180,7 @@ class ArsipBarang extends Model
     }
 
 
+
     /**
      * Metode untuk memulihkan barang yang telah diarsipkan.
      * Ini akan me-restore record BarangQrCode yang terkait (jika di-soft-delete),
@@ -190,77 +192,64 @@ class ArsipBarang extends Model
     public function restoreBarang(int $userId): ?BarangQrCode
     {
         // Mengambil record BarangQrCode, termasuk yang mungkin sudah trashed (soft-deleted)
-        $barangQr = $this->barangQrCode()->first();
+        $barangQr = $this->barangQrCode()->first(); // [cite: 249]
 
         if (!$barangQr) {
-            Log::warning("Gagal memulihkan dari Arsip ID: {$this->id}. BarangQrCode terkait tidak ditemukan.");
-            return null; // BarangQrCode tidak ditemukan
+            Log::warning("Gagal memulihkan dari Arsip ID: {$this->id}. BarangQrCode terkait tidak ditemukan."); // [cite: 249]
+            return null;
         }
 
-        // Hanya lanjutkan jika barang memang di-soft-delete atau status arsipnya memungkinkan pemulihan
-        $canBeRestored = false;
+        // Hanya lanjutkan jika barang memang di-soft-delete
         if ($barangQr->trashed()) {
-            $canBeRestored = true; // Jika unit di-soft-delete, bisa dipulihkan
-        } elseif ($this->status_arsip === self::STATUS_ARSIP_DIAJUKAN || $this->status_arsip === self::STATUS_ARSIP_DISETUJUI) {
-            // Jika unit belum di-soft-delete tapi status arsipnya masih 'Diajukan' atau 'Disetujui' (belum permanen)
-            // Ini berarti proses pengarsipan dibatalkan sebelum unit di-soft-delete.
-            $canBeRestored = true;
-        }
+            DB::beginTransaction();
+            try {
+                // 1. Ambil data penting dari snapshot SEBELUM di-restore
+                $snapshot = $this->data_unit_snapshot ?? [];
+                $kondisiSaatDiarsip = $snapshot['kondisi'] ?? 'Tidak Diketahui';
+                $statusSaatDiarsip = $snapshot['status'] ?? 'Diarsipkan/Dihapus';
 
+                // 2. Pulihkan record dari soft delete
+                $barangQr->restore();
 
-        if ($canBeRestored) {
-            if ($barangQr->trashed()) {
-                $barangQr->restore(); // Restore record BarangQrCode jika sebelumnya di-soft-delete
-            }
+                // 3. PENYESUAIAN KUNCI: Atur kondisi & status ke default "aktif"
+                $barangQr->kondisi = BarangQrCode::KONDISI_BAIK; // Asumsi barang ditemukan dalam kondisi baik
+                $barangQr->status = BarangQrCode::STATUS_TERSEDIA;
 
-            // Atur kembali status dan kondisi barang setelah dipulihkan
-            // Ambil status dan kondisi dari snapshot jika ada, jika tidak, default ke Tersedia & Baik
-            $barangQr->status = $this->data_unit_snapshot['status'] ?? BarangQrCode::STATUS_TERSEDIA;
-            $barangQr->kondisi = $this->data_unit_snapshot['kondisi'] ?? BarangQrCode::KONDISI_BAIK;
+                // 4. PENTING: Jangan atur lokasi. Biarkan NULL agar menjadi tugas Admin/Operator untuk menempatkannya.
+                $barangQr->id_ruangan = null;
+                $barangQr->id_pemegang_personal = null;
 
-            // Kembalikan ruangan atau pemegang dari snapshot
-            // Jika id_ruangan ada di snapshot, gunakan itu. Jika tidak, coba id_pemegang_personal.
-            // Jika keduanya tidak ada, biarkan null atau set ke default jika ada.
-            $barangQr->id_ruangan = $this->data_unit_snapshot['id_ruangan'] ?? null;
-            $barangQr->id_pemegang_personal = $this->data_unit_snapshot['id_pemegang_personal'] ?? null;
+                $barangQr->save();
 
-            // Pastikan salah satu (ruangan atau pemegang) terisi jika keduanya null di snapshot
-            // dan ada aturan bahwa salah satu harus terisi. Ini tergantung logika bisnis Anda.
-            // Untuk sekarang, kita ikuti data snapshot.
+                // 5. Update record arsip ini untuk menandakan sudah dipulihkan
+                $this->dipulihkan_oleh = $userId;
+                $this->tanggal_dipulihkan = now();
+                $this->status_arsip = self::STATUS_ARSIP_DIPULIHKAN;
+                $this->save();
 
-            $barangQr->save();
-
-            // Update record arsip ini
-            $this->dipulihkan_oleh = $userId;
-            $this->tanggal_dipulihkan = now();
-            $this->status_arsip = self::STATUS_ARSIP_DIPULIHKAN; // Menggunakan konstanta
-            $this->save();
-
-            // Opsional: Catat kejadian pemulihan di BarangStatus jika diperlukan
-            // Ini bisa dilakukan di controller setelah memanggil metode ini untuk akses ke Request object
-            // atau jika Anda ingin mencatatnya langsung di sini:
-            if (class_exists(BarangStatus::class)) { // Cek jika model BarangStatus ada
+                // 6. Buat log status yang jelas
                 BarangStatus::create([
                     'id_barang_qr_code' => $barangQr->id,
-                    'id_user_pencatat' => $userId, // User yang melakukan pemulihan
+                    'id_user_pencatat' => $userId,
                     'tanggal_pencatatan' => now(),
-                    'kondisi_sebelumnya' => $this->data_unit_snapshot['kondisi'] ?? BarangQrCode::KONDISI_HILANG, // Kondisi saat diarsip
+                    'kondisi_sebelumnya' => $kondisiSaatDiarsip,
                     'kondisi_sesudahnya' => $barangQr->kondisi,
-                    'status_ketersediaan_sebelumnya' => $this->data_unit_snapshot['status_ketersediaan_sebelumnya'] ?? null, // Status saat diarsip
+                    'status_ketersediaan_sebelumnya' => $statusSaatDiarsip,
                     'status_ketersediaan_sesudahnya' => $barangQr->status,
-                    'id_ruangan_sebelumnya' => $this->data_unit_snapshot['id_ruangan_sebelumnya'] ?? null, // Ruangan saat diarsip
-                    'id_ruangan_sesudahnya' => $barangQr->id_ruangan,
-                    'id_pemegang_personal_sebelumnya' => $this->data_unit_snapshot['id_pemegang_personal_sebelumnya'] ?? null, // Pemegang saat diarsip
-                    'id_pemegang_personal_sesudahnya' => $barangQr->id_pemegang_personal,
-                    'deskripsi_kejadian' => 'Barang dipulihkan dari arsip. Arsip ID: ' . $this->id,
+                    'deskripsi_kejadian' => "Barang dipulihkan dari arsip. Arsip ID: {$this->id}",
                     'id_arsip_barang_trigger' => $this->id,
                 ]);
-            }
 
-            return $barangQr;
+                DB::commit();
+                return $barangQr;
+            } catch (\Exception $e) {
+                DB::rollBack();
+                Log::error("Gagal saat memulihkan barang dari arsip ID {$this->id}: " . $e->getMessage());
+                return null;
+            }
         }
 
-        Log::info("Gagal memulihkan dari Arsip ID: {$this->id}. BarangQrCode (ID: {$barangQr->id}) tidak dalam kondisi yang dapat dipulihkan (tidak trashed atau status arsip tidak memungkinkan).");
-        return null; // Gagal memulihkan
+        // Jika barang tidak di-soft-delete, tidak ada yang bisa dipulihkan.
+        return null;
     }
 }

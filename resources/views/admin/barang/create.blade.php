@@ -76,7 +76,7 @@
                     <div class="page-title-right">
                         <ol class="breadcrumb m-0">
                             <li class="breadcrumb-item"><a href="{{ route($dashboardRouteName) }}">Dashboard</a></li>
-                            <li class="breadcrumb-item"><a href="{{ route('barang.index') }}">Jenis Barang</a></li>
+                            <li class="breadcrumb-item"><a href="{{ route('admin.barang.index') }}">Jenis Barang</a></li>
                             <li class="breadcrumb-item active">Tambah Baru</li>
                         </ol>
                     </div>
@@ -91,7 +91,7 @@
                         <h4 class="card-title mb-0">Formulir Penambahan Barang dan Unit Awal</h4>
                     </div>
                     <div class="card-body">
-                        <form id="createBarangWizardForm" method="POST" action="{{ route('barang.store') }}">
+                        <form id="createBarangWizardForm" method="POST" action="{{ route('admin.barang.store') }}">
                             @csrf
 
                             <div id="barang-wizard" class="twitter-bs-wizard">
@@ -317,13 +317,11 @@
                                         </div>
 
                                         <ul class="pager wizard twitter-bs-wizard-pager-link">
-                                            <li class="float-start">
-                                                <a href="{{ route('barang.index') }}" class="btn btn-light">Batal</a>
-                                            </li>
-                                            <li class="next float-end">
-                                                <a href="javascript:void(0);" class="btn btn-primary">Lanjut <i
-                                                        class="bx bx-chevron-right ms-1"></i></a>
-                                            </li>
+                                            <li class="float-start"><a href="{{ route('admin.barang.index') }}"
+                                                    class="btn btn-light">Batal</a></li>
+                                            <li class="next float-end"><a href="javascript:void(0);"
+                                                    class="btn btn-primary">Lanjut <i
+                                                        class="bx bx-chevron-right ms-1"></i></a></li>
                                         </ul>
                                     </div>
 
@@ -497,20 +495,16 @@
                                                 @enderror
                                             </div>
                                         </div>
+
                                         <ul class="pager wizard twitter-bs-wizard-pager-link">
-                                            <li class="previous">
-                                                <a href="javascript: void(0);" class="btn btn-primary"><i
-                                                        class="bx bx-chevron-left me-1"></i> Kembali</a>
-                                            </li>
-                                            <li class="next float-end" style="display: none;"> {{-- Diatur oleh JS --}}
-                                                <a href="javascript: void(0);" class="btn btn-primary">Lanjut <i
-                                                        class="bx bx-chevron-right ms-1"></i></a>
-                                            </li>
-                                            <li class="submit-step2 float-end" style="display: none;">
-                                                {{-- Diatur oleh JS --}}
-                                                <button type="submit" class="btn btn-success">Simpan Data <i
-                                                        class="bx bx-save ms-1"></i></button>
-                                            </li>
+                                            <li class="previous"><a href="javascript:void(0);" class="btn btn-primary"><i
+                                                        class="bx bx-chevron-left me-1"></i> Kembali</a></li>
+                                            <li class="next float-end"><a href="javascript:void(0);"
+                                                    class="btn btn-primary">Lanjut <i
+                                                        class="bx bx-chevron-right ms-1"></i></a></li>
+                                            <li class="submit-step2" style="display: none;"><button type="submit"
+                                                    class="btn btn-success">Simpan Data <i
+                                                        class="bx bx-save ms-1"></i></button></li>
                                         </ul>
                                     </div>
 
@@ -542,14 +536,11 @@
                                         @endif
 
                                         <ul class="pager wizard twitter-bs-wizard-pager-link mt-3">
-                                            <li class="previous">
-                                                <a href="javascript: void(0);" class="btn btn-primary"><i
-                                                        class="bx bx-chevron-left me-1"></i> Kembali</a>
-                                            </li>
-                                            <li class="finish float-end"> <button type="submit"
+                                            <li class="previous"><a href="javascript:void(0);" class="btn btn-primary"><i
+                                                        class="bx bx-chevron-left me-1"></i> Kembali</a></li>
+                                            <li class="finish float-end"><a href="javascript:void(0);"
                                                     class="btn btn-success">Simpan Keseluruhan Data <i
-                                                        class="bx bx-save ms-1"></i></button>
-                                            </li>
+                                                        class="bx bx-save ms-1"></i></a></li>
                                         </ul>
                                     </div>
                                 </div>
@@ -561,9 +552,9 @@
         </div>
     </div>
 @endsection
-
 @push('scripts')
-    <script src="{{ asset('assets/libs/twitter-bootstrap-wizard/jquery.bootstrap.wizard.min.js') }}"></script>
+    {{-- Aset JS --}}
+   <script src="{{ asset('assets/libs/twitter-bootstrap-wizard/jquery.bootstrap.wizard.min.js') }}"></script>
     <script src="{{ asset('assets/libs/flatpickr/flatpickr.min.js') }}"></script>
     @if (in_array(app()->getLocale(), ['id', 'in']))
         <script src="{{ asset('assets/libs/flatpickr/l10n/id.js') }}"></script>
@@ -572,342 +563,264 @@
 
     <script>
         $(document).ready(function() {
-            var $wizard = $('#barang-wizard');
-            var $form = $('#createBarangWizardForm');
-            // var choiceInstances = {}; // Tidak lagi diperlukan jika inisialisasi global
-
-            console.log('Document ready. Initializing wizard and components...');
-
-            function initializeChoicesGlobally(selector) {
-                console.log('Choices.js: Initializing globally for selector:', selector);
-                document.querySelectorAll(selector).forEach(function(element) {
-                    if (element.choicesInstance) { // Hancurkan instance lama jika ada
-                        try { element.choicesInstance.destroy(); }
-                        catch (e) { console.warn("Choices.js: Error destroying existing instance for:", element.id, e); }
-                    }
-                    try {
-                        element.choicesInstance = new Choices(element, {
-                            searchEnabled: true, removeItemButton: element.multiple, shouldSort: false,
-                            placeholderValue: element.querySelector('option[value=""]') ? element.querySelector('option[value=""]').textContent : 'Pilih...',
-                            classNames: { containerOuter: 'choices form-control', containerInner: 'choices__inner', input: 'choices__input', inputCloned: 'choices__input--cloned', list: 'choices__list', listItems: 'choices__list--multiple', listSingle: 'choices__list--single', listDropdown: 'choices__list--dropdown', item: 'choices__item', itemSelectable: 'choices__item--selectable', itemDisabled: 'choices__item--disabled', itemChoice: 'choices__item--choice', placeholder: 'choices__placeholder', group: 'choices__group', groupHeading: 'choices__heading', button: 'choices__button', activeState: 'is-active', focusState: 'is-focused', openState: 'is-open', disabledState: 'is-disabled', highlightedState: 'is-highlighted'}
-                        });
-                    } catch (e) { console.error("Choices.js: Error initializing on element:", element.id, e); }
+            // 1. Inisialisasi Komponen
+            var choicesInstances = [];
+            $('.choices-select').each(function() {
+                var choiceInstance = new Choices(this, {
+                    searchEnabled: true,
+                    shouldSort: false,
+                    removeItemButton: true,
+                    allowHTML: false
                 });
-            }
-            initializeChoicesGlobally('.choices-select');
+                choicesInstances.push(choiceInstance);
+            });
 
             flatpickr(".datepicker-input", {
                 dateFormat: "Y-m-d",
-                defaultDate: "{{ old('tanggal_perolehan_unit_awal', date('Y-m-d')) }}",
+                maxDate: "today",
                 locale: "{{ app()->getLocale() == 'id' ? 'id' : 'default' }}"
             });
-            console.log('Flatpickr initialized.');
 
-            function invalidateField(element, message) {
-                var $el = $(element);
-                $el.addClass('is-invalid');
-                if ($el.hasClass('choices-select')) {
-                    var $choicesContainer = $el.closest('div').find('.choices');
-                    if ($choicesContainer.length) {
-                        $choicesContainer.addClass('is-invalid'); // Add to main wrapper
-                        $choicesContainer.find('.choices__inner').css('border-color', '#dc3545');
-                    }
-                }
-                var $feedback = $el.siblings('.invalid-feedback, .serial-invalid-feedback').first();
-                if (!$feedback.length) $feedback = $el.closest('.col-md-7').find('.invalid-feedback, .serial-invalid-feedback').first();
-
-                if (message && $feedback.length) { $feedback.text(message).show(); }
-                else if (message && $el.hasClass('serial-number-input')){ $el.siblings('.serial-invalid-feedback').text(message).show(); }
-                return $el[0]; // Return DOM element for focusing
-            }
-
-            function clearFieldError(element) {
-                var $el = $(element);
-                $el.removeClass('is-invalid');
-                if ($el.hasClass('choices-select')) {
-                     var $choicesContainer = $el.closest('div').find('.choices');
-                     if ($choicesContainer.length) {
-                        $choicesContainer.removeClass('is-invalid');
-                        $choicesContainer.find('.choices__inner').css('border-color', '');
-                    }
-                }
-                var $feedback = $el.siblings('.invalid-feedback, .serial-invalid-feedback').first();
-                 if (!$feedback.length) $feedback = $el.closest('.col-md-7').find('.invalid-feedback, .serial-invalid-feedback').first();
-
-                if ($feedback.length) { $feedback.text('').hide(); }
-                else if ($el.hasClass('serial-number-input')){ $el.siblings('.serial-invalid-feedback').text('').hide(); }
-            }
-
-            window.validateClientSideStep = function(stepNumber) {
-                var isValid = true;
-                var firstInvalidElement = null;
-                var paneId;
-
-                if (stepNumber === 1) paneId = '#step1-jenis-barang';
-                else if (stepNumber === 2) paneId = '#step2-unit-awal';
-                else if (stepNumber === 3) paneId = '#step3-nomor-seri';
-                else { console.error('validateClientSideStep: Invalid stepNumber:', stepNumber); return false; }
-
-                var $activePane = $(paneId);
-                if (!$activePane.length) { console.error(`validateClientSideStep: Pane with ID '${paneId}' not found.`); return false; }
-                console.log(`validateClientSideStep: Validating pane '${$activePane.attr('id')}' for step ${stepNumber}`);
-
-                $activePane.find('[required]').each(function() { clearFieldError(this); });
-
-                $activePane.find('[required]').each(function() {
-                    var $field = $(this);
-                    var fieldName = $field.attr('name') || $field.attr('id');
-                    var fieldValue = $field.val();
-                    var isInvalid = false;
-
-                    if ($field.is(':radio')) {
-                        var radioName = $field.attr('name');
-                        if ($(`input[name="${radioName}"]:checked`).length === 0) isInvalid = true;
-                        // console.log(`  Radio: ${fieldName}, Checked: ${!isInvalid}`);
-                    } else if ($field.is('select')) {
-                        if (fieldValue === "" || fieldValue === null) isInvalid = true;
-                        // console.log(`  Select: ${fieldName}, Value: '${fieldValue}', Valid: ${!isInvalid}`);
-                    } else { // input text, textarea, number
-                        if (String(fieldValue).trim() === "") isInvalid = true;
-                        // console.log(`  Input/Textarea: ${fieldName}, Value: '${String(fieldValue).trim()}', Valid: ${!isInvalid}`);
-                    }
-
-                    if (isInvalid) {
-                        console.warn(`  INVALID: ${fieldName} - ${$field.is(':radio') ? 'Not selected' : ($field.is('select') ? 'Not selected' : 'Is empty')}`);
-                        var currentInvalid = invalidateField(this, $field.is(':radio') || $field.is('select') ? 'Pilihan ini wajib dibuat.' : 'Field ini wajib diisi.');
-                        if (!firstInvalidElement) firstInvalidElement = currentInvalid;
-                        isValid = false;
-                    }
-                });
-
-                if (stepNumber === 2) { // Validasi tambahan untuk Step 2
-                    let jumlahUnit = parseInt($('#jumlah_unit_awal').val());
-                    if (isNaN(jumlahUnit) || jumlahUnit < 1) {
-                        if(!firstInvalidElement) firstInvalidElement = invalidateField('#jumlah_unit_awal', 'Jumlah unit minimal 1.'); else invalidateField('#jumlah_unit_awal', 'Jumlah unit minimal 1.'); isValid = false;
-                    }
-                    let ruanganAwal = $('#id_ruangan_awal').val();
-                    let pemegangAwal = $('#id_pemegang_personal_awal').val();
-                    if (!ruanganAwal && !pemegangAwal) {
-                        if(!firstInvalidElement) firstInvalidElement = invalidateField('#id_ruangan_awal', 'Pilih ruangan ATAU pemegang.'); else invalidateField('#id_ruangan_awal', 'Pilih ruangan ATAU pemegang.');
-                        invalidateField('#id_pemegang_personal_awal', 'Pilih pemegang ATAU ruangan.'); isValid = false;
-                    } else if (ruanganAwal && pemegangAwal) {
-                        if(!firstInvalidElement) firstInvalidElement = invalidateField('#id_ruangan_awal', 'Tidak boleh bersamaan.'); else invalidateField('#id_ruangan_awal', 'Tidak boleh bersamaan.');
-                        invalidateField('#id_pemegang_personal_awal', 'Tidak boleh bersamaan.'); isValid = false;
-                    }
-                } else if (stepNumber === 3 && $('input[name="menggunakan_nomor_seri"]:checked').val() === '1') { // Validasi Step 3
-                    var serials = []; var hasDuplicates = false;
-                    var $serialInputs = $activePane.find('.serial-number-input');
-                    if ($serialInputs.length === 0 && parseInt($('#jumlah_unit_awal').val()) > 0) {
-                        alert('Input nomor seri belum muncul. Pastikan Jumlah Unit Awal di Langkah 2 sudah benar.'); isValid = false;
-                    }
-                    $serialInputs.filter('[required]').each(function() { // Hanya validasi yang required
-                        var val = $(this).val().trim();
-                        if (val === "") { if(!firstInvalidElement) firstInvalidElement = invalidateField(this, 'Nomor seri wajib diisi.'); else invalidateField(this, 'Nomor seri wajib diisi.'); isValid = false; }
-                        else { if (serials.includes(val)) { hasDuplicates = true; } serials.push(val); }
-                    });
-                    if (hasDuplicates) {
-                        $serialInputs.each(function() {
-                            var currentVal = $(this).val().trim();
-                            if (currentVal !== "" && serials.filter(s => s === currentVal).length > 1) {
-                                if(!firstInvalidElement) firstInvalidElement = invalidateField(this, 'Nomor seri duplikat.'); else invalidateField(this, 'Nomor seri duplikat.'); isValid = false;
-                            }
-                        });
-                    }
-                }
-
-                if (!isValid && firstInvalidElement) {
-                    console.warn(`validateClientSideStep: Validation failed for step ${stepNumber}. Focusing on:`, $(firstInvalidElement).attr('id') || $(firstInvalidElement).attr('name'));
-                    $(firstInvalidElement).focus();
-                }
-                console.log(`validateClientSideStep: Final isValid for step ${stepNumber}:`, isValid);
-                return isValid;
-            };
-
-            function updateWizardUI(currentIndex) {
-                console.log('updateWizardUI called for index:', currentIndex);
-                var useSerial = $('input[name="menggunakan_nomor_seri"]:checked').val() === '1';
-                var totalSteps = useSerial ? 3 : 2;
-
-                var $progressBar = $wizard.find('.progress-bar');
-                var $percent = totalSteps > 0 ? (((currentIndex + 1) / totalSteps) * 100) : (currentIndex === 0 ? 50 : 0); // Handle progress if index is -1 initially
-                 if (currentIndex === -1 && totalSteps === 2) $percent = 0; // Jika hanya 2 step dan index -1, mulai dari 0
-                 else if (currentIndex === -1 && totalSteps === 3) $percent = 0; // Jika 3 step dan index -1, mulai dari 0
-
-
-                $progressBar.css({ width: $percent + '%' }).attr('aria-valuenow', $percent);
-                // console.log('updateWizardUI: Progress bar to', $percent + '%. Total steps:', totalSteps, 'Current Index:', currentIndex);
-
-                var $step3NavItem = $wizard.find('ul.twitter-bs-wizard-nav li.step3-nav');
-                if (useSerial) { $step3NavItem.show(); } else { $step3NavItem.hide(); }
-
-                var $step2Pager = $('#step2-unit-awal').find('.pager.wizard');
-                var $step2NextLi = $step2Pager.find('li.next');
-                var $step2SubmitLi = $step2Pager.find('li.submit-step2');
-
-                if (currentIndex === 1) { // Jika di Step 2
-                    if (useSerial) { $step2NextLi.show(); $step2SubmitLi.hide(); }
-                    else { $step2NextLi.hide(); $step2SubmitLi.show(); }
-                } else { // Untuk step lain, pastikan state default (misal, di step 1, tombol next step 2 tidak relevan)
-                    $step2NextLi.hide(); $step2SubmitLi.hide();
-                }
-                 // Selalu tampilkan tombol "Lanjut" di step 1
-                if (currentIndex === 0) {
-                    $('#step1-jenis-barang').find('li.next').show();
-                }
-            }
+            // 2. Logika Wizard - PERBAIKAN SEDERHANA
+            var $wizard = $('#barang-wizard');
+            var $form = $('#createBarangWizardForm');
 
             $wizard.bootstrapWizard({
-                tabClass: 'nav nav-pills nav-justified',
-                nextSelector: '.next > a',
-                previousSelector: '.previous > a',
-                finishSelector: '.finish > button', // Digunakan untuk onFinish
+                'nextSelector': '.pager li.next',
+                'previousSelector': '.pager li.previous',
+                'firstSelector': '.pager li.first',
+                'lastSelector': '.pager li.last',
+
                 onTabShow: function(tab, navigation, index) {
-                    // if (index === -1 && !firstLoadDone) { console.log('onTabShow: Index -1 on first load, handled by show(0)'); firstLoadDone = true; return; }
-                    console.log('onTabShow: Tab shown. Current index:', index);
-                    updateWizardUI(index);
-                    if ($('input[name="menggunakan_nomor_seri"]:checked').val() === '1' && index === 2) {
-                        generateSerialNumberInputs();
+                    var useSerial = $('input[name="menggunakan_nomor_seri"]:checked').val() === '1';
+                    var totalTabs = useSerial ? 3 : 2;
+                    var currentTab = index + 1;
+                    var $percent = (currentTab / totalTabs) * 100;
+
+                    $wizard.find('.progress-bar').css({
+                        width: $percent + '%'
+                    });
+
+                    // Reset dan atur visibility tombol
+                    $('.pager li.next').show();
+                    $('.pager li.finish').hide();
+                    $('.pager li.submit-step2').hide();
+                    $('.pager li.previous').toggle(currentTab > 1);
+
+                    // Atur tombol berdasarkan kondisi
+                    if (currentTab === totalTabs) {
+                        $('.pager li.next').hide();
+                        $('.pager li.finish').show();
+                    } else if (currentTab === 2 && !useSerial) {
+                        $('.pager li.next').hide();
+                        $('.pager li.submit-step2').show();
                     }
                 },
+
                 onNext: function(tab, navigation, index) {
-                    console.log('onNext called. Leaving step (index):', index);
-                    var stepToValidate = index + 1;
-                    if (!window.validateClientSideStep(stepToValidate)) {
-                        console.error(`onNext: Validation failed for step ${stepToValidate}. Cannot proceed.`);
-                        return false;
-                    }
-                    return true;
-                },
-                onTabClick: function(tab, navigation, curIndex, clickedIndex) {
-                    console.log(`onTabClick: Current index: ${curIndex}, Clicked index: ${clickedIndex}`);
-                    if (clickedIndex < curIndex) { return true; }
-                    if (clickedIndex > curIndex) {
-                        for (let i = curIndex; i < clickedIndex; i++) {
-                            let stepToValidate = i + 1;
-                            if (!window.validateClientSideStep(stepToValidate)) {
-                                console.error(`onTabClick: Validation failed for intermediate step ${stepToValidate}. Jump to ${clickedIndex} prevented.`);
-                                $wizard.bootstrapWizard('show', i);
-                                return false;
+                    var $valid = true;
+                    var $currentTab = $wizard.find('.tab-pane').eq(index);
+
+                    // Validasi field required
+                    $currentTab.find(':input[required]').each(function() {
+                        if (!this.checkValidity()) {
+                            $valid = false;
+                            $(this).addClass('is-invalid');
+                            if ($(this).is('select')) {
+                                $(this).closest('.choices').addClass('is-invalid');
+                            }
+                        } else {
+                            $(this).removeClass('is-invalid');
+                            if ($(this).is('select')) {
+                                $(this).closest('.choices').removeClass('is-invalid');
                             }
                         }
-                    }
-                    if ($('input[name="menggunakan_nomor_seri"]:checked').val() === '0' && clickedIndex === 2) {
-                        console.warn('onTabClick: Prevented click to Step 3 as not using serial numbers.');
-                        return false;
-                    }
-                    return true;
-                },
-                onFinish: function(tab, navigation, index) {
-                    console.log('onFinish called at index:', index, ' Attempting to submit form.');
-                    // Tombol .finish akan men-trigger event submit form, jadi validasi akhir ada di $form.on('submit')
-                    // $form.trigger('submit'); // Ini bisa menyebabkan loop jika onFinish dipanggil dari tombol submit standar
-                }
-            });
-            console.log('Twitter Bootstrap Wizard initialized.');
+                    });
 
-            // Event handler untuk tombol submit di Step 2 (jika tidak pakai nomor seri)
-            // dan tombol finish di Step 3
-            // Menggunakan class .btn-submit-form untuk kedua tombol agar bisa ditarget bareng
-            $form.find('.btn-submit-form').on('click', function() {
-                console.log('Custom submit button (.btn-submit-form or .finish) clicked.');
-                $form.trigger('submit'); // Trigger submit standar form
-            });
+                    // Validasi khusus untuk step 2: harus ada ruangan ATAU pemegang personal
+                    if (index === 1) {
+                        var ruangan = $('#id_ruangan_awal').val();
+                        var pemegang = $('#id_pemegang_personal_awal').val();
 
-
-            $('input[name="menggunakan_nomor_seri"]').on('change', function() {
-                var isUsingSerial = $(this).val() === '1';
-                console.log('Radio "menggunakan_nomor_seri" changed. Is using serial:', isUsingSerial);
-                var currentWizardIndex = $wizard.bootstrapWizard('currentIndex');
-                updateWizardUI(currentWizardIndex);
-                if (!isUsingSerial && currentWizardIndex === 2) {
-                    console.log('Navigating back to step 2 (index 1) as step 3 is now hidden.');
-                    $wizard.bootstrapWizard('show', 1);
-                } else {
-                     // Paksa refresh UI untuk tab saat ini
-                    var $activeTabLink = $wizard.find('ul.twitter-bs-wizard-nav li').eq(currentWizardIndex).find('a');
-                    if ($activeTabLink.length) {
-                        var $activePane = $($activeTabLink.attr('href'));
-                        if ($activePane.length && typeof $wizard.data('bootstrapWizard').onTabShow === 'function') {
-                             $wizard.data('bootstrapWizard').onTabShow($activePane, $wizard.find('ul.twitter-bs-wizard-nav'), currentWizardIndex);
+                        if (!ruangan && !pemegang) {
+                            $valid = false;
+                            $('#id_ruangan_awal').closest('.choices').addClass('is-invalid');
+                            $('#id_pemegang_personal_awal').closest('.choices').addClass('is-invalid');
+                            alert('Pilih salah satu: Ruangan atau Pemegang Personal');
                         }
                     }
+
+                    if (!$valid) {
+                        return false;
+                    }
+
+                    // Generate serial inputs jika menuju step 3
+                    if (index === 1 && $('input[name="menggunakan_nomor_seri"]:checked').val() ===
+                        '1') {
+                        generateSerialNumberInputs();
+                    }
+
+                    return true;
+                },
+
+                onTabClick: function(tab, navigation, index, clickedIndex) {
+                    return false;
                 }
             });
 
-            var initialIndex = $wizard.find('ul.twitter-bs-wizard-nav li a.active').parent().index();
-            if (initialIndex === -1) initialIndex = 0;
-            $wizard.bootstrapWizard('show', initialIndex);
-            console.log(`Initial wizard display set to tab index: ${initialIndex}.`);
-            // Panggil updateWizardUI setelah wizard benar-benar ditampilkan untuk state awal pager.
-             setTimeout(function() {
-                console.log("Delayed call to updateWizardUI after initial show.");
-                updateWizardUI($wizard.bootstrapWizard('currentIndex'));
-            }, 100); // Delay kecil untuk memastikan onTabShow selesai
+            // Handler untuk tombol finish
+            $(document).on('click', '.pager li.finish a', function(e) {
+                e.preventDefault();
 
+                // Validasi final untuk step 3 jika ada
+                var useSerial = $('input[name="menggunakan_nomor_seri"]:checked').val() === '1';
+                if (useSerial) {
+                    var allValid = true;
+                    $('.serial-number-input').each(function() {
+                        if (!this.checkValidity()) {
+                            allValid = false;
+                            $(this).addClass('is-invalid');
+                        }
+                    });
+
+                    if (!allValid) {
+                        alert('Pastikan semua nomor seri sudah diisi dan valid');
+                        return false;
+                    }
+                }
+
+                $form.submit();
+            });
+
+            // 3. Event Handlers
+            $('input[name="menggunakan_nomor_seri"]').on('change', function() {
+                manageStep3Visibility();
+            });
+
+            $('#jumlah_unit_awal').on('change', function() {
+                if ($('input[name="menggunakan_nomor_seri"]:checked').val() === '1') {
+                    generateSerialNumberInputs();
+                }
+            });
+
+            // Clear validation on input change
+            $(document).on('input change', ':input', function() {
+                $(this).removeClass('is-invalid');
+                if ($(this).is('select')) {
+                    $(this).closest('.choices').removeClass('is-invalid');
+                }
+            });
+
+            // 4. Fungsi Helper
+            function manageStep3Visibility() {
+                var useSerial = $('input[name="menggunakan_nomor_seri"]:checked').val() === '1';
+                var $step3NavItem = $('.step3-nav');
+                if (useSerial) {
+                    $step3NavItem.show();
+                } else {
+                    $step3NavItem.hide();
+                }
+            }
 
             function generateSerialNumberInputs() {
                 var jumlahUnit = parseInt($('#jumlah_unit_awal').val()) || 0;
-                console.log('generateSerialNumberInputs: jumlahUnit =', jumlahUnit);
-                var container = $('#serial-number-inputs-container'); container.empty();
+                var container = $('#serial-number-inputs-container');
+                container.empty();
+
                 if (jumlahUnit > 0) {
-                    var oldSerials = {!! json_encode(old('serial_numbers', [])) !!}; var errors = {!! json_encode($errors->toArray()) !!};
+                    var oldSerials = {!! json_encode(old('serial_numbers', [])) !!};
+                    var errors = {!! json_encode($errors->toArray()) !!};
+
                     for (var i = 0; i < jumlahUnit; i++) {
-                        var serialValue = oldSerials[i] || ''; var errorKeyLaravel = `serial_numbers.${i}`; var isInvalidLaravel = errors.hasOwnProperty(errorKeyLaravel); var errorMessageLaravel = isInvalidLaravel ? errors[errorKeyLaravel][0] : '';
-                        var inputHtml = `<div class="row mb-2 align-items-center"><label for="serial_number_${i}" class="col-md-4 col-form-label text-md-end">Nomor Seri Unit ${i + 1} <span class="text-danger">*</span></label><div class="col-md-7"><input id="serial_number_${i}" type="text" class="form-control serial-number-input ${isInvalidLaravel ? 'is-invalid' : ''}" name="serial_numbers[${i}]" value="${serialValue}" placeholder="Masukkan nomor seri unik" required><div class="serial-invalid-feedback invalid-feedback">${errorMessageLaravel}</div></div></div>`;
+                        var serialValue = oldSerials[i] || '';
+                        var errorKeyLaravel = `serial_numbers.${i}`;
+                        var isInvalidLaravel = errors.hasOwnProperty(errorKeyLaravel);
+                        var errorMessageLaravel = isInvalidLaravel ? errors[errorKeyLaravel][0] : '';
+
+                        var inputHtml = `
+                    <div class="row mb-2 align-items-center">
+                        <label for="serial_number_${i}" class="col-md-4 col-form-label text-md-end">
+                            Nomor Seri Unit ${i + 1} <span class="text-danger">*</span>
+                        </label>
+                        <div class="col-md-7">
+                            <input id="serial_number_${i}" type="text" 
+                                class="form-control serial-number-input ${isInvalidLaravel ? 'is-invalid' : ''}" 
+                                name="serial_numbers[${i}]" value="${serialValue}" 
+                                placeholder="Masukkan nomor seri unik" required>
+                            <div class="serial-invalid-feedback invalid-feedback d-block">${errorMessageLaravel}</div>
+                        </div>
+                    </div>`;
                         container.append(inputHtml);
                     }
-                } else { container.html('<p class="text-muted text-center">Isi "Jumlah Unit Awal" di Langkah 2 (minimal 1) dan klik Lanjut.</p>');}
+                }
             }
-            $('#jumlah_unit_awal').on('input change', function() {
-                if ($('input[name="menggunakan_nomor_seri"]:checked').val() === '1' && $wizard.bootstrapWizard('currentIndex') === 2) { generateSerialNumberInputs(); }
-            });
+
+            // Event listener untuk tombol "Sarankan Nomor Seri"
             $('#suggestSerialsButton').on('click', function() {
-                var kodeBarangInput = $('#kode_barang').val(); var jumlahUnit = parseInt($('#jumlah_unit_awal').val());
-                if (!kodeBarangInput) { alert('Mohon isi Kode Barang di Langkah 1.'); $wizard.bootstrapWizard('show', 0); $('#kode_barang').focus(); return; }
-                if (!jumlahUnit || jumlahUnit <= 0) { alert('Mohon isi Jumlah Unit Awal yang valid.'); $wizard.bootstrapWizard('show', 1); $('#jumlah_unit_awal').focus(); return; }
-                $.ajax({ url: "{{ route('barang.suggest-serials-for-new') }}", type: 'GET', data: { kode_barang_input: kodeBarangInput, jumlah_unit: jumlahUnit },
-                    success: function(response) { var serialInputs = $('.serial-number-input'); if (response && Array.isArray(response) && response.length === jumlahUnit) { serialInputs.each(function(index) { if (!$(this).val() && response[index]) { $(this).val(response[index]); clearFieldError(this); } }); } else { generateClientSideSuggestions(kodeBarangInput, jumlahUnit, serialInputs); }},
-                    error: function() { alert('Gagal dapat saran dari server.'); generateClientSideSuggestions(kodeBarangInput, jumlahUnit, $('.serial-number-input')); }
+                var kodeBarangInput = $('#kode_barang').val();
+                var jumlahUnit = parseInt($('#jumlah_unit_awal').val());
+
+                if (!kodeBarangInput) {
+                    alert('Mohon isi Kode Barang di Langkah 1.');
+                    $wizard.bootstrapWizard('show', 0);
+                    $('#kode_barang').focus();
+                    return;
+                }
+                if (!jumlahUnit || jumlahUnit <= 0) {
+                    alert('Mohon isi Jumlah Unit Awal yang valid di Langkah 2.');
+                    $wizard.bootstrapWizard('show', 1);
+                    $('#jumlah_unit_awal').focus();
+                    return;
+                }
+
+                $.ajax({
+                    url: "{{ route('admin.barang.suggest-serials-for-new') }}",
+                    type: 'GET',
+                    data: {
+                        kode_barang_input: kodeBarangInput,
+                        jumlah_unit: jumlahUnit
+                    },
+                    success: function(response) {
+                        var serialInputs = $('.serial-number-input');
+                        if (response && Array.isArray(response) && response.length ===
+                            jumlahUnit) {
+                            serialInputs.each(function(index) {
+                                if (response[index]) {
+                                    $(this).val(response[index]);
+                                }
+                            });
+                        }
+                    },
+                    error: function() {
+                        alert('Gagal mendapatkan saran nomor seri dari server.');
+                    }
                 });
             });
-            function generateClientSideSuggestions(kodeBarang, jumlah, inputs) {
-                var timestamp = Date.now().toString().slice(-5); inputs.each(function(index) { if (!$(this).val()) { $(this).val((kodeBarang.toUpperCase().replace(/[^A-Z0-9\-]/g, '') || 'BRG') + '-RS' + timestamp + '-' + String(index + 1).padStart(3, '0')); } });
-            }
 
-            $form.on('submit', function(e) {
-                console.log('Form submit event triggered.');
-                var useSerial = $('input[name="menggunakan_nomor_seri"]:checked').val() === '1';
-                var finalValidationOk = true;
-
-                // Hapus semua error class 'is-invalid' sebelum validasi ulang semua langkah
-                $form.find('.is-invalid').removeClass('is-invalid');
-                $form.find('.choices.is-invalid').removeClass('is-invalid'); // For choices main container
-                $form.find('.choices__inner').css('border-color', ''); // Reset choices border
-                $form.find('.invalid-feedback, .serial-invalid-feedback').text('').hide();
-
-                if (!window.validateClientSideStep(1)) {
-                    finalValidationOk = false; $wizard.bootstrapWizard('show', 0);
-                    console.error('Form submit: Validation failed for Step 1.');
-                }
-                if (finalValidationOk && !window.validateClientSideStep(2)) {
-                    finalValidationOk = false; $wizard.bootstrapWizard('show', 1);
-                    console.error('Form submit: Validation failed for Step 2.');
-                }
-                if (useSerial && finalValidationOk && !window.validateClientSideStep(3)) {
-                    finalValidationOk = false; $wizard.bootstrapWizard('show', 2);
-                    console.error('Form submit: Validation failed for Step 3.');
-                }
-
-                if (!finalValidationOk) {
-                    console.error('Form submit: Final validation check failed. Preventing submission.');
-                    e.preventDefault();
-                } else {
-                    console.log('Form submit: All client-side validations passed. Submitting form to backend.');
-                    // Biarkan form submit secara normal jika semua validasi client-side lolos
-                }
+            // Event listener untuk tombol submit khusus di Step 2
+            $(document).on('click', '.submit-step2 button', function(e) {
+                e.preventDefault();
+                $form.submit();
             });
 
-            console.log('All event listeners attached and initial UI setup complete.');
+            // Inisialisasi awal
+            manageStep3Visibility();
+
+            // Handle error state dari backend
+            @if ($errors->any())
+                if ('{{ old('menggunakan_nomor_seri') }}' === '1') {
+                    generateSerialNumberInputs();
+                    @if ($errors->has('serial_numbers.*'))
+                        setTimeout(function() {
+                            $wizard.bootstrapWizard('show', 2);
+                        }, 200);
+                    @elseif ($errors->has('jumlah_unit_awal') || $errors->has('id_ruangan_awal') || $errors->has('id_pemegang_personal_awal'))
+                        setTimeout(function() {
+                            $wizard.bootstrapWizard('show', 1);
+                        }, 200);
+                    @endif
+                }
+            @endif
         });
     </script>
 @endpush

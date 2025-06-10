@@ -11,73 +11,70 @@ class KategoriBarangPolicy
     use HandlesAuthorization;
 
     /**
-     * Menentukan apakah pengguna dapat melihat daftar kategori barang.
-     * Admin dan Operator bisa melihat daftar kategori.
+     * Berikan akses penuh untuk Admin untuk semua aksi.
+     */
+    public function before(User $user, string $ability): ?bool
+    {
+        if ($user->hasRole(User::ROLE_ADMIN)) {
+            return true;
+        }
+        return null;
+    }
+
+    /**
+     * Izinkan Operator untuk bisa MELIHAT daftar kategori.
      */
     public function viewAny(User $user): bool
     {
-        return $user->hasRole(User::ROLE_ADMIN) || $user->hasRole(User::ROLE_OPERATOR); //
+        return $user->hasRole(User::ROLE_OPERATOR);
     }
 
     /**
-     * Menentukan apakah pengguna dapat melihat detail kategori barang tertentu.
-     * Admin dan Operator bisa melihat detail.
+     * Izinkan Operator untuk bisa MELIHAT detail satu kategori.
      */
     public function view(User $user, KategoriBarang $kategoriBarang): bool
     {
-        return $user->hasRole(User::ROLE_ADMIN) || $user->hasRole(User::ROLE_OPERATOR); //
+        return $user->hasRole(User::ROLE_OPERATOR);
     }
 
     /**
-     * Menentukan apakah pengguna dapat membuat kategori barang baru.
-     * Hanya Admin yang bisa membuat kategori baru.
+     * JANGAN izinkan non-admin untuk membuat kategori baru.
      */
     public function create(User $user): bool
     {
-        return $user->hasRole(User::ROLE_ADMIN); //
+        return false; // Hanya Admin (sudah di-handle oleh before())
     }
 
     /**
-     * Menentukan apakah pengguna dapat mengupdate kategori barang tertentu.
-     * Hanya Admin yang bisa mengupdate kategori.
+     * JANGAN izinkan non-admin untuk mengupdate kategori.
      */
     public function update(User $user, KategoriBarang $kategoriBarang): bool
     {
-        return $user->hasRole(User::ROLE_ADMIN); //
+        return false; // Hanya Admin
     }
 
     /**
-     * Menentukan apakah pengguna dapat menghapus kategori barang tertentu.
-     * Hanya Admin yang bisa menghapus.
+     * JANGAN izinkan non-admin untuk menghapus kategori.
      */
     public function delete(User $user, KategoriBarang $kategoriBarang): bool
     {
-        if ($user->hasRole(User::ROLE_ADMIN)) { //
-            // Pengecekan apakah kategori masih digunakan oleh barang akan ditangani
-            // oleh database constraint (ON DELETE RESTRICT) atau controller jika diperlukan pesan custom.
-            // if ($kategoriBarang->barangs()->exists()) {
-            // return false;
-            // }
-            return true; //
-        }
-        return false; //
+        // Pengecekan relasi sudah ada di controller, policy ini hanya untuk hak akses.
+        return false; // Hanya Admin
     }
 
     /**
-     * Menentukan apakah pengguna dapat memulihkan kategori yang di-soft-delete.
-     * Hanya Admin.
+     * JANGAN izinkan non-admin untuk memulihkan kategori.
      */
     public function restore(User $user, KategoriBarang $kategoriBarang): bool
     {
-        return $user->hasRole(User::ROLE_ADMIN); //
+        return false; // Hanya Admin
     }
 
     /**
-     * Menentukan apakah pengguna dapat menghapus kategori secara permanen.
-     * Hanya Admin.
+     * JANGAN izinkan non-admin untuk menghapus permanen.
      */
-    // public function forceDelete(User $user, KategoriBarang $kategoriBarang): bool
-    // {
-    // return $user->hasRole(User::ROLE_ADMIN);
-    // }
+    public function forceDelete(User $user, KategoriBarang $kategoriBarang): bool
+    {
+        return false; // Hanya Admin
+    }
 }

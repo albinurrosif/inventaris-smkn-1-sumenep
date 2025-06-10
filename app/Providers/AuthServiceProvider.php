@@ -15,6 +15,7 @@ use App\Models\KategoriBarang;
 use App\Models\Peminjaman;
 use App\Policies\PeminjamanPolicy;
 use App\Policies\KategoriBarangPolicy;
+use App\Policies\LaporanPolicy;
 
 use App\Policies\UserPolicy;
 use App\Models\ArsipBarang;
@@ -28,7 +29,11 @@ use App\Policies\RekapStokPolicy;
 use App\Models\LogAktivitas;
 use App\Policies\LogAktivitasPolicy;
 use App\Models\DetailPeminjaman;
+use App\Models\MutasiBarang;
 use App\Policies\DetailPeminjamanPolicy;
+use App\Policies\MutasiBarangPolicy;
+use App\Policies\PengaturanPolicy;
+
 
 
 
@@ -58,9 +63,11 @@ class AuthServiceProvider extends ServiceProvider
         RekapStok::class => RekapStokPolicy::class,
         KategoriBarang::class => KategoriBarangPolicy::class,
         Peminjaman::class => PeminjamanPolicy::class,
-        DetailPeminjaman::class => DetailPeminjaman::class,
+        DetailPeminjaman::class => DetailPeminjamanPolicy::class,
         User::class => UserPolicy::class,
         LogAktivitas::class => LogAktivitasPolicy::class,
+        MutasiBarang::class => MutasiBarangPolicy::class
+
 
         // \App\Models\Post::class => \App\Policies\PostPolicy::class,
 
@@ -89,5 +96,27 @@ class AuthServiceProvider extends ServiceProvider
         Gate::define('isOperator', fn(User $user) => $user->role === User::ROLE_OPERATOR);
 
         Gate::define('isGuru', fn(User $user) => $user->role === User::ROLE_GURU);
+
+
+        // Gate ini akan memanggil method 'viewInventaris' di dalam LaporanPolicy
+        Gate::define('view-laporan-inventaris', [LaporanPolicy::class, 'viewInventaris']);
+
+        // Gate ini akan memanggil method 'viewPeminjaman' di dalam LaporanPolicy
+        Gate::define('view-laporan-peminjaman', [LaporanPolicy::class, 'viewPeminjaman']);
+
+        // Gate ini akan memanggil method 'viewPemeliharaan' di dalam LaporanPolicy
+        Gate::define('view-laporan-pemeliharaan', [LaporanPolicy::class, 'viewPemeliharaan']);
+
+        /**
+         * Mendefinisikan hak akses untuk melihat halaman "Aktivitas Saya".
+         * Hanya relevan untuk Operator dan Guru.
+         */
+        Gate::define('view-my-activity', function (User $user) {
+            return $user->hasAnyRole([User::ROLE_OPERATOR, User::ROLE_GURU]);
+        });
+
+        // Daftarkan Gate untuk Pengaturan
+        Gate::define('view-pengaturan', [PengaturanPolicy::class, 'viewAny']);
+        Gate::define('update-pengaturan', [PengaturanPolicy::class, 'update']);
     }
 }

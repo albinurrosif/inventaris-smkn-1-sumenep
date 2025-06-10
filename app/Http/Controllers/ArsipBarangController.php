@@ -35,12 +35,11 @@ class ArsipBarangController extends Controller
         $query = ArsipBarang::query()
             ->with([
                 'barangQrCode' => function ($q) {
-                    $q->withTrashed()->with(['barang.kategori', 'ruangan', 'pemegangPersonal']); // Tambahkan pemegangPersonal
+                    $q->withTrashed()->with(['barang.kategori', 'ruangan', 'pemegangPersonal']);
                 },
-                'userPengaju',
-                'userPenyetuju',
-                // 'ruanganSaatDiarsipkan', // Ini ada di snapshot, atau dari relasi barangQrCode
-                // 'pemegangSaatDiarsipkan' // Ini ada di snapshot, atau dari relasi barangQrCode
+                // PENYESUAIAN NAMA RELASI DI SINI
+                'pengaju',    // Ganti dari 'userPengaju' menjadi 'pengaju'
+                'penyetuju',  // Ganti dari 'userPenyetuju' menjadi 'penyetuju'
             ]);
 
         if ($statusArsipFilter && $statusArsipFilter !== 'semua') {
@@ -98,8 +97,10 @@ class ArsipBarangController extends Controller
             'barangQrCode' => function ($q) {
                 $q->withTrashed()->with(['barang.kategori', 'ruangan', 'pemegangPersonal']);
             },
-            'userPengaju',
-            'userPenyetuju',
+            'pengaju',    // Ganti dari 'userPengaju' menjadi 'pengaju'
+            'penyetuju',  // Ganti dari 'userPenyetuju' menjadi 'penyetuju'
+            'dipulihkanOlehUser'
+
         ])->findOrFail($id);
 
         $this->authorize('view', $arsip); // [cite: 731]

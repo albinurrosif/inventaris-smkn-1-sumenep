@@ -63,9 +63,9 @@ class RuanganController extends Controller
 
         $ruangans = $query->orderBy('nama_ruangan')->paginate(15)->withQueryString();
         $operators = User::where('role', User::ROLE_OPERATOR)->orderBy('username')->get();
-        $viewPath = $this->getViewPathBasedOnRole('admin.ruangan.index', 'operator.ruangan.index');
+        // $viewPath = $this->getViewPathBasedOnRole('admin.ruangan.index', 'operator.ruangan.index');
 
-        return view($viewPath, compact('ruangans', 'operators', 'request', 'searchTerm', 'statusFilter'));
+        return view('pages.ruangan.index', compact('ruangans', 'operators', 'request', 'searchTerm', 'statusFilter'));
     }
 
     public function show($id): View
@@ -98,8 +98,8 @@ class RuanganController extends Controller
         $totalUnit = $ruangan->getTotalUnitCount();
         $totalValue = $ruangan->getTotalValue();
 
-        $viewPath = $this->getViewPathBasedOnRole('admin.ruangan.show', 'operator.ruangan.show');
-        return view($viewPath, compact('ruangan', 'unitBarang', 'totalUnit', 'totalValue', 'operators'));
+        //$viewPath = $this->getViewPathBasedOnRole('admin.ruangan.show', 'operator.ruangan.show');
+        return view('pages.ruangan.show', compact('ruangan', 'unitBarang', 'totalUnit', 'totalValue', 'operators'));
     }
 
     public function create(): View

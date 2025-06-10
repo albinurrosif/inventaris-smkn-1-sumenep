@@ -118,7 +118,7 @@
                                     <td class="text-center">{{ $arsipList->firstItem() + $index }}</td>
                                     <td>
                                         @if ($arsip->barangQrCode)
-                                            <a href="{{ route('barang-qr-code.show', $arsip->id_barang_qr_code) }}"
+                                            <a href="{{ route('admin.barang-qr-code.show', $arsip->id_barang_qr_code) }}"
                                                 target="_blank">
                                                 <code>{{ $arsip->barangQrCode->kode_inventaris_sekolah ?? 'N/A' }}</code>
                                             </a>
@@ -134,7 +134,7 @@
                                             class="badge bg-secondary">{{ $arsip->barangQrCode->barang->kategori->nama_kategori ?? '-' }}</span>
                                     </td>
                                     <td>
-                                        {{ $arsip->ruanganSaatDiarsipkan->nama_ruangan ?? ($arsip->pemegangSaatDiarsipkan->username ? 'Pribadi: ' . $arsip->pemegangSaatDiarsipkan->username : 'Tidak Diketahui') }}
+                                        {{ $arsip->ruanganSaatDiarsipkan->nama_ruangan ?? ($arsip->pemegangSaatDiarsipkan && $arsip->pemegangSaatDiarsipkan->username ? 'Pribadi: ' . $arsip->pemegangSaatDiarsipkan->username : 'Tidak Diketahui') }}
                                     </td>
                                     <td><span class="badge bg-warning text-dark">{{ $arsip->jenis_penghapusan }}</span>
                                     </td>

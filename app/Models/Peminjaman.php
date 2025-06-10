@@ -122,6 +122,7 @@ class Peminjaman extends Model
     public const STATUS_MENUNGGU_VERIFIKASI_KEMBALI = 'Menunggu Verifikasi Kembali';
     public const STATUS_SEBAGIAN_DIAJUKAN_KEMBALI = 'Sebagian Diajukan Kembali';
 
+
     /**
      * Mendefinisikan relasi BelongsTo ke model User (sebagai guru yang meminjam).
      *
@@ -255,57 +256,72 @@ class Peminjaman extends Model
      */
     public function updateStatusPeminjaman(): void
     {
-        $details = $this->detailPeminjaman()->get(); // Ambil semua detail terkait
-        $totalDetails = $details->count();
+        // Gunakan withTrashed() untuk memastikan detail yang di-soft-delete (jika ada) tetap terhitung
+        $details = $this->detailPeminjaman()->withTrashed()->get();
 
-        // Jika tidak ada detail sama sekali dan status belum dibatalkan, batalkan peminjaman.
-        if ($totalDetails === 0 && $this->status !== self::STATUS_DIBATALKAN) {
-            $this->status = self::STATUS_DIBATALKAN;
-            $this->save();
-            return;
-        }
-        // Jika tidak ada detail, tidak ada yang perlu diupdate lebih lanjut.
-        if ($totalDetails === 0) return;
+        // Namun, untuk logika status, kita hanya peduli pada yang tidak di-soft-delete
+        // karena item yang ditolak (status 'Ditolak') tidak kita soft-delete.
+        $activeDetails = $details->whereNull('deleted_at');
+        $totalActiveDetails = $activeDetails->count();
 
-        // Hitung jumlah detail berdasarkan status unitnya
-        $countDiambil = $details->where('status_unit', DetailPeminjaman::STATUS_ITEM_DIAMBIL)->count();
-        $countDikembalikan = $details->where('status_unit', DetailPeminjaman::STATUS_ITEM_DIKEMBALIKAN)->count();
-        $countRusakHilang = $details->whereIn('status_unit', [DetailPeminjaman::STATUS_ITEM_RUSAK_SAAT_DIPINJAM, DetailPeminjaman::STATUS_ITEM_HILANG_SAAT_DIPINJAM])->count();
-        $countDisetujui = $details->where('status_unit', DetailPeminjaman::STATUS_ITEM_DISETUJUI)->count();
-        $countDiajukan = $details->where('status_unit', DetailPeminjaman::STATUS_ITEM_DIAJUKAN)->count();
-
-        // Tentukan apakah semua item sudah selesai (dikembalikan atau rusak/hilang)
-        $semuaSelesai = ($countDikembalikan + $countRusakHilang) === $totalDetails;
-
-        $newStatus = $this->status; // Default ke status saat ini untuk menghindari perubahan yang tidak perlu
-
-        if ($semuaSelesai) {
-            $newStatus = self::STATUS_SELESAI;
-            if (!$this->tanggal_selesai) { // Set tanggal selesai jika belum ada
-                $this->tanggal_selesai = now();
+        if ($totalActiveDetails === 0) {
+            if ($this->status !== self::STATUS_DIBATALKAN) {
+                $this->status = self::STATUS_DIBATALKAN;
             }
-        } elseif ($countDiambil > 0 || $countDikembalikan > 0 || $countRusakHilang > 0) {
-            // Jika ada item yang sudah diambil, atau sedang dalam proses pengembalian/rusak/hilang
-            $newStatus = self::STATUS_SEDANG_DIPINJAM;
-            if ($this->getAdaItemTerlambatAttribute()) { // Cek apakah terlambat
-                $newStatus = self::STATUS_TERLAMBAT;
-            }
-        } elseif ($countDisetujui === $totalDetails && $countDiajukan === 0) {
-            // Jika semua item sudah disetujui dan tidak ada lagi yang diajukan (menunggu diambil)
-            $newStatus = self::STATUS_DISETUJUI;
-        } elseif ($countDiajukan > 0) {
-            // Jika masih ada item yang berstatus 'Diajukan'
-            $newStatus = self::STATUS_MENUNGGU_PERSETUJUAN;
-        }
-        // Tambahkan logika lain jika diperlukan untuk status DITOLAK, SEBAGIAN_DIAJUKAN_KEMBALI, dll.
-        // Misalnya, jika semua item ditolak, status Peminjaman menjadi DITOLAK.
+        } else {
+            $countDiambil = $activeDetails->where('status_unit', DetailPeminjaman::STATUS_ITEM_DIAMBIL)->count();
+            $countSelesaiDiproses = $activeDetails->whereIn('status_unit', [
+                DetailPeminjaman::STATUS_ITEM_DIKEMBALIKAN,
+                DetailPeminjaman::STATUS_ITEM_RUSAK_SAAT_DIPINJAM,
+                DetailPeminjaman::STATUS_ITEM_HILANG_SAAT_DIPINJAM,
+                DetailPeminjaman::STATUS_ITEM_DITOLAK,
+            ])->count();
 
-        // Hanya simpan jika status berubah
-        if ($this->status !== $newStatus) {
-            $this->status = $newStatus;
+            $semuaSelesaiDiproses = ($countSelesaiDiproses === $totalActiveDetails);
+
+            // Prioritas 1: Apakah semua item sudah selesai diproses?
+            if ($semuaSelesaiDiproses) {
+                // Cek apakah ada item yang benar-benar selesai (dikembalikan/hilang/rusak)
+                // bukan hanya ditolak semua
+                $isTrulyFinished = $activeDetails->whereIn('status_unit', [
+                    DetailPeminjaman::STATUS_ITEM_DIKEMBALIKAN,
+                    DetailPeminjaman::STATUS_ITEM_RUSAK_SAAT_DIPINJAM,
+                    DetailPeminjaman::STATUS_ITEM_HILANG_SAAT_DIPINJAM
+                ])->count() > 0;
+
+                if ($isTrulyFinished) {
+                    $this->status = self::STATUS_SELESAI;
+                    if (!$this->tanggal_selesai) {
+                        $this->tanggal_selesai = now();
+                    }
+                } else {
+                    // Jika semua item hanya ditolak, maka statusnya Ditolak
+                    $this->status = self::STATUS_DITOLAK;
+                }
+            }
+            // Prioritas 2: Jika belum selesai, apakah ada barang yang sedang dipinjam?
+            elseif ($countDiambil > 0 || $countSelesaiDiproses > 0) {
+                $this->status = $this->getAdaItemTerlambatAttribute() ? self::STATUS_TERLAMBAT : self::STATUS_SEDANG_DIPINJAM;
+            }
+            // Prioritas 3: Jika belum, berarti masih dalam tahap persetujuan.
+            else {
+                $countDiajukan = $activeDetails->where('status_unit', DetailPeminjaman::STATUS_ITEM_DIAJUKAN)->count();
+                if ($countDiajukan > 0) {
+                    $this->status = self::STATUS_MENUNGGU_PERSETUJUAN;
+                } else {
+                    // Jika tidak ada yang diajukan, berarti semua sudah disetujui (siap diambil)
+                    $this->status = self::STATUS_DISETUJUI;
+                }
+            }
+        }
+
+        // Hanya simpan jika ada perubahan pada model untuk mencegah loop event
+        if ($this->isDirty()) {
             $this->save();
         }
     }
+
+
 
     /**
      * Metode boot model untuk mendaftarkan event listener.
@@ -373,16 +389,16 @@ class Peminjaman extends Model
     public static function statusColor(string $status): string
     {
         return match (strtolower($status)) {
-            strtolower(self::STATUS_MENUNGGU_PERSETUJUAN) => 'warning text-dark',
-            strtolower(self::STATUS_DISETUJUI) => 'info',
-            strtolower(self::STATUS_SEDANG_DIPINJAM) => 'primary',
-            strtolower(self::STATUS_SELESAI) => 'success',
-            strtolower(self::STATUS_DITOLAK) => 'danger',
-            strtolower(self::STATUS_TERLAMBAT) => 'danger',
-            strtolower(self::STATUS_DIBATALKAN) => 'secondary',
-            strtolower(self::STATUS_MENUNGGU_VERIFIKASI_KEMBALI) => 'info',
-            strtolower(self::STATUS_SEBAGIAN_DIAJUKAN_KEMBALI) => 'primary',
-            default => 'light text-dark',
+            strtolower(self::STATUS_MENUNGGU_PERSETUJUAN) => 'text-bg-warning text-dark',
+            strtolower(self::STATUS_DISETUJUI) => 'text-bg-info',
+            strtolower(self::STATUS_SEDANG_DIPINJAM) => 'text-bg-primary',
+            strtolower(self::STATUS_SELESAI) => 'text-bg-success',
+            strtolower(self::STATUS_DITOLAK) => 'text-bg-danger',
+            strtolower(self::STATUS_TERLAMBAT) => 'text-bg-danger',
+            strtolower(self::STATUS_DIBATALKAN) => 'text-bg-secondary',
+            strtolower(self::STATUS_MENUNGGU_VERIFIKASI_KEMBALI) => 'text-bg-info',
+            strtolower(self::STATUS_SEBAGIAN_DIAJUKAN_KEMBALI) => 'text-bg-primary',
+            default => 'text-bg-light text-dark',
         };
     }
 }

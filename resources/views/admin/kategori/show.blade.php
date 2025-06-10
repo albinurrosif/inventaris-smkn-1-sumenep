@@ -121,7 +121,7 @@
                                                 <td>
                                                     @can('view', $barang)
                                                         <a
-                                                            href="{{ route('barang.show', $barang->id) }}">{{ $barang->nama_barang }}</a>
+                                                            href="{{ route('admin.barang.show', $barang->id) }}">{{ $barang->nama_barang }}</a>
                                                     @else
                                                         {{ $barang->nama_barang }}
                                                     @endcan

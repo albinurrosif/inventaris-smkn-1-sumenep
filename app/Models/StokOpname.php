@@ -48,6 +48,19 @@ class StokOpname extends Model
     public const STATUS_SELESAI = 'Selesai'; //
     public const STATUS_DIBATALKAN = 'Dibatalkan'; //
 
+    /**
+     * Helper untuk mendapatkan kelas warna Bootstrap berdasarkan status stok opname.
+     */
+    public static function statusColor($status): string
+    {
+        return match (strtolower($status)) {
+            self::STATUS_SELESAI => 'text-bg-success',
+            self::STATUS_DRAFT => 'text-bg-warning',
+            self::STATUS_DIBATALKAN => 'text-bg-secondary',
+            default => 'text-bg-light',
+        };
+    }
+
     public function operator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'id_operator'); //

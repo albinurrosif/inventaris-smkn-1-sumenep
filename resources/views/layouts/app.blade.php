@@ -202,6 +202,10 @@
     <!-- Right bar overlay-->
     <div class="rightbar-overlay"></div>
 
+    <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
+        @csrf
+    </form>
+
     <!-- JAVASCRIPT -->
     <script src="{{ asset('assets/libs/jquery/jquery.min.js') }}"></script>
     <script src="{{ asset('assets/libs/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
@@ -249,6 +253,9 @@
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+
+    {{-- TAMBAHKAN SCRIPT INI --}}
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 
     {{-- <script src="{{ asset('assets/js/preloader.min.js') }}"></script> --}}
     <script>
@@ -299,13 +306,7 @@
     @endif
 
     <!-- Tambahkan ke layout -->
-    @if (session()->has('incomplete_barang_id') &&
-            !in_array(\Request::route()->getName(), [
-                'barang.input-serial',
-                'barang.store-serial',
-                'barang.edit-step1',
-                'barang.update-step1',
-            ]))
+    {{-- @if (session()->has('incomplete_barang_id') && !in_array(\Request::route()->getName(), ['barang.input-serial', 'barang.store-serial', 'barang.edit-step1', 'barang.update-step1']))
         <script>
             document.addEventListener('DOMContentLoaded', function() {
                 // Konfirmasi jika user mencoba meninggalkan halaman
@@ -338,13 +339,7 @@
         </script>
     @endif
 
-    @if (session()->has('incomplete_barang_id') &&
-            !in_array(\Request::route()->getName(), [
-                'barang.input-serial',
-                'barang.store-serial',
-                'barang.edit-step1',
-                'barang.update-step1',
-            ]))
+    @if (session()->has('incomplete_barang_id') && !in_array(\Request::route()->getName(), ['barang.input-serial', 'barang.store-serial', 'barang.edit-step1', 'barang.update-step1']))
         <div class="modal fade" id="modalWarnIncomplete" tabindex="-1" data-bs-backdrop="static">
             <div class="modal-dialog">
                 <div class="modal-content">
@@ -380,7 +375,7 @@
 
         <!-- Dark Mode Manager (must be after app.js) -->
         <script src="{{ asset('assets/js/dark-mode-fix.js') }}"></script>
-    @endif
+    @endif --}}
     <!-- Add this script right before your dark mode initialization -->
     <script>
         // Override problematic app.js code
@@ -644,6 +639,7 @@
     </script>
 
     @stack('scripts');
+    @yield('scripts');
 
 </body>
 

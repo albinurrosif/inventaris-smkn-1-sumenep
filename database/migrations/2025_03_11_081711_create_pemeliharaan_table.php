@@ -16,19 +16,20 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger('id_barang_qr_code');
 
+
             // Kolom untuk alur pengajuan pemeliharaan
-            $table->unsignedBigInteger('id_user_pengaju')->nullable();
+            $table->foreignId('id_user_pengaju')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('tanggal_pengajuan')->nullable()->useCurrent();
             $table->enum('status_pengajuan', Pemeliharaan::getValidStatusPengajuan(false))->default(Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN); // Menggunakan konstanta dari model
             $table->text('catatan_pengajuan')->nullable()->comment('Deskripsi kerusakan atau keluhan awal'); // Ini untuk deskripsi kerusakan
 
             // Kolom untuk persetujuan pemeliharaan
-            $table->unsignedBigInteger('id_user_penyetuju')->nullable();
+            $table->foreignId('id_user_penyetuju')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('tanggal_persetujuan')->nullable();
             $table->text('catatan_persetujuan')->nullable();
 
             // Kolom untuk pelaksanaan pemeliharaan
-            $table->unsignedBigInteger('id_operator_pengerjaan')->nullable();
+            $table->foreignId('id_operator_pengerjaan')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('tanggal_mulai_pengerjaan')->nullable();
             $table->timestamp('tanggal_selesai_pengerjaan')->nullable();
             $table->text('deskripsi_pekerjaan')->nullable()->comment('Deskripsi pekerjaan yang dilakukan');
@@ -47,9 +48,6 @@ return new class extends Migration
             $table->softDeletes();
 
             $table->foreign('id_barang_qr_code')->references('id')->on('barang_qr_codes')->onDelete('cascade');
-            $table->foreign('id_user_pengaju')->references('id')->on('users')->onDelete('set null');
-            $table->foreign('id_user_penyetuju')->references('id')->on('users')->onDelete('set null');
-            $table->foreign('id_operator_pengerjaan')->references('id')->on('users')->onDelete('set null');
         });
     }
 

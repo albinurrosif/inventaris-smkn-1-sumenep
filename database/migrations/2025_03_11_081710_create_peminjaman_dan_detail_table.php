@@ -17,7 +17,10 @@ return new class extends Migration
         // Tabel peminjamen
         Schema::create('peminjamen', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('id_guru'); // FK ke users (role guru)
+            $table->foreignId('id_guru')->nullable()->constrained('users')->onDelete('set null');
+            $table->foreignId('disetujui_oleh')->nullable()->constrained('users')->onDelete('set null');
+            $table->foreignId('ditolak_oleh')->nullable()->constrained('users')->onDelete('set null');
+
             $table->text('tujuan_peminjaman');
             $table->timestamp('tanggal_pengajuan')->useCurrent();
             $table->timestamp('tanggal_disetujui')->nullable();
@@ -47,14 +50,11 @@ return new class extends Migration
                 'Menunggu Verifikasi Kembali', // Jika ada alur verifikasi pengembalian
                 'Sebagian Diajukan Kembali' // Jika ada item yang ditolak/diajukan ulang
             ])->default('Menunggu Persetujuan');
-            $table->unsignedBigInteger('disetujui_oleh')->nullable(); // FK ke users (admin/operator)
-            $table->unsignedBigInteger('ditolak_oleh')->nullable(); // FK ke users (admin/operator)
+
             $table->timestamps();
             $table->softDeletes();
 
-            $table->foreign('id_guru')->references('id')->on('users')->onDelete('cascade');
-            $table->foreign('disetujui_oleh')->references('id')->on('users')->onDelete('set null');
-            $table->foreign('ditolak_oleh')->references('id')->on('users')->onDelete('set null');
+
             $table->foreign('id_ruangan_tujuan_peminjaman')->references('id')->on('ruangans')->onDelete('set null');
         });
 
@@ -71,6 +71,7 @@ return new class extends Migration
             $table->enum('status_unit', [
                 'Diajukan',
                 'Disetujui',
+                'Ditolak',
                 'Diambil',
                 'Dikembalikan',
                 'Rusak Saat Dipinjam',

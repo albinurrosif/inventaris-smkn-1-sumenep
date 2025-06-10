@@ -95,6 +95,7 @@ class DetailPeminjaman extends Model
     // Konstanta untuk nilai enum 'status_unit' (sesuai SQL dump)
     public const STATUS_ITEM_DIAJUKAN = 'Diajukan';
     public const STATUS_ITEM_DISETUJUI = 'Disetujui';
+    public const STATUS_ITEM_DITOLAK = 'Ditolak';
     public const STATUS_ITEM_DIAMBIL = 'Diambil';
     public const STATUS_ITEM_DIKEMBALIKAN = 'Dikembalikan';
     public const STATUS_ITEM_RUSAK_SAAT_DIPINJAM = 'Rusak Saat Dipinjam';
@@ -118,7 +119,8 @@ class DetailPeminjaman extends Model
      */
     public function barangQrCode(): BelongsTo
     {
-        return $this->belongsTo(BarangQrCode::class, 'id_barang_qr_code');
+        // PENYESUAIAN: Tambahkan withTrashed()
+        return $this->belongsTo(BarangQrCode::class, 'id_barang_qr_code')->withTrashed();
     }
 
     /**
@@ -302,6 +304,8 @@ class DetailPeminjaman extends Model
         } elseif ($kondisiAktual === BarangQrCode::KONDISI_HILANG) {
             $this->status_unit = self::STATUS_ITEM_HILANG_SAAT_DIPINJAM;
             $barang->kondisi = BarangQrCode::KONDISI_HILANG;
+            $barang->status = BarangQrCode::STATUS_DIARSIPKAN;
+
             // $barang->status = 'Hilang'; // Tidak ada status 'Hilang' di enum BarangQrCode, barang akan di soft delete
             $barang->save(); // Simpan kondisi hilang
             $barang->delete(); // Soft delete barangnya
@@ -353,11 +357,11 @@ class DetailPeminjaman extends Model
         });
 
         // Saat DetailPeminjaman disimpan (baik create maupun update), update status Peminjaman induk.
-        static::saved(function ($detailPeminjaman) {
-            if ($detailPeminjaman->peminjaman) {
-                $detailPeminjaman->peminjaman->updateStatusPeminjaman();
-            }
-        });
+        // static::saved(function ($detailPeminjaman) {
+        //     if ($detailPeminjaman->peminjaman) {
+        //         $detailPeminjaman->peminjaman->updateStatusPeminjaman();
+        //     }
+        // });
 
         // Saat DetailPeminjaman di-soft delete, update status Peminjaman induk.
         static::deleted(function ($detailPeminjaman) {
@@ -384,10 +388,30 @@ class DetailPeminjaman extends Model
         return [
             self::STATUS_ITEM_DIAJUKAN,
             self::STATUS_ITEM_DISETUJUI,
+            self::STATUS_ITEM_DITOLAK,
             self::STATUS_ITEM_DIAMBIL,
             self::STATUS_ITEM_DIKEMBALIKAN,
             self::STATUS_ITEM_RUSAK_SAAT_DIPINJAM,
             self::STATUS_ITEM_HILANG_SAAT_DIPINJAM,
         ];
+    }
+    /**
+     * Helper untuk mendapatkan kelas warna Bootstrap berdasarkan status unit peminjaman.
+     *
+     * @param string $status
+     * @return string
+     */
+    public static function statusColor(string $status): string
+    {
+        return match (strtolower($status)) {
+            strtolower(self::STATUS_ITEM_DIAJUKAN) => 'text-bg-info',
+            strtolower(self::STATUS_ITEM_DISETUJUI) => 'text-bg-primary',
+            strtolower(self::STATUS_ITEM_DITOLAK) => 'text-bg-danger',
+            strtolower(self::STATUS_ITEM_DIAMBIL) => 'text-bg-primary',
+            strtolower(self::STATUS_ITEM_DIKEMBALIKAN) => 'text-bg-success',
+            strtolower(self::STATUS_ITEM_RUSAK_SAAT_DIPINJAM) => 'text-bg-warning text-dark',
+            strtolower(self::STATUS_ITEM_HILANG_SAAT_DIPINJAM) => 'text-bg-dark',
+            default => 'text-bg-secondary',
+        };
     }
 }

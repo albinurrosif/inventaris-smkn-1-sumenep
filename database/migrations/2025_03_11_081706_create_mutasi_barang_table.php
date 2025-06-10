@@ -18,7 +18,7 @@ return new class extends Migration
             $table->unsignedBigInteger('id_ruangan_tujuan'); // FK ke ruangans
             $table->timestamp('tanggal_mutasi')->useCurrent();
             $table->text('alasan_pemindahan')->nullable();
-            $table->unsignedBigInteger('id_user_admin'); // Siapa yang melakukan mutasi
+            $table->foreignId('id_user_admin')->nullable()->constrained('users')->onDelete('set null'); // Siapa yang melakukan mutasi
             $table->string('surat_pemindahan_path')->nullable(); // Path dokumen surat pemindahan
             $table->timestamps();
             $table->softDeletes();
@@ -26,7 +26,6 @@ return new class extends Migration
             $table->foreign('id_barang_qr_code')->references('id')->on('barang_qr_codes')->onDelete('cascade');
             $table->foreign('id_ruangan_asal')->references('id')->on('ruangans')->onDelete('restrict');
             $table->foreign('id_ruangan_tujuan')->references('id')->on('ruangans')->onDelete('restrict');
-            $table->foreign('id_user_admin')->references('id')->on('users')->onDelete('cascade');
         });
     }
 

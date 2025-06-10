@@ -32,6 +32,7 @@ class BarangController extends Controller
 {
     use AuthorizesRequests;
 
+
     public function index(Request $request): View
     {
         $this->authorize('viewAny', Barang::class);
@@ -42,12 +43,22 @@ class BarangController extends Controller
         $kategoriId = $request->get('id_kategori');
         $searchTerm = $request->get('search');
 
-        $ruanganList = Ruangan::orderBy('nama_ruangan')->get();
+        $ruanganList = $user->hasRole(User::ROLE_OPERATOR)
+            ? $user->ruanganYangDiKelola()->orderBy('nama_ruangan')->get()
+            : Ruangan::orderBy('nama_ruangan')->get();
         $kategoriList = KategoriBarang::orderBy('nama_kategori')->get();
-        $operatorTidakAdaRuangan = false;
 
+        $operatorTidakAdaRuangan = false;
         $query = Barang::with('kategori')
-            ->withCount(['qrCodes as active_qr_codes_count' => function ($q) {
+            ->withCount(['qrCodes as active_qr_codes_count' => function ($q) use ($user) {
+                // Jika operator, hitung hanya unit yang relevan dengannya
+                if ($user->hasRole(User::ROLE_OPERATOR)) {
+                    $ruanganOperatorIds = $user->ruanganYangDiKelola()->pluck('id');
+                    $q->where(function ($subQuery) use ($ruanganOperatorIds, $user) {
+                        $subQuery->whereIn('id_ruangan', $ruanganOperatorIds)
+                            ->orWhere('id_pemegang_personal', $user->id);
+                    });
+                }
                 $q->whereNull('deleted_at');
             }]);
 
@@ -62,48 +73,46 @@ class BarangController extends Controller
             });
         }
 
+        // Logika filter berdasarkan peran
         if ($user->hasRole(User::ROLE_OPERATOR)) {
             $operatorRuanganIds = $user->ruanganYangDiKelola()->pluck('id');
-            if ($operatorRuanganIds->isEmpty()) {
-                $query->whereRaw('0=1');
-                $operatorTidakAdaRuangan = true;
-            } else {
-                if ($ruanganId) {
-                    if ($ruanganId === 'tanpa-ruangan') {
-                        $query->where(function ($qSub) use ($operatorRuanganIds) {
-                            $qSub->whereHas('qrCodes', fn($qUnit) => $qUnit->whereIn('id_ruangan', $operatorRuanganIds)->whereNull('deleted_at'))
-                                ->orWhereHas('qrCodes', fn($qUnit) => $qUnit->whereNull('id_ruangan')->whereNotNull('id_pemegang_personal')->whereNull('deleted_at'));
-                        })->whereHas('qrCodes', fn($qUnitTanpaRuangan) => $qUnitTanpaRuangan->whereNull('id_ruangan')->whereNull('deleted_at'));
-                    } elseif ($operatorRuanganIds->contains($ruanganId)) {
-                        $query->whereHas('qrCodes', fn($q) => $q->where('id_ruangan', $ruanganId)->whereNull('deleted_at'));
-                    } else {
-                        $query->whereRaw('0=1');
-                    }
-                } else {
-                    $query->where(function ($qSub) use ($operatorRuanganIds) {
-                        $qSub->whereHas('qrCodes', fn($qUnit) => $qUnit->whereIn('id_ruangan', $operatorRuanganIds)->whereNull('deleted_at'))
-                            ->orWhereHas('qrCodes', fn($qUnit) => $qUnit->whereNull('id_ruangan')->whereNotNull('id_pemegang_personal')->whereNull('deleted_at'));
+
+            // --- BLOK KODE YANG DIPERBAIKI ---
+            $query->where(function ($qSub) use ($operatorRuanganIds, $user) {
+                // Kondisi 1: Barang memiliki unit di salah satu ruangan yang dikelola operator
+                $qSub->whereHas('qrCodes', function ($qUnit) use ($operatorRuanganIds) {
+                    $qUnit->whereIn('id_ruangan', $operatorRuanganIds)->whereNull('deleted_at');
+                })
+                    // Kondisi 2: ATAU barang memiliki unit yang dipegang secara personal oleh operator
+                    ->orWhereHas('qrCodes', function ($qUnit) use ($user) {
+                        $qUnit->where('id_pemegang_personal', $user->id)->whereNull('deleted_at');
                     });
+            });
+            // --- AKHIR BLOK KODE YANG DIPERBAIKI ---
+
+            if ($operatorRuanganIds->isEmpty() && !$user->barangQrCodesYangDipegang()->exists()) {
+                $operatorTidakAdaRuangan = true;
+            }
+
+            // Filter tambahan jika operator memilih ruangan spesifik
+            if ($ruanganId) {
+                if ($ruanganId === 'tanpa-ruangan') {
+                    $query->whereHas('qrCodes', fn($q) => $q->where('id_pemegang_personal', $user->id)->whereNull('deleted_at'));
+                } elseif ($operatorRuanganIds->contains($ruanganId)) {
+                    $query->whereHas('qrCodes', fn($q) => $q->where('id_ruangan', $ruanganId)->whereNull('deleted_at'));
+                } else {
+                    $query->whereRaw('0=1');
                 }
             }
-        } elseif ($ruanganId) {
+        } elseif ($user->hasRole(User::ROLE_ADMIN) && $ruanganId) { // Ini untuk Admin
             if ($ruanganId === 'tanpa-ruangan') {
-                $query->whereHas('qrCodes', fn($q) => $q->whereNull('id_ruangan')->whereNull('deleted_at'));
+                $query->whereHas('qrCodes', fn($q) => $q->whereNotNull('id_pemegang_personal')->whereNull('deleted_at'));
             } else {
                 $query->whereHas('qrCodes', fn($q) => $q->where('id_ruangan', $ruanganId)->whereNull('deleted_at'));
             }
         }
 
-        if (!($user->hasRole(User::ROLE_OPERATOR) && $operatorTidakAdaRuangan)) {
-            if (!($ruanganId || $kategoriId || $searchTerm)) {
-                $query->whereHas('qrCodes', function ($q_unit) {
-                    $q_unit->whereNull('deleted_at');
-                });
-            }
-        }
-
         $barangs = $query->latest('updated_at')->paginate(15)->withQueryString();
-        
 
         $viewPath = $this->getViewPathBasedOnRole('admin.barang.index', 'operator.barang.index');
 
@@ -117,6 +126,7 @@ class BarangController extends Controller
             'operatorTidakAdaRuangan'
         ));
     }
+
 
     public function create(): View
     {
@@ -267,8 +277,10 @@ class BarangController extends Controller
 
             DB::commit();
 
-            $showRouteName = $this->getRedirectRouteName('barang.show', 'admin.barang.show');
-            return redirect()->route($showRouteName, $barang->id)
+            // Menggunakan helper baru untuk mendapatkan prefix route
+            $prefix = $this->getRolePrefix();
+            // Redirect ke route admin karena hanya admin yang bisa store
+            return redirect()->route($prefix . 'barang.show', $barang->id)
                 ->with('success', "Jenis barang '{$barang->nama_barang}' dan {$validated['jumlah_unit_awal']} unit fisik berhasil ditambahkan.");
         } catch (\Exception $e) {
             DB::rollBack();
@@ -454,9 +466,11 @@ class BarangController extends Controller
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
             ]);
-            return redirect()->route($this->getRedirectRouteName('barang.show', 'admin.barang.show'), $barang->id)->with('success', 'Data jenis barang berhasil diperbarui.');
+            return redirect()->route('admin.barang.show', $barang->id)->with('success', 'Data jenis barang berhasil diperbarui.');
         }
-        return redirect()->route($this->getRedirectRouteName('barang.show', 'admin.barang.show'), $barang->id)->with('info', 'Tidak ada perubahan data.');
+
+        // --- PERUBAHAN DI SINI ---
+        return redirect()->route('admin.barang.show', $barang->id)->with('info', 'Tidak ada perubahan data.');
     }
 
     public function destroy(Request $request, Barang $barang): RedirectResponse
@@ -527,7 +541,7 @@ class BarangController extends Controller
                 'user_agent' => $request->userAgent(),
             ]);
             DB::commit();
-            return redirect()->route($this->getRedirectRouteName('barang.index', 'admin.barang.index'))->with('success', 'Jenis barang dan semua unit aktifnya berhasil dihapus (diarsipkan).');
+            return redirect()->route($this->getRolePrefix('barang.index', 'admin.barang.index'))->with('success', 'Jenis barang dan semua unit aktifnya berhasil dihapus (diarsipkan).');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Gagal hapus jenis barang (ID: {$barang->id}): {$e->getMessage()}", ['exception' => $e]);
@@ -552,33 +566,28 @@ class BarangController extends Controller
         return $adminView;
     }
 
-    private function getRedirectRouteName(string $baseRouteName, string $adminFallbackRouteName): string
+    // --- HELPER BARU UNTUK MENGGANTIKAN getRedirectRouteName ---
+    private function getRolePrefix(): string
     {
         $user = Auth::user();
-        /** @var \App\Models\User $user */
+        if (!$user) return ''; // Fallback
 
-        if (!$user) return $adminFallbackRouteName;
-
-        $rolePrefix = '';
-        // Menggunakan User::ROLE_ADMIN, dll. dari model User
         if ($user->hasRole(User::ROLE_ADMIN)) {
-            $rolePrefix = 'admin.';
+            return 'admin.';
         } elseif ($user->hasRole(User::ROLE_OPERATOR)) {
-            $rolePrefix = 'operator.';
+            return 'operator.';
         } elseif ($user->hasRole(User::ROLE_GURU)) {
-            $rolePrefix = 'guru.';
+            return 'guru.';
         }
-
-        // Cek apakah route dengan prefix ada
-        if (!empty($rolePrefix) && Route::has($rolePrefix . $baseRouteName)) {
-            return $rolePrefix . $baseRouteName;
-        }
-        if (Route::has($baseRouteName)) {
-            return $baseRouteName;
-        }
-        return Route::has($adminFallbackRouteName) ? $adminFallbackRouteName : $baseRouteName;
+        return '';
     }
 
+    /**
+     * Download QR Code for a specific BarangQrCode.
+     *
+     * @param BarangQrCode $barangQrCode
+     * @return BinaryFileResponse|RedirectResponse
+     */
     public function downloadQrCode(BarangQrCode $barangQrCode): BinaryFileResponse|RedirectResponse
     {
         $this->authorize('view', $barangQrCode->barang);

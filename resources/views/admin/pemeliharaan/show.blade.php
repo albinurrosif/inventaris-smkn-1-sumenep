@@ -90,7 +90,7 @@
                         @if ($pemeliharaan->barangQrCode)
                             @php $barangQr = $pemeliharaan->barangQrCode; @endphp
                             <p><span class="detail-label">Kode Unit:</span>
-                                <a href="{{ route('barang-qr-code.show', $barangQr->id) }}"
+                                <a href="{{ route('admin.barang-qr-code.show', $barangQr->id) }}"
                                     target="_blank"><code>{{ $barangQr->kode_inventaris_sekolah }}</code></a>
                             </p>
                             <p><span class="detail-label">Nama Barang:</span> {{ $barangQr->barang->nama_barang ?? 'N/A' }}

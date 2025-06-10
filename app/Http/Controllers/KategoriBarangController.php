@@ -58,12 +58,14 @@ class KategoriBarangController extends Controller
             $kategori->agregat_nilai_total = $kategori->getTotalValue(); // Nilai total dari barang aktif
         }
 
-        $viewPath = 'admin.kategori.index';
-        return view($viewPath, [
-            'kategoriBarangList' => $kategoriBarangList,
-            'searchTerm' => $searchTerm,
-            'statusFilter' => $statusFilter,
-        ]);
+
+        return view('pages.kategori.index', compact(
+            'kategoriBarangList',
+            'request',
+            'searchTerm',
+            'statusFilter',
+
+        ));
     }
 
     public function create(): View

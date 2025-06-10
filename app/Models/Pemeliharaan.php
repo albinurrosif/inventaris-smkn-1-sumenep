@@ -75,6 +75,7 @@ class Pemeliharaan extends Model
     public const PRIORITAS_SEDANG = 'sedang';
     public const PRIORITAS_TINGGI = 'tinggi';
 
+
     // --- RELATIONS ---
     public function barangQrCode(): BelongsTo
     {
@@ -177,17 +178,17 @@ class Pemeliharaan extends Model
             return 'dark';
         }
         return match (strtolower($status)) {
-            strtolower(self::STATUS_PENGAJUAN_DIAJUKAN) => 'info',
-            strtolower(self::STATUS_PENGAJUAN_DISETUJUI) => 'primary',
-            strtolower(self::STATUS_PENGAJUAN_DITOLAK) => 'danger',
-            strtolower(self::STATUS_PENGAJUAN_DIBATALKAN) => 'secondary',
-            strtolower(self::STATUS_PENGERJAAN_BELUM_DIKERJAKAN) => 'warning text-dark',
-            strtolower(self::STATUS_PENGERJAAN_SEDANG_DILAKUKAN) => 'info',
-            strtolower(self::STATUS_PENGERJAAN_SELESAI) => 'success',
-            strtolower(self::STATUS_PENGERJAAN_GAGAL) => 'danger',
-            strtolower(self::STATUS_PENGERJAAN_TIDAK_DAPAT_DIPERBAIKI) => 'dark',
-            strtolower(self::STATUS_PENGERJAAN_DITUNDA) => 'secondary',
-            default => 'light text-dark',
+            strtolower(self::STATUS_PENGAJUAN_DIAJUKAN) => 'text-bg-info',
+            strtolower(self::STATUS_PENGAJUAN_DISETUJUI) => 'text-bg-primary',
+            strtolower(self::STATUS_PENGAJUAN_DITOLAK) => 'text-bg-danger',
+            strtolower(self::STATUS_PENGAJUAN_DIBATALKAN) => 'text-bg-secondary',
+            strtolower(self::STATUS_PENGERJAAN_BELUM_DIKERJAKAN) => 'text-bg-warning text-dark',
+            strtolower(self::STATUS_PENGERJAAN_SEDANG_DILAKUKAN) => 'text-bg-info',
+            strtolower(self::STATUS_PENGERJAAN_SELESAI) => 'text-bg-success',
+            strtolower(self::STATUS_PENGERJAAN_GAGAL) => 'text-bg-danger',
+            strtolower(self::STATUS_PENGERJAAN_TIDAK_DAPAT_DIPERBAIKI) => 'text-bg-dark',
+            strtolower(self::STATUS_PENGERJAAN_DITUNDA) => 'text-bg-secondary',
+            default => 'text-bg-light text-dark',
         };
     }
 
@@ -225,8 +226,10 @@ class Pemeliharaan extends Model
 
             $perluSimpanBarang = false;
 
-            if ($pemeliharaan->status_pengajuan === self::STATUS_PENGAJUAN_DISETUJUI &&
-                in_array($pemeliharaan->status_pengerjaan, [self::STATUS_PENGERJAAN_BELUM_DIKERJAKAN, self::STATUS_PENGERJAAN_SEDANG_DILAKUKAN])) {
+            if (
+                $pemeliharaan->status_pengajuan === self::STATUS_PENGAJUAN_DISETUJUI &&
+                in_array($pemeliharaan->status_pengerjaan, [self::STATUS_PENGERJAAN_BELUM_DIKERJAKAN, self::STATUS_PENGERJAAN_SEDANG_DILAKUKAN])
+            ) {
                 if ($barang->status !== BarangQrCode::STATUS_DALAM_PEMELIHARAAN) {
                     $barang->status = BarangQrCode::STATUS_DALAM_PEMELIHARAAN;
                     $perluSimpanBarang = true;
@@ -237,7 +240,7 @@ class Pemeliharaan extends Model
                 }
             } elseif ($pemeliharaan->status_pengerjaan === self::STATUS_PENGERJAAN_SELESAI) {
                 $kondisiBaru = $pemeliharaan->kondisi_barang_setelah_pemeliharaan ?? BarangQrCode::KONDISI_BAIK;
-                 if (!in_array($kondisiBaru, BarangQrCode::getValidKondisi())) { // Pastikan valid
+                if (!in_array($kondisiBaru, BarangQrCode::getValidKondisi())) { // Pastikan valid
                     $kondisiBaru = BarangQrCode::KONDISI_BAIK; // Fallback jika tidak valid
                 }
                 if ($barang->status !== BarangQrCode::STATUS_TERSEDIA || $barang->kondisi !== $kondisiBaru) {
@@ -247,7 +250,7 @@ class Pemeliharaan extends Model
                 }
             } elseif ($pemeliharaan->status_pengerjaan === self::STATUS_PENGERJAAN_TIDAK_DAPAT_DIPERBAIKI) {
                 $kondisiBaru = $pemeliharaan->kondisi_barang_setelah_pemeliharaan ?? BarangQrCode::KONDISI_RUSAK_BERAT;
-                 if (!in_array($kondisiBaru, BarangQrCode::getValidKondisi())) {
+                if (!in_array($kondisiBaru, BarangQrCode::getValidKondisi())) {
                     $kondisiBaru = BarangQrCode::KONDISI_RUSAK_BERAT;
                 }
                 if ($barang->status !== BarangQrCode::STATUS_TERSEDIA || $barang->kondisi !== $kondisiBaru) {
@@ -267,10 +270,10 @@ class Pemeliharaan extends Model
                         $barang->status = BarangQrCode::STATUS_TERSEDIA;
                         // Mengambil kondisi dari log status terakhir sebelum pemeliharaan ini
                         $logStatusAwal = BarangStatus::where('id_barang_qr_code', $barang->id)
-                                           ->where('id_pemeliharaan_trigger', $pemeliharaan->id)
-                                           ->orderBy('tanggal_pencatatan', 'asc')
-                                           ->first();
-                        if($logStatusAwal && $logStatusAwal->kondisi_sebelumnya){
+                            ->where('id_pemeliharaan_trigger', $pemeliharaan->id)
+                            ->orderBy('tanggal_pencatatan', 'asc')
+                            ->first();
+                        if ($logStatusAwal && $logStatusAwal->kondisi_sebelumnya) {
                             $barang->kondisi = $logStatusAwal->kondisi_sebelumnya;
                         }
                         $perluSimpanBarang = true;
@@ -284,7 +287,7 @@ class Pemeliharaan extends Model
 
             // Cek apakah ada perubahan yang signifikan untuk dicatat di BarangStatus
             if ($kondisiSebelum !== $barang->kondisi || $statusKetersediaanSebelum !== $barang->status) {
-                 BarangStatus::create([
+                BarangStatus::create([
                     'id_barang_qr_code' => $barang->id,
                     'id_user_pencatat' => Auth::id() ?? $pemeliharaan->id_operator_pengerjaan ?? $pemeliharaan->id_user_penyetuju ?? $pemeliharaan->id_user_pengaju,
                     'tanggal_pencatatan' => now(),
@@ -315,10 +318,10 @@ class Pemeliharaan extends Model
 
                         $barang->status = BarangQrCode::STATUS_TERSEDIA;
                         $logStatusAwal = BarangStatus::where('id_barang_qr_code', $barang->id)
-                                           ->where('id_pemeliharaan_trigger', $pemeliharaan->id) // Cari log yang dipicu oleh pemeliharaan ini
-                                           ->orderBy('tanggal_pencatatan', 'asc') // Ambil yang paling awal
-                                           ->first();
-                        if($logStatusAwal && $logStatusAwal->kondisi_sebelumnya){
+                            ->where('id_pemeliharaan_trigger', $pemeliharaan->id) // Cari log yang dipicu oleh pemeliharaan ini
+                            ->orderBy('tanggal_pencatatan', 'asc') // Ambil yang paling awal
+                            ->first();
+                        if ($logStatusAwal && $logStatusAwal->kondisi_sebelumnya) {
                             $barang->kondisi = $logStatusAwal->kondisi_sebelumnya; // Kembalikan ke kondisi sebelum pemeliharaan ini dimulai
                         }
                         $barang->saveQuietly();

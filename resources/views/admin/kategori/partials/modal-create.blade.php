@@ -1,4 +1,4 @@
-{{-- resources/views/admin/kategori/partials/modal-create.blade.php --}}
+resources/views/admin/kategori/partials/modal-create.blade.php
 <div class="modal fade" id="modalTambahKategori" tabindex="-1" aria-labelledby="modalTambahKategoriLabel" aria-hidden="true"
     data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog">

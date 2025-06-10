@@ -14,10 +14,14 @@ return new class extends Migration
         Schema::create('arsip_barangs', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('id_barang_qr_code')->unique(); // FK ke unit yang diarsipkan (unique karena satu unit hanya bisa diarsip sekali)
-            $table->unsignedBigInteger('id_user_pengaju')->nullable(); // Siapa yang mengajukan arsip/penghapusan (operator)
-            $table->unsignedBigInteger('id_user_penyetuju')->nullable(); // Siapa yang menyetujui arsip/penghapusan (admin)
 
-            $table->enum('jenis_penghapusan', ['Rusak Berat', 'Hilang', 'Dimusnahkan', 'Dijual', 'Dihibahkan','Usang', 'Lain-lain'])->default('Lain-lain');
+
+            // KODE BARU
+            $table->foreignId('id_user_pengaju')->nullable()->constrained('users')->onDelete('set null'); // Siapa yang mengajukan arsip/penghapusan (operator)
+            $table->foreignId('id_user_penyetuju')->nullable()->constrained('users')->onDelete('set null'); // Siapa yang menyetujui arsip/penghapusan (admin)
+            $table->foreignId('dipulihkan_oleh')->nullable()->constrained('users')->onDelete('set null');   // FK ke users (admin)
+
+            $table->enum('jenis_penghapusan', ['Rusak Berat', 'Hilang', 'Dimusnahkan', 'Dijual', 'Dihibahkan', 'Usang', 'Lain-lain'])->default('Lain-lain');
             $table->text('alasan_penghapusan')->nullable();
             $table->string('berita_acara_path')->nullable(); // Path dokumen berita acara penghapusan
             $table->string('foto_bukti_path')->nullable(); // Path foto bukti penghapusan/kondisi
@@ -27,7 +31,7 @@ return new class extends Migration
 
             $table->enum('status_arsip', ['Diajukan', 'Disetujui', 'Ditolak', 'Diarsipkan Permanen', 'Dipulihkan'])->default('Diajukan'); // Status alur pengarsipan
 
-            $table->unsignedBigInteger('dipulihkan_oleh')->nullable(); // FK ke users (admin)
+
             $table->timestamp('tanggal_dipulihkan')->nullable(); // Jika aset dipulihkan
 
             // Simpan snapshot data unit saat diarsip untuk keperluan laporan historis
@@ -36,9 +40,7 @@ return new class extends Migration
             $table->timestamps(); // created_at untuk kapan entri arsip dibuat, updated_at untuk perubahan status arsip
 
             $table->foreign('id_barang_qr_code')->references('id')->on('barang_qr_codes')->onDelete('cascade'); // Jika unit asli dihapus, arsip juga terhapus
-            $table->foreign('id_user_pengaju')->references('id')->on('users')->onDelete('set null');
-            $table->foreign('id_user_penyetuju')->references('id')->on('users')->onDelete('set null');
-            $table->foreign('dipulihkan_oleh')->references('id')->on('users')->onDelete('set null');
+
         });
     }
 

@@ -75,7 +75,7 @@
                 <h5 class="card-title mb-0"><i class="fas fa-filter me-2"></i>Filter & Pencarian Unit Barang</h5>
             </div>
             <div class="card-body">
-                <form action="{{ route('barang-qr-code.index') }}" method="GET" id="filterFormUnitQr">
+                <form action="{{ route('admin.barang-qr-code.index') }}" method="GET" id="filterFormUnitQr">
                     <div class="row g-3 align-items-end">
                         <!-- Ruangan Filter -->
                         <div class="col-md-3">
@@ -155,7 +155,7 @@
 
                         <!-- Reset Button -->
                         <div class="col-md-2 d-flex align-items-end">
-                            <a href="{{ route('barang-qr-code.index') }}" class="btn btn-outline-secondary btn-sm w-100">
+                            <a href="{{ route('admin.barang-qr-code.index') }}" class="btn btn-outline-secondary btn-sm w-100">
                                 <i class="fas fa-undo me-1"></i> Reset Filter
                             </a>
                         </div>
@@ -179,21 +179,21 @@
             <!-- Right Side Buttons -->
             <div class="d-flex align-items-center gap-2">
                 @can('export', App\Models\BarangQrCode::class)
-                    <a href="{{ route('barang-qr-code.export-excel', request()->query()) }}"
+                    <a href="{{ route('admin.barang-qr-code.export-excel', request()->query()) }}"
                         class="btn btn-outline-success btn-sm" data-bs-toggle="tooltip" title="Export Excel">
                         <i class="mdi mdi-file-excel me-1"></i> Export Excel
                     </a>
-                    <a href="{{ route('barang-qr-code.export-pdf', array_merge(request()->query(), ['pisah_per_ruangan' => false])) }}"
+                    <a href="{{ route('admin.barang-qr-code.export-pdf', array_merge(request()->query(), ['pisah_per_ruangan' => false])) }}"
                         class="btn btn-outline-danger btn-sm" data-bs-toggle="tooltip" title="Export PDF semua unit">
                         <i class="mdi mdi-file-pdf-box me-1"></i> Export PDF (Semua)
                     </a>
-                    <a href="{{ route('barang-qr-code.export-pdf', array_merge(request()->query(), ['pisah_per_ruangan' => true])) }}"
+                    <a href="{{ route('admin.barang-qr-code.export-pdf', array_merge(request()->query(), ['pisah_per_ruangan' => true])) }}"
                         class="btn btn-danger btn-sm" data-bs-toggle="tooltip" title="Export PDF per Ruangan">
                         <i class="mdi mdi-file-pdf-box me-1"></i> Export PDF (Per Ruangan)
                     </a>
                 @endcan
                 @can('create', App\Models\Barang::class)
-                    <a href="{{ route('barang.index') }}" class="btn btn-primary btn-sm" data-bs-toggle="tooltip"
+                    <a href="{{ route('admin.barang.index') }}" class="btn btn-primary btn-sm" data-bs-toggle="tooltip"
                         title="Kelola Jenis Barang">
                         <i class="mdi mdi-plus-circle-outline me-1"></i> Tambah Unit (via Jenis Barang)
                     </a>
@@ -207,7 +207,7 @@
                 <h4 class="card-title mb-0"><i class="mdi mdi-qrcode-scan me-2"></i>Data Unit Barang Individual</h4>
             </div>
             <div class="card-body">
-                <form id="formBatchAction" action="{{ route('barang-qr-code.print-multiple') }}" method="POST"
+                <form id="formBatchAction" action="{{ route('admin.barang-qr-code.print-multiple') }}" method="POST"
                     target="_blank">
                     @csrf
                     <div class="table-responsive">
@@ -239,7 +239,7 @@
                                                 name="qr_code_ids[]" value="{{ $unit->id }}">
                                         </td>
                                         <td>
-                                            <a href="{{ route('barang-qr-code.show', $unit->id) }}" class="fw-medium">
+                                            <a href="{{ route('admin.barang-qr-code.show', $unit->id) }}" class="fw-medium">
                                                 {{ $unit->kode_inventaris_sekolah ?? 'N/A' }}
                                             </a>
                                             @if ($unit->arsip && $unit->arsip->status_arsip !== \App\Models\ArsipBarang::STATUS_ARSIP_DIPULIHKAN)
@@ -249,7 +249,7 @@
                                         <td>
                                             @if ($unit->barang)
                                                 <a
-                                                    href="{{ route('barang.show', $unit->barang->id) }}">{{ Str::limit($unit->barang->nama_barang, 30) }}</a>
+                                                    href="{{ route('admin.barang.show', $unit->barang->id) }}">{{ Str::limit($unit->barang->nama_barang, 30) }}</a>
                                                 <br><small
                                                     class="text-muted">{{ $unit->barang->kategori?->nama_kategori ?? '-' }}</small>
                                             @else
@@ -307,7 +307,7 @@
                                         <td>
                                             <div class="d-flex gap-1 justify-content-center">
                                                 @can('view', $unit)
-                                                    <a href="{{ route('barang-qr-code.show', $unit->id) }}"
+                                                    <a href="{{ route('admin.barang-qr-code.show', $unit->id) }}"
                                                         class="btn btn-outline-primary btn-sm" title="Lihat Detail (KIB)">
                                                         <i class="fas fa-eye"></i>
                                                     </a>

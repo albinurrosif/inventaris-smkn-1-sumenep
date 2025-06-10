@@ -1,20 +1,31 @@
+{{-- resources/views/admin/barang/show.blade.php --}}
+{{--
+    Halaman ini menampilkan detail untuk satu Jenis Barang (Induk/Master).
+    Juga menampilkan daftar semua unit fisik (Barang QR Code) yang terkait dengan jenis barang ini.
+
+    Variabel yang diharapkan dari Controller (BarangController@show):
+    - $barang: Model \App\Models\Barang (dengan relasi 'kategori' dan 'active_qr_codes_count' sudah di-load).
+    - $qrCodes: Paginator of \App\Models\BarangQrCode (unit-unit terkait, dengan relasi 'ruangan', 'pemegangPersonal', 'arsip' sudah di-load).
+    - $kategoriList: Collection of \App\Models\KategoriBarang (untuk dropdown di modal edit jenis barang).
+--}}
+
 @extends('layouts.app')
 
 @section('title', 'Detail Jenis Barang - ' . $barang->nama_barang)
 
 @section('content')
     <div class="container-fluid">
+        {{-- Judul Halaman dan Breadcrumb --}}
         <div class="row">
             <div class="col-12">
                 <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                    <h4 class="mb-sm-0">Detail Jenis Barang (Ruangan Anda)</h4>
+                    <h4 class="mb-sm-0">Detail Jenis Barang</h4>
                     <div class="page-title-right">
                         <ol class="breadcrumb m-0">
-                            <li class="breadcrumb-item"><a href="{{ route('operator.dashboard') }}">Dashboard</a></li>
-                            {{-- Jika Operator menggunakan route barang.index yang sama dengan Admin --}}
-                            <li class="breadcrumb-item"><a href="{{ route('barang.index') }}">Daftar Jenis Barang</a></li>
-                            {{-- Atau jika Operator punya route index sendiri: --}}
-                            {{-- <li class="breadcrumb-item"><a href="{{ route('operator.barang.index') }}">Daftar Jenis Barang</a></li> --}}
+                            <li class="breadcrumb-item"><a href="{{ route('redirect-dashboard') }}">Dashboard</a></li>
+                            <li class="breadcrumb-item"><a href="{{ route('operator.barang.index') }}">Daftar Jenis
+                                    Barang</a>
+                            </li>
                             <li class="breadcrumb-item active">Detail: {{ $barang->nama_barang }}</li>
                         </ol>
                     </div>
@@ -22,34 +33,37 @@
             </div>
         </div>
 
+        {{-- Card Informasi Jenis Barang (Induk) --}}
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">Jenis Barang: {{ $barang->nama_barang }} ({{ $barang->kode_barang }})</h5>
-                <div class="d-flex gap-2">
-                    {{-- Operator mungkin tidak bisa mengedit info jenis barang induk --}}
-                    {{-- Jika boleh, pastikan BarangPolicy@update mengizinkannya --}}
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                <h5 class="card-title mb-0">Jenis Barang: {{ $barang->nama_barang }}
+                    ({{ $barang->kode_barang ?? 'Belum Ada Kode' }})</h5>
+                <div class="d-flex gap-2 mt-2 mt-sm-0">
                     @can('update', $barang)
-                        <button type="button" class="btn btn-warning btn-sm btn-edit-barang-trigger" data-bs-toggle="modal"
-                            data-bs-target="#modalEditBarang" data-barang='@json($barang->loadCount('qrCodes'))'>
-                            <i class="fas fa-edit me-1"></i> Edit Info Jenis Barang
+                        <button type="button" class="btn btn-warning btn-sm btn-edit-jenis-barang" data-bs-toggle="modal"
+                            data-bs-target="#modalEditJenisBarang" data-barang='@json($barang)'
+                            data-url="{{ route('operator.barang.update', $barang->id) }}">
+                            <i class="fas fa-edit me-1"></i> Edit Info Jenis
                         </button>
                     @endcan
-
-                    {{-- Operator TIDAK BOLEH menghapus jenis barang --}}
-                    {{-- @can('delete', $barang) ... @endcan --}}
-
-                    <a href="{{ route('barang.index') }}" class="btn btn-secondary btn-sm">
-                        {{-- Jika Operator menggunakan route barang.index yang sama: <a href="{{ route('barang.index') }}" ...> --}}
-                        <i class="fas fa-arrow-left me-1"></i> Kembali ke Daftar
+                    @can('delete', $barang)
+                        <button type="button" class="btn btn-danger btn-sm btn-hapus-jenis-barang" data-bs-toggle="modal"
+                            data-bs-target="#modalHapusJenisBarang"
+                            data-url="{{ route('operator.barang.destroy', $barang->id) }}"
+                            data-nama="{{ $barang->nama_barang }}" data-jumlah-unit="{{ $barang->active_qr_codes_count }}">
+                            <i class="fas fa-trash-alt me-1"></i> Hapus Jenis & Semua Unit
+                        </button>
+                    @endcan
+                    <a href="{{ route('operator.barang.index') }}" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-arrow-left me-1"></i> Kembali
                     </a>
                 </div>
             </div>
             <div class="card-body">
-                {{-- Detail Informasi Jenis Barang --}}
                 <div class="row">
                     <div class="col-md-6">
                         <p><strong>Nama Barang:</strong> {{ $barang->nama_barang }}</p>
-                        <p><strong>Kode Barang:</strong> {{ $barang->kode_barang }}</p>
+                        <p><strong>Kode Barang:</strong> {{ $barang->kode_barang ?? '-' }}</p>
                         <p><strong>Kategori:</strong> {{ $barang->kategori->nama_kategori ?? '-' }}</p>
                         <p><strong>Merk / Model:</strong> {{ $barang->merk_model ?? '-' }}</p>
                         <p><strong>Ukuran:</strong> {{ $barang->ukuran ?? '-' }}</p>
@@ -57,339 +71,325 @@
                     </div>
                     <div class="col-md-6">
                         <p><strong>Tahun Pembuatan:</strong> {{ $barang->tahun_pembuatan ?? '-' }}</p>
-                        <p><strong>Harga Perolehan Induk (Ref):</strong> Rp
-                            {{ $barang->harga_perolehan_induk ? number_format($barang->harga_perolehan_induk, 0, ',', '.') : '0' }}
+                        <p><strong>Harga Perolehan Induk:</strong> Rp
+                            {{ number_format($barang->harga_perolehan_induk ?? 0, 0, ',', '.') }}</p>
+                        <p><strong>Sumber Perolehan Induk:</strong> {{ $barang->sumber_perolehan_induk ?? '-' }}</p>
+                        <p><strong>Menggunakan Nomor Seri:</strong>
+                            <span
+                                @class([
+                                    'badge',
+                                    'bg-success' => $barang->menggunakan_nomor_seri,
+                                    'bg-info' => !$barang->menggunakan_nomor_seri,
+                                ])>{{ $barang->menggunakan_nomor_seri ? 'Ya' : 'Tidak' }}</span>
                         </p>
-                        <p><strong>Sumber Perolehan Induk (Ref):</strong> {{ $barang->sumber_perolehan_induk ?? '-' }}</p>
-                        <p><strong>Menggunakan Nomor Seri:</strong> <span
-                                class="badge bg-{{ $barang->menggunakan_nomor_seri ? 'success' : 'info' }}">{{ $barang->menggunakan_nomor_seri ? 'Ya' : 'Tidak' }}</span>
-                        </p>
-                        <p><strong>Jumlah Unit Aktif (di Ruangan Anda):</strong> <span
-                                class="badge bg-primary fs-6">{{ $qrCodes->count() }}</span> unit</p>
-                        <p>
-                            <small class="text-muted">* Jumlah unit yang ditampilkan adalah unit aktif di ruangan yang Anda
-                                kelola.</small>
-                        </p>
+                        <p><strong>Jumlah Unit Aktif Saat Ini:</strong> <span
+                                class="badge bg-primary fs-6">{{ $barang->active_qr_codes_count }}</span> unit</p>
+                        <p><small class="text-muted">* Jumlah unit aktif adalah unit yang belum di-soft-delete/diarsipkan
+                                permanen.</small></p>
                     </div>
                 </div>
             </div>
         </div>
 
+        {{-- Card Daftar Unit Fisik (Barang QR Code) --}}
         <div class="card mt-4">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">Daftar Unit Fisik Barang (di Ruangan Anda)</h5>
-                {{-- Operator mungkin tidak boleh menambah unit baru dari halaman ini, --}}
-                {{-- penambahan unit mungkin melalui wizard pembuatan jenis barang baru --}}
-                {{-- atau dari halaman khusus penambahan unit ke jenis barang yang sudah ada. --}}
-                {{-- Jika boleh: --}}
-                {{-- @can('createUnitFor', $barang) --}} {{-- Ability kustom jika perlu --}}
-                {{-- <a href="{{ route('NAMAROUTE_TAMBAH_UNIT', ['id_barang' => $barang->id]) }}" class="btn btn-primary btn-sm"> --}}
-                {{-- <i class="mdi mdi-plus"></i> Tambah Unit ke Jenis Ini --}}
-                {{-- </a> --}}
-                {{-- @endcan --}}
+                <h5 class="card-title mb-0">Daftar Unit Fisik Barang</h5>
+                @if ($barang->menggunakan_nomor_seri)
+                    @can('create', [App\Models\BarangQrCode::class, $barang])
+                        <div class="d-flex align-items-center gap-2">
+                            <form action="{{ route('operator.barang-qr-code.create') }}" method="GET"
+                                class="d-inline-flex align-items-center">
+                                <input type="hidden" name="barang_id" value="{{ $barang->id }}">
+                                <label for="jumlah_unit_to_add" class="form-label me-2 mb-0">Tambah:</label>
+                                <input type="number" name="jumlah_unit" id="jumlah_unit_to_add" value="1" min="1"
+                                    max="50" class="form-control form-control-sm" style="width: 70px;">
+                                <button type="submit" class="btn btn-primary btn-sm ms-2">
+                                    <i class="fas fa-plus me-1"></i> Unit Baru
+                                </button>
+                            </form>
+                        </div>
+                    @endcan
+                @else
+                    <span class="badge bg-info">Jenis barang ini tidak dikelola per unit individual.</span>
+                @endif
             </div>
             <div class="card-body">
-                {{-- Variabel $qrCodes sudah difilter di controller untuk Operator --}}
-                @if (isset($qrCodes) && $qrCodes->count() > 0)
-                    <div class="table-responsive">
-                        <table id="unitTableOperator" class="table table-bordered table-hover dt-responsive nowrap w-100">
-                            <thead class="table-light">
+                <div class="table-responsive">
+                    <table id="unitTable" class="table table-bordered table-hover dt-responsive nowrap w-100">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Kode Inventaris</th>
+                                <th>No. Seri Pabrik</th>
+                                <th>Lokasi/Pemegang</th>
+                                <th class="text-end">Harga Perolehan</th>
+                                <th>Tgl. Perolehan</th>
+                                <th>Sumber</th>
+                                <th>Kondisi</th>
+                                <th>Status</th>
+                                <th class="text-center">QR</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse ($qrCodes as $unit)
                                 <tr>
-                                    <th>#</th>
-                                    <th>Kode Inventaris Sekolah</th>
-                                    <th>No. Seri Pabrik</th>
-                                    <th>Ruangan</th> {{-- Ruangan akan selalu sama dengan yang dikelola operator --}}
-                                    <th>Kondisi</th>
-                                    <th>Status Ketersediaan</th>
-                                    <th>Harga Unit (Rp)</th>
-                                    <th>Tgl. Perolehan</th>
-                                    <th>Pemegang</th>
-                                    <th>QR</th>
-                                    <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($qrCodes as $index => $unit)
-                                    <tr>
-                                        <td>{{ $loop->iteration }}</td>
-                                        <td>
-                                            {{-- Operator seharusnya selalu bisa melihat detail unit di ruangannya --}}
+                                    <td>{{ $loop->iteration + $qrCodes->firstItem() - 1 }}</td>
+                                    <td><a
+                                            href="{{ route('operator.barang-qr-code.show', $unit->id) }}">{{ $unit->kode_inventaris_sekolah }}</a>
+                                    </td>
+                                    <td>{{ $unit->no_seri_pabrik ?? '-' }}</td>
+                                    <td>
+                                        @if ($unit->id_pemegang_personal && $unit->pemegangPersonal)
+                                            <i class="fas fa-user text-primary me-1"
+                                                title="Pemegang Personal"></i>{{ $unit->pemegangPersonal->username }}
+                                        @elseif ($unit->id_ruangan && $unit->ruangan)
+                                            <i class="fas fa-map-marker-alt text-info me-1"
+                                                title="Lokasi Ruangan"></i>{{ $unit->ruangan->nama_ruangan }}
+                                        @else
+                                            <span class="text-muted">Belum Ditempatkan</span>
+                                        @endif
+                                    </td>
+                                    <td class="text-end">
+                                        {{ $unit->harga_perolehan_unit ? number_format($unit->harga_perolehan_unit, 0, ',', '.') : '-' }}
+                                    </td>
+                                    <td>{{ $unit->tanggal_perolehan_unit ? \Carbon\Carbon::parse($unit->tanggal_perolehan_unit)->isoFormat('DD MMM YY') : '-' }}
+                                    </td>
+                                    <td>{{ $unit->sumber_dana_unit ?? '-' }}</td>
+                                    <td>
+                                        <span @class([
+                                            'badge',
+                                            'bg-success' => $unit->kondisi == \App\Models\BarangQrCode::KONDISI_BAIK,
+                                            'bg-warning text-dark' =>
+                                                $unit->kondisi == \App\Models\BarangQrCode::KONDISI_KURANG_BAIK,
+                                            'bg-danger' =>
+                                                $unit->kondisi == \App\Models\BarangQrCode::KONDISI_RUSAK_BERAT,
+                                            'bg-dark' => $unit->kondisi == \App\Models\BarangQrCode::KONDISI_HILANG,
+                                            'bg-secondary' => !in_array(
+                                                $unit->kondisi,
+                                                \App\Models\BarangQrCode::getValidKondisi()),
+                                        ])>{{ $unit->kondisi }}</span>
+                                    </td>
+                                    <td>
+                                        <span @class([
+                                            'badge',
+                                            'bg-success' => $unit->status == \App\Models\BarangQrCode::STATUS_TERSEDIA,
+                                            'bg-info text-dark' =>
+                                                $unit->status == \App\Models\BarangQrCode::STATUS_DIPINJAM,
+                                            'bg-warning text-dark' =>
+                                                $unit->status == \App\Models\BarangQrCode::STATUS_DALAM_PEMELIHARAAN,
+                                            'bg-secondary' => !in_array(
+                                                $unit->status,
+                                                \App\Models\BarangQrCode::getValidStatus()),
+                                        ])>{{ $unit->status }}</span>
+                                        @if (
+                                            $unit->arsip &&
+                                                in_array($unit->arsip->status_arsip, [
+                                                    \App\Models\ArsipBarang::STATUS_ARSIP_DIAJUKAN,
+                                                    \App\Models\ArsipBarang::STATUS_ARSIP_DISETUJUI,
+                                                ]))
+                                            <small class="d-block text-danger fst-italic">(Proses Arsip)</small>
+                                        @elseif($unit->arsip && $unit->arsip->status_arsip == \App\Models\ArsipBarang::STATUS_ARSIP_DISETUJUI_PERMANEN)
+                                            <small class="d-block text-dark fst-italic">(Diarsipkan)</small>
+                                        @endif
+                                    </td>
+                                    <td class="text-center">
+                                        @if ($unit->qr_path && Storage::disk('public')->exists($unit->qr_path))
+                                            <a href="{{ route('operator.barang-qr-code.download', $unit->id) }}"
+                                                title="Download QR Code {{ $unit->kode_inventaris_sekolah }}">
+                                                <img src="{{ asset('storage/' . $unit->qr_path) }}"
+                                                    alt="QR Code {{ $unit->kode_inventaris_sekolah }}"
+                                                    style="width: 40px; height: 40px; cursor:pointer;">
+                                            </a>
+                                        @else
+                                            <a href="{{ route('operator.barang-qr-code.download', $unit->id) }}"
+                                                class="btn btn-sm btn-outline-secondary"
+                                                title="Generate & Download QR {{ $unit->kode_inventaris_sekolah }}"><i
+                                                    class="fas fa-qrcode"></i></a>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        <div class="d-flex gap-1 flex-wrap">
                                             @can('view', $unit)
-                                                <a
-                                                    href="{{ route('barang-qr-code.show', $unit->id) }}">{{ $unit->kode_inventaris_sekolah }}</a>
-                                            @else
-                                                {{ $unit->kode_inventaris_sekolah }}
+                                                <a href="{{ route('operator.barang-qr-code.show', $unit->id) }}"
+                                                    class="btn btn-info btn-sm" title="Lihat Detail Unit"><i
+                                                        class="fas fa-eye"></i></a>
                                             @endcan
-                                        </td>
-                                        <td>{{ $unit->no_seri_pabrik ?? '-' }}</td>
-                                        <td>{{ $unit->ruangan->nama_ruangan ?? ($unit->id_pemegang_personal ? 'Dipegang Personal' : 'Belum Ditempatkan') }}
-                                        </td>
-                                        <td>
-                                            <span
-                                                class="badge @if ($unit->kondisi == 'Baik') bg-success @elseif($unit->kondisi == 'Kurang Baik') bg-warning @elseif($unit->kondisi == 'Rusak Berat') bg-danger @else bg-secondary @endif">
-                                                {{ $unit->kondisi }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span
-                                                class="badge @if ($unit->status == 'Tersedia') bg-success @elseif($unit->status == 'Dipinjam') bg-info @elseif($unit->status == 'Dalam Pemeliharaan') bg-warning @elseif($unit->status == 'Diarsipkan/Dihapus') bg-danger @else bg-secondary @endif">
-                                                {{ $unit->status }}
-                                            </span>
-                                        </td>
-                                        <td class="text-end">
-                                            {{ $unit->harga_perolehan_unit ? number_format($unit->harga_perolehan_unit, 0, ',', '.') : '-' }}
-                                        </td>
-                                        <td>{{ $unit->tanggal_perolehan_unit ? \Carbon\Carbon::parse($unit->tanggal_perolehan_unit)->isoFormat('DD MMM YY') : '-' }}
-                                        </td>
-                                        <td>{{ $unit->pemegangPersonal->username ?? '-' }}</td>
-                                        <td>
-                                            @can('downloadQr', $unit)
-                                                @if ($unit->qr_path && Storage::disk('public')->exists($unit->qr_path))
-                                                    <a href="{{ route('barang-qr-code.download', $unit->id) }}"
-                                                        title="Download QR Code">
-                                                        <img src="{{ asset('storage/' . $unit->qr_path) }}"
-                                                            alt="QR Code {{ $unit->kode_inventaris_sekolah }}"
-                                                            style="width: 40px; height: 40px; cursor:pointer;">
-                                                    </a>
-                                                @else
-                                                    <a href="{{ route('barang-qr-code.download', $unit->id) }}"
-                                                        class="btn btn-sm btn-outline-secondary" title="Generate & Download QR">
-                                                        <i class="fas fa-qrcode"></i>
-                                                    </a>
-                                                @endif
-                                            @else
-                                                <i class="fas fa-qrcode text-muted" title="QR Code"></i>
-                                            @endcan
-                                        </td>
-                                        <td>
-                                            <div class="d-flex gap-1">
-                                                @can('view', $unit)
-                                                    <a href="{{ route('barang-qr-code.show', $unit->id) }}"
-                                                        class="btn btn-info btn-sm" title="Lihat Detail Unit">
-                                                        <i class="fas fa-eye"></i>
-                                                    </a>
-                                                @endcan
-                                                @can('update', $unit)
-                                                    <a href="{{ route('barang-qr-code.edit', $unit->id) }}"
-                                                        class="btn btn-warning btn-sm" title="Edit Unit">
-                                                        <i class="fas fa-edit"></i>
-                                                    </a>
-                                                @endcan
-                                                @can('delete', $unit)
-                                                    <button type="button" class="btn btn-danger btn-sm btn-arsip-unit"
-                                                        data-unit-id="{{ $unit->id }}"
-                                                        data-unit-kode="{{ $unit->kode_inventaris_sekolah }}"
-                                                        title="Arsipkan/Hapus Unit">
-                                                        <i class="fas fa-archive"></i>
-                                                    </button>
-                                                @endcan
-                                                @can('mutasi', $unit)
-                                                    {{-- Tombol Mutasi Unit --}}
-                                                    <button type="button" class="btn btn-primary btn-sm btn-mutasi-unit"
-                                                        data-unit-id="{{ $unit->id }}"
-                                                        data-unit-kode="{{ $unit->kode_inventaris_sekolah }}"
-                                                        data-ruangan-asal-id="{{ $unit->id_ruangan }}"
-                                                        data-ruangan-asal-nama="{{ $unit->ruangan->nama_ruangan ?? '' }}"
-                                                        title="Mutasi/Pindahkan Unit">
-                                                        <i class="fas fa-truck"></i>
-                                                    </button>
-                                                @endcan
-                                            </div>
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                @else
-                    <div class="alert alert-info text-center">
-                        Tidak ada unit fisik barang dari jenis ini yang berada di ruangan yang Anda kelola.
+                                            {{-- Tombol aksi transisi unit DIHILANGKAN dari daftar ini --}}
+                                            {{-- Tombol arsip juga DIHILANGKAN dari daftar ini --}}
+                                        </div>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="11" class="text-center">Belum ada unit fisik yang terdaftar untuk jenis
+                                        barang ini.</td>
+                                </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+                @if ($qrCodes instanceof \Illuminate\Pagination\AbstractPaginator && $qrCodes->hasPages())
+                    <div class="mt-3 d-flex justify-content-center">
+                        {{ $qrCodes->links() }}
                     </div>
                 @endif
             </div>
         </div>
     </div>
 
-    {{-- Modal Edit Jenis Barang (jika Operator diizinkan dan tombolnya diaktifkan) --}}
-    @can('update', $barang)
-        @include('admin.barang.partials.modal_edit', ['kategoriList' => $kategoriList])
-    @endcan
-
-    {{-- Modal untuk Arsip/Hapus Unit Individual --}}
-    @if (isset($qrCodes) && $qrCodes->contains(fn($unit) => Gate::allows('delete', $unit)))
-        @include('admin.barang_qr_code.partials.modal_arsip_unit')
-    @endif
-
-    {{-- Modal untuk Mutasi Unit Individual (Anda perlu membuat partial ini) --}}
-    @if (isset($qrCodes) && $qrCodes->contains(fn($unit) => Gate::allows('mutasi', $unit)))
-        @include('admin.barang_qr_code.partials.modal_mutasi_unit', [
-            'ruanganListAll' => $ruanganListAll ?? App\Models\Ruangan::orderBy('nama_ruangan')->get(),
+    {{-- Include Modal-modal --}}
+    @if (isset($kategoriList))
+        @include('admin.barang.partials.modal_edit_jenis', [
+            'kategoriList' => $kategoriList,
+            'barang' => $barang,
         ])
     @endif
+    @include('admin.barang.partials.modal_hapus_jenis')
+    {{-- Modal arsip unit tetap di-include jika ada tombol lain yang mungkin memicunya, atau jika JS-nya digunakan bersama --}}
+    @include('admin.barang_qr_code.partials.modal_arsip_unit')
 
 @endsection
 
 @push('scripts')
     <script>
-        $(document).ready(function() {
-            // Inisialisasi DataTable untuk tabel unit jika ada data
-            if ($('#unitTableOperator tbody tr').length > 0 && !$('#unitTableOperator tbody tr td').hasClass(
-                    'text-center')) {
-                $('#unitTableOperator').DataTable({
+        document.addEventListener('DOMContentLoaded', function() {
+            const unitTableEl = document.getElementById('unitTable');
+            if (unitTableEl && typeof DataTable !== 'undefined' && unitTableEl.tBodies[0] && unitTableEl.tBodies[0]
+                .rows.length > 0 && unitTableEl.tBodies[0].rows[0].cells.length > 1) {
+                new DataTable(unitTableEl, {
                     responsive: true,
-                    language: {
-                        url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/id.json'
+                    paging: false,
+                    info: false,
+                    language: { // Opsi untuk melokalisasi DataTables ke Bahasa Indonesia
+                        sEmptyTable: "Tidak ada data yang tersedia pada tabel ini",
+                        sProcessing: "Sedang memproses...",
+                        sLengthMenu: "Tampilkan _MENU_ entri",
+                        sZeroRecords: "Tidak ditemukan data yang sesuai",
+                        sInfo: "Menampilkan _START_ sampai _END_ dari _TOTAL_ entri",
+                        sInfoEmpty: "Menampilkan 0 sampai 0 dari 0 entri",
+                        sInfoFiltered: "(disaring dari _MAX_ entri keseluruhan)",
+                        sInfoPostFix: "",
+                        sSearch: "Cari:",
+                        sUrl: "",
+                        oPaginate: {
+                            sFirst: "Pertama",
+                            sPrevious: "Sebelumnya",
+                            sNext: "Selanjutnya",
+                            sLast: "Terakhir"
+                        }
                     },
                     order: [
                         [0, 'asc']
-                    ]
+                    ],
+                    columnDefs: [{
+                        orderable: false,
+                        targets: [3, 9, 10]
+                    }]
                 });
             }
-        });
 
-        // JavaScript untuk tombol Edit Info Jenis Barang (jika diaktifkan untuk Operator)
-        @can('update', $barang)
             document.addEventListener('click', function(e) {
-                const editBtn = e.target.closest('.btn-edit-barang-trigger');
-                if (editBtn) {
+                const targetElement = e.target.closest('button') || e.target.closest('a');
+                if (!targetElement) return;
+
+                if (targetElement.matches('.btn-edit-jenis-barang')) {
                     e.preventDefault();
-                    const dataString = editBtn.getAttribute('data-barang');
-                    if (!dataString) {
-                        console.error('Data barang tidak ditemukan');
-                        return;
-                    }
-                    let data;
-                    try {
-                        data = JSON.parse(dataString);
-                    } catch (error) {
-                        console.error('Gagal parse JSON:', error);
-                        return;
-                    }
+                    const modalEl = document.getElementById('modalEditJenisBarang');
+                    if (!modalEl) return;
+                    const form = modalEl.querySelector('form');
+                    const data = JSON.parse(targetElement.dataset.barang);
+                    form.action = targetElement.dataset.url;
+                    if (form.querySelector('#editNamaBarang')) form.querySelector('#editNamaBarang').value =
+                        data.nama_barang ?? '';
+                    if (form.querySelector('#editIdKategori')) form.querySelector('#editIdKategori').value =
+                        data.id_kategori ?? '';
+                    if (form.querySelector('#editMerkModel')) form.querySelector('#editMerkModel').value =
+                        data.merk_model ?? '';
+                    if (form.querySelector('#editUkuran')) form.querySelector('#editUkuran').value = data
+                        .ukuran ?? '';
+                    if (form.querySelector('#editBahan')) form.querySelector('#editBahan').value = data
+                        .bahan ?? '';
+                    if (form.querySelector('#editTahunPembuatan')) form.querySelector('#editTahunPembuatan')
+                        .value = data.tahun_pembuatan ?? '';
+                    if (form.querySelector('#editHargaPerolehanInduk')) form.querySelector(
+                        '#editHargaPerolehanInduk').value = data.harga_perolehan_induk ?? '';
+                    if (form.querySelector('#editSumberPerolehanInduk')) form.querySelector(
+                        '#editSumberPerolehanInduk').value = data.sumber_perolehan_induk ?? '';
+                    const inputKodeBarang = form.querySelector('#editKodeBarang');
+                    const infoKodeBarang = form.querySelector('#infoKodeBarangEdit');
+                    const radioYa = form.querySelector('#editMenggunakanNomorSeriYa');
+                    const radioTidak = form.querySelector('#editMenggunakanNomorSeriTidak');
+                    const infoNomorSeri = form.querySelector('#infoNomorSeriEdit');
+                    // Menggunakan active_qr_codes_count yang di-load di controller
+                    const hasUnits = (typeof data.active_qr_codes_count !== 'undefined' && parseInt(data
+                        .active_qr_codes_count) > 0);
 
-                    const modalElement = document.getElementById('modalEditBarang');
-                    if (!modalElement) {
-                        console.error('Modal #modalEditBarang tidak ditemukan');
-                        return;
-                    }
-                    const modal = new bootstrap.Modal(modalElement);
-                    const form = document.getElementById('formEditBarangAction');
-                    if (!form) {
-                        console.error('Form #formEditBarangAction tidak ditemukan');
-                        return;
-                    }
-
-                    form.action =
-                        `{{ url('admin/barang') }}/${data.id}`; // Sesuaikan dengan route update barang Anda
-
-                    modalElement.querySelector('#editNamaBarang').value = data.nama_barang ?? '';
-                    modalElement.querySelector('#editIdKategori').value = data.id_kategori ?? '';
-                    modalElement.querySelector('#editMerkModel').value = data.merk_model ?? '';
-                    modalElement.querySelector('#editUkuran').value = data.ukuran ?? '';
-                    modalElement.querySelector('#editBahan').value = data.bahan ?? '';
-                    modalElement.querySelector('#editTahunPembuatan').value = data.tahun_pembuatan ?? '';
-                    modalElement.querySelector('#editHargaPerolehanInduk').value = data.harga_perolehan_induk ?? '';
-                    modalElement.querySelector('#editSumberPerolehanInduk').value = data.sumber_perolehan_induk ??
-                        '';
-
-                    const radioYa = modalElement.querySelector('#editMenggunakanNomorSeriYa');
-                    const radioTidak = modalElement.querySelector('#editMenggunakanNomorSeriTidak');
-                    const infoNomorSeri = modalElement.querySelector('#infoNomorSeriEdit');
-
-                    const hasUnits = (typeof data.qr_codes_count !== 'undefined' && data.qr_codes_count > 0);
-
-                    if (data.menggunakan_nomor_seri == 1 || data.menggunakan_nomor_seri === true) {
-                        radioYa.checked = true;
-                    } else {
-                        radioTidak.checked = true;
-                    }
-
-                    // Untuk Operator, field ini selalu disabled saat edit karena sudah ada unit (sesuai pendekatan terintegrasi)
-                    radioYa.disabled = true;
-                    radioTidak.disabled = true;
-                    infoNomorSeri.textContent = 'Properti "Menggunakan Nomor Seri" tidak dapat diubah.';
-                    infoNomorSeri.className = 'form-text text-muted';
-
-                    modal.show();
-                }
-            });
-        @endcan
-
-        // JavaScript untuk tombol Arsip/Hapus Unit Individual
-        document.addEventListener('click', function(e) {
-            const arsipBtn = e.target.closest('.btn-arsip-unit');
-            if (arsipBtn) {
-                e.preventDefault();
-                const unitId = arsipBtn.getAttribute('data-unit-id');
-                const unitKode = arsipBtn.getAttribute('data-unit-kode');
-
-                const modalElement = document.getElementById('modalArsipUnit');
-                if (!modalElement) {
-                    console.error('Modal #modalArsipUnit tidak ditemukan');
-                    return;
-                }
-                const modalArsip = new bootstrap.Modal(modalElement);
-                const form = document.getElementById('formArsipUnitAction');
-                if (!form) {
-                    console.error('Form #formArsipUnitAction tidak ditemukan');
-                    return;
-                }
-
-                modalElement.querySelector('#arsipUnitId').value = unitId;
-                modalElement.querySelector('#arsipUnitKodeDisplay').textContent = unitKode;
-                modalElement.querySelector('#konfirmasiKodeUnit').textContent = unitKode;
-
-                form.action = `{{ url('admin/barang-qr-code') }}/${unitId}`; // Sesuaikan route
-                form.reset();
-                modalArsip.show();
-            }
-        });
-
-        // JavaScript untuk tombol Mutasi Unit
-        document.addEventListener('click', function(e) {
-            const mutasiBtn = e.target.closest('.btn-mutasi-unit');
-            if (mutasiBtn) {
-                e.preventDefault();
-                const unitId = mutasiBtn.getAttribute('data-unit-id');
-                const unitKode = mutasiBtn.getAttribute('data-unit-kode');
-                const ruanganAsalId = mutasiBtn.getAttribute('data-ruangan-asal-id');
-                const ruanganAsalNama = mutasiBtn.getAttribute('data-ruangan-asal-nama');
-
-                const modalElement = document.getElementById('modalMutasiUnit'); // Pastikan modal ini ada
-                if (!modalElement) {
-                    console.error('Modal #modalMutasiUnit tidak ditemukan');
-                    return;
-                }
-                const modalMutasi = new bootstrap.Modal(modalElement);
-                const form = document.getElementById(
-                    'formMutasiUnitAction'); // Pastikan form ini ada di modal mutasi
-                if (!form) {
-                    console.error('Form #formMutasiUnitAction tidak ditemukan');
-                    return;
-                }
-
-                modalElement.querySelector('#mutasiUnitId').value = unitId; // Input hidden di modal mutasi
-                modalElement.querySelector('#mutasiUnitKodeDisplay').textContent = unitKode;
-                modalElement.querySelector('#mutasiRuanganAsalDisplay').textContent = ruanganAsalNama ||
-                    'Tidak di ruangan';
-                modalElement.querySelector('#mutasiIdRuanganAsalHidden').value = ruanganAsalId ||
-                    ''; // Input hidden
-
-                form.action = `{{ url('admin/barang-qr-code/${unitId}/mutasi') }}`; // Sesuaikan route
-                form.reset();
-
-                // Hapus opsi ruangan asal dari dropdown ruangan tujuan
-                const ruanganTujuanSelect = modalElement.querySelector('#mutasiIdRuanganTujuan');
-                if (ruanganTujuanSelect && ruanganAsalId) {
-                    for (let i = 0; i < ruanganTujuanSelect.options.length; i++) {
-                        if (ruanganTujuanSelect.options[i].value == ruanganAsalId) {
-                            ruanganTujuanSelect.options[i].style.display = 'none';
-                        } else {
-                            ruanganTujuanSelect.options[i].style.display = '';
+                    if (inputKodeBarang) {
+                        inputKodeBarang.value = data.kode_barang ?? '';
+                        inputKodeBarang.disabled = hasUnits;
+                        if (infoKodeBarang) {
+                            infoKodeBarang.textContent = hasUnits ?
+                                'Kode Barang tidak dapat diubah jika sudah ada unit.' :
+                                'Biarkan kosong jika ingin digenerate otomatis.';
+                            infoKodeBarang.className = hasUnits ? 'form-text text-danger' :
+                                'form-text text-muted';
                         }
                     }
+                    if (radioYa && radioTidak && infoNomorSeri) {
+                        radioYa.checked = data.menggunakan_nomor_seri == 1 || data
+                            .menggunakan_nomor_seri === true;
+                        radioTidak.checked = !(data.menggunakan_nomor_seri == 1 || data
+                            .menggunakan_nomor_seri === true);
+                        radioYa.disabled = hasUnits;
+                        radioTidak.disabled = hasUnits;
+                        infoNomorSeri.textContent = hasUnits ?
+                            'Opsi ini tidak dapat diubah karena sudah ada unit.' : '';
+                        infoNomorSeri.className = hasUnits ? 'form-text text-danger' :
+                            'form-text text-muted';
+                    }
                 }
-                modalMutasi.show();
-            }
+
+                if (targetElement.matches('.btn-hapus-jenis-barang')) {
+                    e.preventDefault();
+                    const formHapus = document.getElementById('formDeleteJenisBarang');
+                    if (!formHapus) return;
+                    formHapus.action = targetElement.dataset.url;
+                    const namaBarang = targetElement.dataset.nama;
+                    const jumlahUnit = targetElement.dataset
+                        .jumlahUnit; // Ini akan menggunakan active_qr_codes_count
+                    Swal.fire({
+                        title: `<span class="text-danger fw-bold">PERHATIAN!</span>`,
+                        html: `Anda akan menghapus jenis barang <strong>"${namaBarang}"</strong> beserta perkiraan <strong>${jumlahUnit} unit fisiknya</strong>. <br><strong class='text-danger fs-6'>Semua unit aktif akan DIARSIPKAN (jika ada), dan jenis barang ini akan di-soft-delete. Aksi ini berdampak besar.</strong><br><br>Apakah Anda yakin ingin melanjutkan?`,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#d33',
+                        cancelButtonColor: '#3085d6',
+                        confirmButtonText: 'Ya, Hapus Jenis Barang Ini!',
+                        cancelButtonText: 'Batal',
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            formHapus.submit();
+                        }
+                    });
+                }
+
+                // Event listener untuk tombol arsip unit (jika masih ada di tempat lain atau untuk modal yang di-include)
+                if (targetElement.matches('.btn-arsip-unit')) {
+                    const modalEl = document.getElementById('modalArsipUnit');
+                    if (!modalEl) return;
+                    const form = modalEl.querySelector('form');
+                    form.action = targetElement.dataset.url;
+                    modalEl.querySelector('#arsipUnitKodeDisplay').textContent = targetElement.dataset.kode;
+                    const konfirmasiLabel = modalEl.querySelector('label[for="inputKonfirmasiArsipUnit"]');
+                    if (konfirmasiLabel) {
+                        konfirmasiLabel.innerHTML =
+                            `Ketik "<strong class="text-danger">${targetElement.dataset.kode}</strong>" untuk konfirmasi:`;
+                    }
+                    form.reset();
+                }
+            });
         });
     </script>
 @endpush
