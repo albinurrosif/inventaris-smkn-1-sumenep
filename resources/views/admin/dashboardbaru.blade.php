@@ -44,6 +44,11 @@
     <div class="container-fluid">
         {{-- Page Title & Breadcrumb --}}
         <div class="row">
+            <!-- Add this inside <body> -->
+            <button id="pwa-install-btn"
+                style="display:none; position: fixed; bottom: 20px; right: 20px; padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 8px; z-index: 1000;">
+                Install App
+            </button>
             <div class="col-12">
                 <div class="page-title-box d-sm-flex align-items-center justify-content-between">
                     <h4 class="mb-sm-0">Dashboard Admin</h4>

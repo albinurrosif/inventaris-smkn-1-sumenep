@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'isGuru' => \App\Http\Middleware\IsGuru::class,
             'canManageBarang' => \App\Http\Middleware\CanManageBarang::class,
             'checkIncompleteBarang' => \App\Http\Middleware\CheckIncompleteBarang::class,
+            'LaravelPwa' => \Ladumor\LaravelPwa\LaravelPwa::class,
         ]);
 
         $middleware->web(append: [

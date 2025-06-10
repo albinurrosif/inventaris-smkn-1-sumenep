@@ -7,6 +7,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta content="Sistem Inventaris SMKN 1 Sumenep" name="description" />
     <meta content="SMKN 1 Sumenep" name="author" />
+    <!-- PWA  -->
+    <meta name="theme-color" content="#6777ef" />
+    <link rel="apple-touch-icon" href="{{ asset('logo.png') }}">
+    <link rel="manifest" href="{{ asset('/manifest.json') }}">
     <script>
         // Immediately execute before any DOM is constructed
         (function() {
@@ -264,6 +268,26 @@
             // Kode dark mode di sini
         });
     </script>
+
+
+    <script src="{{ asset('/sw.js') }}"></script>
+    <script>
+        if ("serviceWorker" in navigator) {
+            // Register a service worker hosted at the root of the
+            // site using the default scope.
+            navigator.serviceWorker.register("/sw.js").then(
+                (registration) => {
+                    console.log("Service worker registration succeeded:", registration);
+                },
+                (error) => {
+                    console.error(`Service worker registration failed: ${error}`);
+                },
+            );
+        } else {
+            console.error("Service workers are not supported.");
+        }
+    </script>
+
 
     <!-- Tooltips and Popovers Initialization -->
     <script>
@@ -637,6 +661,7 @@
             }
         });
     </script>
+    <script src="{{ asset('pwa-install.js') }}"></script>
 
     @stack('scripts');
     @yield('scripts');
