@@ -196,11 +196,12 @@ class BarangQrCodeController extends Controller
             ->orderBy('username')->get();
 
         $kondisiOptions = BarangQrCode::getValidKondisi();
-        $jumlahUnit = filter_var($request->query('jumlah_unit', 1), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 1]]);
-
-        return view('admin.barang_qr_code.create_units', compact(
+        // SESUDAH (BENAR)
+        $jumlah_unit = filter_var($request->query('jumlah_unit', 1), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 1]]);
+        
+        return view('pages.barang_qr_code.create_units', compact(
             'barang',
-            'jumlahUnit',
+            'jumlah_unit',
             'ruanganList',
             'pemegangList',
             'kondisiOptions'
