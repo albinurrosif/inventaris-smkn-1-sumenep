@@ -125,12 +125,14 @@
         </div>
 
         {{-- Tabel Daftar Peminjaman --}}
+        {{-- Tabel Daftar Peminjaman --}}
         <div class="card">
             <div class="card-body">
                 <div class="table-responsive">
                     <table class="table table-hover table-striped align-middle">
                         <thead class="table-light">
                             <tr>
+                                <th>No</th>
                                 <th>ID</th>
                                 <th>Peminjam</th>
                                 <th>Tujuan</th>
@@ -142,15 +144,21 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @forelse ($peminjamanList as $peminjaman)
+                            @forelse ($peminjamanList as $index => $peminjaman)
                                 <tr>
+                                    {{-- PERBAIKAN 1: Penomoran yang Benar untuk Paginasi --}}
+                                    <td>{{ $peminjamanList->firstItem() + $index }}</td>
+
                                     <td>#{{ $peminjaman->id }}</td>
                                     <td>{{ optional($peminjaman->guru)->username ?? 'N/A' }}</td>
                                     <td>{{ Str::limit($peminjaman->tujuan_peminjaman, 40) }}</td>
                                     <td>{{ $peminjaman->tanggal_pengajuan->isoFormat('DD MMM YYYY, HH:mm') }}</td>
                                     <td>{{ $peminjaman->tanggal_harus_kembali ? $peminjaman->tanggal_harus_kembali->isoFormat('DD MMM YYYY') : '-' }}
                                     </td>
+
+                                    {{-- PERBAIKAN 2: Memanggil Properti _count --}}
                                     <td class="text-center">{{ $peminjaman->detail_peminjaman_count }}</td>
+
                                     <td class="text-center">
                                         <span
                                             class="badge {{ \App\Models\Peminjaman::statusColor($peminjaman->status) }}">{{ $peminjaman->status }}</span>
@@ -159,18 +167,17 @@
                                         <div class="d-flex gap-2 justify-content-center">
                                             @can('view', $peminjaman)
                                                 <a href="{{ route($rolePrefix . 'peminjaman.show', $peminjaman->id) }}"
-                                                    class="btn btn-outline-info btn-sm" title="Lihat Detail"
-                                                    data-bs-toggle="tooltip">
+                                                    class="btn btn-outline-info btn-sm" title="Lihat Detail">
                                                     <i class="fas fa-eye"></i>
                                                 </a>
                                             @endcan
                                             @can('update', $peminjaman)
                                                 <a href="{{ route($rolePrefix . 'peminjaman.edit', $peminjaman->id) }}"
-                                                    class="btn btn-outline-warning btn-sm" title="Edit Pengajuan"
-                                                    data-bs-toggle="tooltip">
+                                                    class="btn btn-outline-warning btn-sm" title="Edit Pengajuan">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
                                             @endcan
+
                                             @can('delete', $peminjaman)
                                                 <button type="button" class="btn btn-outline-danger btn-sm" title="Arsipkan"
                                                     data-bs-toggle="modal" data-bs-target="#archiveModal{{ $peminjaman->id }}">

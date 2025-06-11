@@ -554,7 +554,7 @@
 @endsection
 @push('scripts')
     {{-- Aset JS --}}
-   <script src="{{ asset('assets/libs/twitter-bootstrap-wizard/jquery.bootstrap.wizard.min.js') }}"></script>
+    <script src="{{ asset('assets/libs/twitter-bootstrap-wizard/jquery.bootstrap.wizard.min.js') }}"></script>
     <script src="{{ asset('assets/libs/flatpickr/flatpickr.min.js') }}"></script>
     @if (in_array(app()->getLocale(), ['id', 'in']))
         <script src="{{ asset('assets/libs/flatpickr/l10n/id.js') }}"></script>
@@ -569,7 +569,7 @@
                 var choiceInstance = new Choices(this, {
                     searchEnabled: true,
                     shouldSort: false,
-                    removeItemButton: true,
+                    removeItemButton: false, // Ubah ke false untuk required fields
                     allowHTML: false
                 });
                 choicesInstances.push(choiceInstance);
@@ -581,144 +581,187 @@
                 locale: "{{ app()->getLocale() == 'id' ? 'id' : 'default' }}"
             });
 
-            // 2. Logika Wizard - PERBAIKAN SEDERHANA
-            var $wizard = $('#barang-wizard');
+            // 2. Variabel Global untuk Wizard
+            var currentStep = 0;
+            var totalSteps = 3;
+            var completedSteps = []; // Array untuk tracking step yang sudah completed
             var $form = $('#createBarangWizardForm');
 
-            $wizard.bootstrapWizard({
-                'nextSelector': '.pager li.next',
-                'previousSelector': '.pager li.previous',
-                'firstSelector': '.pager li.first',
-                'lastSelector': '.pager li.last',
+            // 3. Fungsi Helper
+            function updateProgressBar() {
+                var useSerial = $('input[name="menggunakan_nomor_seri"]:checked').val() === '1';
+                var maxSteps = useSerial ? 3 : 2;
+                var progress = ((currentStep + 1) / maxSteps) * 100;
+                $('.progress-bar').css('width', progress + '%');
+            }
 
-                onTabShow: function(tab, navigation, index) {
-                    var useSerial = $('input[name="menggunakan_nomor_seri"]:checked').val() === '1';
-                    var totalTabs = useSerial ? 3 : 2;
-                    var currentTab = index + 1;
-                    var $percent = (currentTab / totalTabs) * 100;
+            function updateWizardButtons() {
+                var useSerial = $('input[name="menggunakan_nomor_seri"]:checked').val() === '1';
+                var maxSteps = useSerial ? 3 : 2;
 
-                    $wizard.find('.progress-bar').css({
-                        width: $percent + '%'
-                    });
+                // Reset semua tombol
+                $('.pager li.next').show();
+                $('.pager li.previous').show();
+                $('.pager li.finish').hide();
+                $('.pager li.submit-step2').hide();
 
-                    // Reset dan atur visibility tombol
-                    $('.pager li.next').show();
-                    $('.pager li.finish').hide();
-                    $('.pager li.submit-step2').hide();
-                    $('.pager li.previous').toggle(currentTab > 1);
+                // Atur tombol previous
+                if (currentStep === 0) {
+                    $('.pager li.previous').hide();
+                }
 
-                    // Atur tombol berdasarkan kondisi
-                    if (currentTab === totalTabs) {
-                        $('.pager li.next').hide();
+                // Atur tombol next/finish berdasarkan step terakhir
+                if (currentStep === maxSteps - 1) {
+                    $('.pager li.next').hide();
+                    if (useSerial) {
                         $('.pager li.finish').show();
-                    } else if (currentTab === 2 && !useSerial) {
-                        $('.pager li.next').hide();
+                    } else {
                         $('.pager li.submit-step2').show();
                     }
-                },
+                }
+            }
 
-                onNext: function(tab, navigation, index) {
-                    var $valid = true;
-                    var $currentTab = $wizard.find('.tab-pane').eq(index);
+            function updateTabNavigation() {
+                // Update active tab
+                $('.twitter-bs-wizard-nav .nav-link').removeClass('active');
+                $('.twitter-bs-wizard-nav .nav-link').eq(currentStep).addClass('active');
 
-                    // Validasi field required
-                    $currentTab.find(':input[required]').each(function() {
-                        if (!this.checkValidity()) {
-                            $valid = false;
-                            $(this).addClass('is-invalid');
-                            if ($(this).is('select')) {
-                                $(this).closest('.choices').addClass('is-invalid');
-                            }
-                        } else {
-                            $(this).removeClass('is-invalid');
-                            if ($(this).is('select')) {
-                                $(this).closest('.choices').removeClass('is-invalid');
-                            }
+                // Update tab content
+                $('.tab-pane').removeClass('active show');
+                $('.tab-pane').eq(currentStep).addClass('active show');
+
+                // Enable/disable nav links berdasarkan completed steps
+                $('.twitter-bs-wizard-nav .nav-link').each(function(index) {
+                    if (index <= currentStep || completedSteps.includes(index)) {
+                        $(this).removeClass('disabled').removeAttr('tabindex');
+                    } else {
+                        $(this).addClass('disabled').attr('tabindex', '-1');
+                    }
+                });
+            }
+
+            function validateCurrentStep() {
+                var $currentTab = $('.tab-pane').eq(currentStep);
+                var isValid = true;
+
+                // Clear previous errors
+                $currentTab.find('.is-invalid').removeClass('is-invalid');
+                $('.choices.is-invalid').removeClass('is-invalid');
+
+                // Validate required fields
+                $currentTab.find(':input[required]').each(function() {
+                    var $field = $(this);
+                    var value = $field.val();
+
+                    if (!value || value.trim() === '') {
+                        isValid = false;
+                        $field.addClass('is-invalid');
+
+                        // Handle Choices.js select
+                        if ($field.is('select')) {
+                            $field.closest('.choices').addClass('is-invalid');
+                        }
+                    }
+                });
+
+                // Validasi khusus untuk step 2: ruangan ATAU pemegang personal
+                if (currentStep === 1) {
+                    var ruangan = $('#id_ruangan_awal').val();
+                    var pemegang = $('#id_pemegang_personal_awal').val();
+
+                    if (!ruangan && !pemegang) {
+                        isValid = false;
+                        $('#id_ruangan_awal').closest('.choices').addClass('is-invalid');
+                        $('#id_pemegang_personal_awal').closest('.choices').addClass('is-invalid');
+
+                        // Show error message
+                        if (!$('#location-error').length) {
+                            $('<div id="location-error" class="alert alert-danger mt-2">Pilih salah satu: Ruangan atau Pemegang Personal</div>')
+                                .insertAfter('#id_pemegang_personal_awal').closest('.col-md-7');
+                        }
+                    } else {
+                        $('#location-error').remove();
+                    }
+                }
+
+                // Validasi step 3 (serial numbers)
+                if (currentStep === 2) {
+                    $('.serial-number-input').each(function() {
+                        var $input = $(this);
+                        var value = $input.val();
+
+                        if (!value || value.trim() === '') {
+                            isValid = false;
+                            $input.addClass('is-invalid');
                         }
                     });
 
-                    // Validasi khusus untuk step 2: harus ada ruangan ATAU pemegang personal
-                    if (index === 1) {
-                        var ruangan = $('#id_ruangan_awal').val();
-                        var pemegang = $('#id_pemegang_personal_awal').val();
+                    // Check for duplicate serial numbers
+                    var serialValues = [];
+                    var hasDuplicates = false;
 
-                        if (!ruangan && !pemegang) {
-                            $valid = false;
-                            $('#id_ruangan_awal').closest('.choices').addClass('is-invalid');
-                            $('#id_pemegang_personal_awal').closest('.choices').addClass('is-invalid');
-                            alert('Pilih salah satu: Ruangan atau Pemegang Personal');
+                    $('.serial-number-input').each(function() {
+                        var value = $(this).val().trim();
+                        if (value && serialValues.includes(value)) {
+                            hasDuplicates = true;
+                            $(this).addClass('is-invalid');
+                        } else if (value) {
+                            serialValues.push(value);
                         }
+                    });
+
+                    if (hasDuplicates) {
+                        isValid = false;
+                        if (!$('#duplicate-error').length) {
+                            $('<div id="duplicate-error" class="alert alert-danger mt-2">Nomor seri tidak boleh duplikat</div>')
+                                .insertAfter('#serial-number-inputs-container');
+                        }
+                    } else {
+                        $('#duplicate-error').remove();
                     }
+                }
 
-                    if (!$valid) {
-                        return false;
-                    }
+                return isValid;
+            }
 
-                    // Generate serial inputs jika menuju step 3
-                    if (index === 1 && $('input[name="menggunakan_nomor_seri"]:checked').val() ===
-                        '1') {
-                        generateSerialNumberInputs();
-                    }
+            function goToStep(stepIndex) {
+                var useSerial = $('input[name="menggunakan_nomor_seri"]:checked').val() === '1';
+                var maxSteps = useSerial ? 3 : 2;
 
-                    return true;
-                },
-
-                onTabClick: function(tab, navigation, index, clickedIndex) {
+                // Validasi range step
+                if (stepIndex < 0 || stepIndex >= maxSteps) {
                     return false;
                 }
-            });
 
-            // Handler untuk tombol finish
-            $(document).on('click', '.pager li.finish a', function(e) {
-                e.preventDefault();
+                // Update current step
+                currentStep = stepIndex;
 
-                // Validasi final untuk step 3 jika ada
-                var useSerial = $('input[name="menggunakan_nomor_seri"]:checked').val() === '1';
-                if (useSerial) {
-                    var allValid = true;
-                    $('.serial-number-input').each(function() {
-                        if (!this.checkValidity()) {
-                            allValid = false;
-                            $(this).addClass('is-invalid');
-                        }
-                    });
-
-                    if (!allValid) {
-                        alert('Pastikan semua nomor seri sudah diisi dan valid');
-                        return false;
-                    }
-                }
-
-                $form.submit();
-            });
-
-            // 3. Event Handlers
-            $('input[name="menggunakan_nomor_seri"]').on('change', function() {
-                manageStep3Visibility();
-            });
-
-            $('#jumlah_unit_awal').on('change', function() {
-                if ($('input[name="menggunakan_nomor_seri"]:checked').val() === '1') {
+                // Generate serial inputs jika masuk ke step 3
+                if (currentStep === 2 && useSerial) {
                     generateSerialNumberInputs();
                 }
-            });
 
-            // Clear validation on input change
-            $(document).on('input change', ':input', function() {
-                $(this).removeClass('is-invalid');
-                if ($(this).is('select')) {
-                    $(this).closest('.choices').removeClass('is-invalid');
-                }
-            });
+                // Update UI
+                updateTabNavigation();
+                updateProgressBar();
+                updateWizardButtons();
+                manageStep3Visibility();
 
-            // 4. Fungsi Helper
+                return true;
+            }
+
             function manageStep3Visibility() {
                 var useSerial = $('input[name="menggunakan_nomor_seri"]:checked').val() === '1';
                 var $step3NavItem = $('.step3-nav');
+
                 if (useSerial) {
                     $step3NavItem.show();
                 } else {
                     $step3NavItem.hide();
+                    // Jika sedang di step 3 dan serial tidak digunakan, pindah ke step 2
+                    if (currentStep === 2) {
+                        goToStep(1);
+                    }
                 }
             }
 
@@ -738,37 +781,125 @@
                         var errorMessageLaravel = isInvalidLaravel ? errors[errorKeyLaravel][0] : '';
 
                         var inputHtml = `
-                    <div class="row mb-2 align-items-center">
-                        <label for="serial_number_${i}" class="col-md-4 col-form-label text-md-end">
-                            Nomor Seri Unit ${i + 1} <span class="text-danger">*</span>
-                        </label>
-                        <div class="col-md-7">
-                            <input id="serial_number_${i}" type="text" 
-                                class="form-control serial-number-input ${isInvalidLaravel ? 'is-invalid' : ''}" 
-                                name="serial_numbers[${i}]" value="${serialValue}" 
-                                placeholder="Masukkan nomor seri unik" required>
-                            <div class="serial-invalid-feedback invalid-feedback d-block">${errorMessageLaravel}</div>
-                        </div>
-                    </div>`;
+                <div class="row mb-2 align-items-center">
+                    <label for="serial_number_${i}" class="col-md-4 col-form-label text-md-end">
+                        Nomor Seri Unit ${i + 1} <span class="text-danger">*</span>
+                    </label>
+                    <div class="col-md-7">
+                        <input id="serial_number_${i}" type="text" 
+                            class="form-control serial-number-input ${isInvalidLaravel ? 'is-invalid' : ''}" 
+                            name="serial_numbers[${i}]" value="${serialValue}" 
+                            placeholder="Masukkan nomor seri unik" required>
+                        ${errorMessageLaravel ? `<div class="invalid-feedback">${errorMessageLaravel}</div>` : ''}
+                    </div>
+                </div>`;
                         container.append(inputHtml);
                     }
+                } else {
+                    container.html(
+                        '<p class="text-muted text-center">Input nomor seri akan muncul di sini setelah Anda mengisi "Jumlah Unit Awal" di Langkah 2.</p>'
+                        );
                 }
             }
 
-            // Event listener untuk tombol "Sarankan Nomor Seri"
+            // 4. Event Handlers
+
+            // Tombol Next
+            $(document).on('click', '.pager li.next a', function(e) {
+                e.preventDefault();
+
+                if (validateCurrentStep()) {
+                    // Mark current step as completed
+                    if (!completedSteps.includes(currentStep)) {
+                        completedSteps.push(currentStep);
+                    }
+
+                    var useSerial = $('input[name="menggunakan_nomor_seri"]:checked').val() === '1';
+                    var maxSteps = useSerial ? 3 : 2;
+
+                    if (currentStep < maxSteps - 1) {
+                        goToStep(currentStep + 1);
+                    }
+                }
+            });
+
+            // Tombol Previous
+            $(document).on('click', '.pager li.previous a', function(e) {
+                e.preventDefault();
+
+                if (currentStep > 0) {
+                    goToStep(currentStep - 1);
+                }
+            });
+
+            // Tombol Finish
+            $(document).on('click', '.pager li.finish a', function(e) {
+                e.preventDefault();
+
+                if (validateCurrentStep()) {
+                    $form.submit();
+                }
+            });
+
+            // Tombol Submit Step 2 (jika tidak menggunakan serial)
+            $(document).on('click', '.pager li.submit-step2 button', function(e) {
+                e.preventDefault();
+
+                if (validateCurrentStep()) {
+                    $form.submit();
+                }
+            });
+
+            // Navigation tabs click
+            $(document).on('click', '.twitter-bs-wizard-nav .nav-link:not(.disabled)', function(e) {
+                e.preventDefault();
+
+                var targetStep = $(this).closest('li').index();
+
+                // Hanya izinkan navigasi ke step yang sudah completed atau step saat ini
+                if (targetStep <= currentStep || completedSteps.includes(targetStep)) {
+                    goToStep(targetStep);
+                }
+            });
+
+            // Radio button change untuk nomor seri
+            $('input[name="menggunakan_nomor_seri"]').on('change', function() {
+                manageStep3Visibility();
+                updateWizardButtons();
+            });
+
+            // Jumlah unit change
+            $('#jumlah_unit_awal').on('change input', function() {
+                var useSerial = $('input[name="menggunakan_nomor_seri"]:checked').val() === '1';
+                if (useSerial && currentStep === 2) {
+                    generateSerialNumberInputs();
+                }
+            });
+
+            // Clear validation on input change
+            $(document).on('input change', ':input', function() {
+                $(this).removeClass('is-invalid');
+                if ($(this).is('select')) {
+                    $(this).closest('.choices').removeClass('is-invalid');
+                }
+                // Clear error messages
+                $('#location-error, #duplicate-error').remove();
+            });
+
+            // Tombol suggest serials
             $('#suggestSerialsButton').on('click', function() {
                 var kodeBarangInput = $('#kode_barang').val();
                 var jumlahUnit = parseInt($('#jumlah_unit_awal').val());
 
                 if (!kodeBarangInput) {
                     alert('Mohon isi Kode Barang di Langkah 1.');
-                    $wizard.bootstrapWizard('show', 0);
+                    goToStep(0);
                     $('#kode_barang').focus();
                     return;
                 }
                 if (!jumlahUnit || jumlahUnit <= 0) {
                     alert('Mohon isi Jumlah Unit Awal yang valid di Langkah 2.');
-                    $wizard.bootstrapWizard('show', 1);
+                    goToStep(1);
                     $('#jumlah_unit_awal').focus();
                     return;
                 }
@@ -781,10 +912,9 @@
                         jumlah_unit: jumlahUnit
                     },
                     success: function(response) {
-                        var serialInputs = $('.serial-number-input');
                         if (response && Array.isArray(response) && response.length ===
                             jumlahUnit) {
-                            serialInputs.each(function(index) {
+                            $('.serial-number-input').each(function(index) {
                                 if (response[index]) {
                                     $(this).val(response[index]);
                                 }
@@ -797,29 +927,30 @@
                 });
             });
 
-            // Event listener untuk tombol submit khusus di Step 2
-            $(document).on('click', '.submit-step2 button', function(e) {
-                e.preventDefault();
-                $form.submit();
-            });
-
-            // Inisialisasi awal
+            // 5. Inisialisasi
             manageStep3Visibility();
+            updateTabNavigation();
+            updateProgressBar();
+            updateWizardButtons();
 
             // Handle error state dari backend
             @if ($errors->any())
-                if ('{{ old('menggunakan_nomor_seri') }}' === '1') {
+                @if (old('menggunakan_nomor_seri') === '1')
                     generateSerialNumberInputs();
                     @if ($errors->has('serial_numbers.*'))
                         setTimeout(function() {
-                            $wizard.bootstrapWizard('show', 2);
+                            goToStep(2);
                         }, 200);
                     @elseif ($errors->has('jumlah_unit_awal') || $errors->has('id_ruangan_awal') || $errors->has('id_pemegang_personal_awal'))
                         setTimeout(function() {
-                            $wizard.bootstrapWizard('show', 1);
+                            goToStep(1);
                         }, 200);
                     @endif
-                }
+                @elseif ($errors->has('jumlah_unit_awal') || $errors->has('id_ruangan_awal') || $errors->has('id_pemegang_personal_awal'))
+                    setTimeout(function() {
+                        goToStep(1);
+                    }, 200);
+                @endif
             @endif
         });
     </script>

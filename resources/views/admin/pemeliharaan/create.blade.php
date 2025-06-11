@@ -178,7 +178,8 @@
                 theme: "bootstrap-5",
                 width: '100%',
                 ajax: {
-                    url: "{{ route('admin.stok-opname.search-barang-qr') }}", // Menggunakan route yang sudah ada untuk search barang
+                    url: "{{ route('admin.barang-qr-code.search-for-maintenance') }}", // Menggunakan route baru
+
                     dataType: 'json',
                     delay: 250,
                     data: function(params) {
@@ -231,7 +232,7 @@
                 var option = new Option(selectedBarang.text, selectedBarang.id, true, true);
                 $('.select2-barang').append(option).trigger('change');
                 $('.select2-barang').prop('disabled',
-                true); // Langsung disable jika sudah dipilih dari halaman sebelumnya
+                    true); // Langsung disable jika sudah dipilih dari halaman sebelumnya
             @endif
         });
     </script>

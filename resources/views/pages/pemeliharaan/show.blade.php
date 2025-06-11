@@ -144,7 +144,8 @@
                                 <h6 class="mb-1">Pengajuan Laporan</h6>
                                 <p class="text-muted mb-2">Diajukan oleh
                                     <strong>{{ optional($pemeliharaan->pengaju)->username ?? 'N/A' }}</strong> pada
-                                    {{ $pemeliharaan->tanggal_pengajuan->isoFormat('dddd, DD MMMM YYYY, HH:mm') }}</p>
+                                    {{ $pemeliharaan->tanggal_pengajuan->isoFormat('dddd, DD MMMM YYYY, HH:mm') }}
+                                </p>
                                 <div class="p-3 card-item-detail">
                                     <p class="detail-label mb-1">Deskripsi Kerusakan/Keluhan:</p>
                                     <p class="mb-0">{{ $pemeliharaan->catatan_pengajuan ?: '-' }}</p>
@@ -206,6 +207,23 @@
                                 @if ($pemeliharaan->biaya > 0)
                                     <p class="mt-2 mb-0"><span class="detail-label">Biaya Perbaikan:</span> Rp
                                         {{ number_format($pemeliharaan->biaya, 0, ',', '.') }}</p>
+                                @endif
+                                @if ($pemeliharaan->hasil_pemeliharaan)
+                                    <div class="p-3 card-item-detail mt-2">
+                                        <p class="detail-label mb-1">Hasil Akhir:</p>
+                                        <p class="mb-2">{{ $pemeliharaan->hasil_pemeliharaan }}</p>
+
+                                        {{-- BARIS BARU UNTUK MENAMPILKAN FOTO --}}
+                                        @if ($pemeliharaan->foto_perbaikan_path)
+                                            <p class="detail-label mb-1 mt-3">Foto Bukti Perbaikan:</p>
+                                            <a href="{{ asset('storage/' . $pemeliharaan->foto_perbaikan_path) }}"
+                                                target="_blank">
+                                                <img src="{{ asset('storage/' . $pemeliharaan->foto_perbaikan_path) }}"
+                                                    alt="Foto Perbaikan" class="img-fluid rounded"
+                                                    style="max-height: 200px;">
+                                            </a>
+                                        @endif
+                                    </div>
                                 @endif
                             </div>
                         </div>

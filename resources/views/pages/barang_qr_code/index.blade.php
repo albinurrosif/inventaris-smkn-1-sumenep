@@ -80,12 +80,12 @@
 
                         {{-- FILTER UTAMA BARU --}}
                         <div class="col-md-3">
-                            <label for="filter_utama" class="form-label">Filter Status & Kondisi</label>
-                            <select name="filter_utama" id="filter_utama" class="form-select form-select-sm"
-                                onchange="this.form.submit()">
-                                @foreach ($filterOptions as $value => $label)
-                                    <option value="{{ $value }}" @selected($filterUtama == $value)>{{ $label }}
-                                    </option>
+                            <label for="filter_utama" class="form-label">Tampilkan</label>
+                            <select class="form-select" name="filter_utama" id="filter_utama" onchange="this.form.submit()">
+                                @foreach ($filterOptions as $key => $value)
+                                    <option value="{{ $key }}"
+                                        {{ $request->input('filter_utama', 'aktif') == $key ? 'selected' : '' }}>
+                                        {{ $value }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -94,11 +94,15 @@
                             <label for="id_ruangan_filter_qr" class="form-label">Ruangan</label>
                             <select name="id_ruangan" id="id_ruangan_filter_qr" class="form-select form-select-sm">
                                 <option value="">-- Semua Ruangan --</option>
+
+                                {{-- Loop ini sekarang akan menerima daftar ruangan yang sudah difilter untuk Operator --}}
                                 @foreach ($ruanganList as $ruangan)
                                     <option value="{{ $ruangan->id }}" @selected(request('id_ruangan') == $ruangan->id)>
                                         {{ $ruangan->nama_ruangan }}
                                     </option>
                                 @endforeach
+
+                                {{-- Opsi ini tetap ada untuk kasus khusus --}}
                                 <option value="tanpa-ruangan" @selected(request('id_ruangan') == 'tanpa-ruangan')>
                                     Tanpa Ruangan/Personal
                                 </option>
@@ -234,8 +238,11 @@
                                         <td class="text-center"><span
                                                 class="badge {{ \App\Models\BarangQrCode::getKondisiColor($unit->kondisi) }}">{{ $unit->kondisi }}</span>
                                         </td>
-                                        <td class="text-center"><span
+                                        <td class="text-center">
+
+                                            <span
                                                 class="badge {{ \App\Models\BarangQrCode::getStatusColor($unit->status) }}">{{ $unit->status }}</span>
+
                                         </td>
 
                                         {{-- PENYESUAIAN: Menampilkan kembali Tanggal Perolehan --}}

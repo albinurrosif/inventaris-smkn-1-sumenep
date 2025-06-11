@@ -80,6 +80,68 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <style>
+        /* PWA Install Prompt Styles */
+        .pwa-install-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 300px;
+            background-color: var(--bs-body-bg);
+            border: 1px solid var(--bs-border-color);
+            border-radius: 0.5rem;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            padding: 1rem;
+            display: none;
+        }
+
+        .pwa-install-container.show {
+            display: block;
+            animation: fadeInUp 0.3s ease-out;
+        }
+
+        .pwa-install-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .pwa-install-icon {
+            width: 40px;
+            height: 40px;
+            margin-right: 0.75rem;
+        }
+
+        .pwa-install-title {
+            font-weight: 600;
+            margin: 0;
+            color: var(--bs-heading-color);
+        }
+
+        .pwa-install-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .pwa-install-btn {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         /* Style untuk SweetAlert */
         .sweetalert-custom-popup {
             font-family: 'Nunito', sans-serif;
@@ -206,6 +268,18 @@
     <!-- Right bar overlay-->
     <div class="rightbar-overlay"></div>
 
+    <div id="pwa-install-container" class="pwa-install-container">
+        <div class="pwa-install-header">
+            <img src="{{ asset('logo.png') }}" alt="App Icon" class="pwa-install-icon">
+            <h5 class="pwa-install-title">Instal Aplikasi</h5>
+        </div>
+        <p>Pasang aplikasi Inventaris SMKN 1 Sumenep di perangkat Anda untuk pengalaman yang lebih baik.</p>
+        <div class="pwa-install-actions">
+            <button id="pwa-install-cancel" class="btn btn-outline-secondary btn-sm pwa-install-btn">Nanti</button>
+            <button id="pwa-install-accept" class="btn btn-primary btn-sm pwa-install-btn">Pasang</button>
+        </div>
+    </div>
+
     <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
         @csrf
     </form>
@@ -269,7 +343,6 @@
         });
     </script>
 
-
     <script src="{{ asset('/sw.js') }}"></script>
     <script>
         if ("serviceWorker" in navigator) {
@@ -287,7 +360,6 @@
             console.error("Service workers are not supported.");
         }
     </script>
-
 
     <!-- Tooltips and Popovers Initialization -->
     <script>
@@ -661,7 +733,61 @@
             }
         });
     </script>
-    <script src="{{ asset('pwa-install.js') }}"></script>
+    {{-- <script src="{{ asset('pwa-install.js') }}"></script> --}}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            let deferredPrompt;
+            const pwaInstallContainer = document.getElementById('pwa-install-container');
+            const pwaInstallAccept = document.getElementById('pwa-install-accept');
+            const pwaInstallCancel = document.getElementById('pwa-install-cancel');
+
+            // Only show the install prompt if not already installed
+            if (!window.matchMedia('(display-mode: standalone)').matches) {
+                window.addEventListener('beforeinstallprompt', (e) => {
+                    // Prevent the mini-infobar from appearing on mobile
+                    e.preventDefault();
+                    // Stash the event so it can be triggered later
+                    deferredPrompt = e;
+
+                    // Show the custom install prompt
+                    setTimeout(() => {
+                        pwaInstallContainer.classList.add('show');
+                    }, 5000); // Show after 10 seconds
+                });
+
+                pwaInstallAccept.addEventListener('click', () => {
+                    // Hide the custom prompt
+                    pwaInstallContainer.classList.remove('show');
+
+                    // Show the native prompt
+                    deferredPrompt.prompt();
+
+                    // Wait for the user to respond to the prompt
+                    deferredPrompt.userChoice.then((choiceResult) => {
+                        if (choiceResult.outcome === 'accepted') {
+                            console.log('User accepted the install prompt');
+                        } else {
+                            console.log('User dismissed the install prompt');
+                        }
+                        deferredPrompt = null;
+                    });
+                });
+
+                pwaInstallCancel.addEventListener('click', () => {
+                    pwaInstallContainer.classList.remove('show');
+                    // Hide for at least 1 week
+                    localStorage.setItem('pwaInstallDismissed', Date.now());
+                });
+
+                // Check if user previously dismissed
+                const lastDismissed = localStorage.getItem('pwaInstallDismissed');
+                if (lastDismissed && (Date.now() - parseInt(lastDismissed)) < (7 * 24 * 60 * 60 * 1000)) {
+                    // Don't show if dismissed within last week
+                    return;
+                }
+            }
+        });
+    </script>
 
     @stack('scripts');
     @yield('scripts');

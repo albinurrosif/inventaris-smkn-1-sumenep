@@ -16,17 +16,19 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger('id_barang_qr_code');
 
-
             // Kolom untuk alur pengajuan pemeliharaan
             $table->foreignId('id_user_pengaju')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('tanggal_pengajuan')->nullable()->useCurrent();
-            $table->enum('status_pengajuan', Pemeliharaan::getValidStatusPengajuan(false))->default(Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN); // Menggunakan konstanta dari model
-            $table->text('catatan_pengajuan')->nullable()->comment('Deskripsi kerusakan atau keluhan awal'); // Ini untuk deskripsi kerusakan
+            $table->enum('status_pengajuan', Pemeliharaan::getValidStatusPengajuan(false))->default(Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN);
+            $table->text('catatan_pengajuan')->nullable()->comment('Deskripsi kerusakan atau keluhan awal');
 
             // Kolom untuk persetujuan pemeliharaan
             $table->foreignId('id_user_penyetuju')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('tanggal_persetujuan')->nullable();
             $table->text('catatan_persetujuan')->nullable();
+
+            // Kolom untuk foto kerusakan
+            $table->string('foto_kerusakan_path')->nullable()->after('catatan_persetujuan')->comment('Path foto bukti kerusakan'); // <-- TAMBAHAN
 
             // Kolom untuk pelaksanaan pemeliharaan
             $table->foreignId('id_operator_pengerjaan')->nullable()->constrained('users')->onDelete('set null');
@@ -34,15 +36,16 @@ return new class extends Migration
             $table->timestamp('tanggal_selesai_pengerjaan')->nullable();
             $table->text('deskripsi_pekerjaan')->nullable()->comment('Deskripsi pekerjaan yang dilakukan');
             $table->decimal('biaya', 15, 2)->nullable();
-            $table->enum('status_pengerjaan', Pemeliharaan::getValidStatusPengerjaan(false))->default(Pemeliharaan::STATUS_PENGERJAAN_BELUM_DIKERJAKAN); // Menggunakan konstanta
+            $table->enum('status_pengerjaan', Pemeliharaan::getValidStatusPengerjaan(false))->default(Pemeliharaan::STATUS_PENGERJAAN_BELUM_DIKERJAKAN);
 
-            // Tambahan kolom 'prioritas'
+            // Kolom tambahan
             $table->enum('prioritas', Pemeliharaan::getValidPrioritas(false))->default(Pemeliharaan::PRIORITAS_SEDANG)->comment('Prioritas pemeliharaan');
-
             $table->text('hasil_pemeliharaan')->nullable()->comment('Hasil dari pemeliharaan');
-            // Tambahan kolom 'kondisi_barang_setelah_pemeliharaan'
             $table->string('kondisi_barang_setelah_pemeliharaan')->nullable()->comment('Kondisi barang setelah pemeliharaan selesai');
             $table->text('catatan_pengerjaan')->nullable()->comment('Catatan tambahan dari teknisi/operator');
+
+            // Kolom untuk foto perbaikan
+            $table->string('foto_perbaikan_path')->nullable()->after('catatan_pengerjaan')->comment('Path foto bukti setelah perbaikan'); // <-- TAMBAHAN
 
             $table->timestamps();
             $table->softDeletes();
@@ -56,6 +59,13 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('pemeliharaans');
+        // PERUBAHAN: Tambahkan dropColumn agar migrasi bisa di-rollback
+        Schema::table('pemeliharaans', function (Blueprint $table) {
+            $table->dropColumn(['foto_kerusakan_path', 'foto_perbaikan_path']);
+        });
+
+        // Baris dropIfExists di bawah ini hanya dijalankan jika Anda ingin menghapus seluruh tabel
+        // Jika hanya ingin rollback migrasi ini, biarkan seperti di atas.
+        // Schema::dropIfExists('pemeliharaans');
     }
 };

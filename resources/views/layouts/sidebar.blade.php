@@ -52,9 +52,20 @@
                         </ul>
                     </li>
                 @endif
+                {{-- PENAMBAHAN MENU KATALOG BARANG (Hanya untuk Guru) --}}
+                @if ($user->hasRole(\App\Models\User::ROLE_GURU))
+                    <li class="menu-title">Aktivitas</li>
+                    <li>
+                        <a href="{{ route('guru.katalog.index') }}" class="waves-effect">
+                            <i data-feather="shopping-bag"></i>
+                            <span>Katalog Barang</span>
+                        </a>
+                    </li>
+                @endif
 
-                <li class="menu-title">Aktivitas & Transaksi</li>
-
+                @if (!$user->hasRole(\App\Models\User::ROLE_GURU))
+                    <li class="menu-title">Aktivitas & Transaksi</li>
+                @endif
                 {{-- Menu Peminjaman (Sudah dinamis dan benar) --}}
                 @can('viewAny', \App\Models\Peminjaman::class)
                     <li>

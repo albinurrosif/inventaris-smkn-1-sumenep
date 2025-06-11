@@ -95,7 +95,7 @@ class PeminjamanController extends Controller
             'ruanganTujuanPeminjaman',
             'detailPeminjaman.barangQrCode.barang',
             'detailPeminjaman.barangQrCode.ruangan'
-        ]); // [cite: 2224]
+        ])->withCount('detailPeminjaman');
 
         $searchTerm = $request->input('search');
         $statusFilter = $request->input('status');
@@ -158,36 +158,78 @@ class PeminjamanController extends Controller
         ));
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
-        $this->authorize('create', Peminjaman::class); // [cite: 2240]
+        $this->authorize('create', Peminjaman::class);
 
-        $barangList = BarangQrCode::where('status', BarangQrCode::STATUS_TERSEDIA)
-            ->whereIn('kondisi', [BarangQrCode::KONDISI_BAIK, BarangQrCode::KONDISI_KURANG_BAIK])
-            ->whereDoesntHave('peminjamanDetails', function ($query) {
-                $query->whereIn('status_unit', [
-                    DetailPeminjaman::STATUS_ITEM_DIAJUKAN,
-                    DetailPeminjaman::STATUS_ITEM_DISETUJUI,
-                    DetailPeminjaman::STATUS_ITEM_DIAMBIL
-                ]); // [cite: 2242]
-            })
-            ->whereNull('deleted_at')
-            ->with('barang', 'ruangan', 'pemegangPersonal')
-            ->orderBy('id_barang')
-            ->get()
-            ->map(function ($item) {
-                $namaRuangan = $item->ruangan ? $item->ruangan->nama_ruangan : ($item->id_pemegang_personal ? 'Pemegang: ' . optional($item->pemegangPersonal)->username : 'Tidak di Ruangan'); // [cite: 2244]
-                return [
-                    'id' => $item->id,
-                    'text' => $item->barang->nama_barang . ' (' . $item->kode_inventaris_sekolah . ($item->no_seri_pabrik ? ' / SN: ' . $item->no_seri_pabrik : '') . ') - Kondisi: ' . $item->kondisi . ' - Lokasi: ' . $namaRuangan
-                ]; // [cite: 2245, 2246, 2247]
-            });
+        $selectedBarang = null;
 
-        $ruanganTujuanList = Ruangan::whereNull('deleted_at')->orderBy('nama_ruangan')->get(); // [cite: 2248]
+        // Cek apakah ada ID barang yang dikirim dari halaman katalog
+        if ($request->has('id_barang_qr_code')) {
+            // Ambil data lengkap dari barang yang dipilih untuk ditampilkan di awal
+            $selectedBarang = BarangQrCode::with(['barang', 'ruangan'])
+                ->where('status', BarangQrCode::STATUS_TERSEDIA)
+                ->whereNull('deleted_at')
+                ->whereNull('id_pemegang_personal')
+                ->find($request->input('id_barang_qr_code'));
+        }
 
-        // PERUBAHAN: Mengarahkan ke path view spesifik guru
-        return view('pages.peminjaman.create', compact('barangList', 'ruanganTujuanList'));
+        // Ambil data ruangan untuk dropdown "Ruangan Tujuan Penggunaan"
+        $ruanganTujuanList = Ruangan::whereNull('deleted_at')->orderBy('nama_ruangan')->get();
+
+        // Hapus variabel 'barangList' karena tidak lagi dibutuhkan
+        return view('pages.peminjaman.create', compact('ruanganTujuanList', 'selectedBarang'));
     }
+
+    /**
+     * Method untuk menangani pencarian barang via AJAX untuk Select2.
+     */
+    public function searchAvailableItems(Request $request): JsonResponse
+    {
+        $term = $request->input('q', '');
+        $ruanganId = $request->input('ruangan_id');
+
+        $itemsQuery = BarangQrCode::with(['barang', 'ruangan'])
+            ->where('status', BarangQrCode::STATUS_TERSEDIA)
+            ->whereNull('deleted_at')
+            ->whereNotNull('id_ruangan') // Pastikan hanya barang yang punya ruangan yang muncul
+            ->whereNull('id_pemegang_personal');
+
+        $itemsQuery->whereDoesntHave('peminjamanDetails', function ($q) {
+            $q->whereHas('peminjaman', function ($qPeminjaman) {
+                $qPeminjaman->whereNotIn('status', [
+                    Peminjaman::STATUS_SELESAI,
+                    Peminjaman::STATUS_DITOLAK,
+                    Peminjaman::STATUS_DIBATALKAN,
+                ]);
+            });
+        });
+
+        if ($ruanganId) {
+            $itemsQuery->where('id_ruangan', $ruanganId);
+        }
+
+        if (!empty($term)) {
+            $itemsQuery->whereHas('barang', function ($q) use ($term) {
+                $q->where('nama_barang', 'LIKE', "%{$term}%");
+            });
+        }
+
+        $items = $itemsQuery->limit(20)->get();
+
+        $results = $items->map(function ($item) {
+            $namaRuangan = optional($item->ruangan)->nama_ruangan ?? 'N/A';
+            return [
+                'id' => $item->id,
+                'text' => "{$item->barang->nama_barang} ({$item->kode_inventaris_sekolah}) - Lokasi: {$namaRuangan}",
+                'ruangan_id' => $item->id_ruangan,
+                'ruangan_nama' => $namaRuangan, // Kirim juga nama ruangan
+            ];
+        });
+
+        return response()->json(['results' => $results]);
+    }
+
 
     public function store(PeminjamanStoreRequest $request): RedirectResponse
     {

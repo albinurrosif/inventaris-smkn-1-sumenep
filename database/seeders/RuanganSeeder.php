@@ -24,16 +24,16 @@ class RuanganSeeder extends Seeder
             ['nama' => 'Ruang Guru Umum', 'kode' => 'RG-UMUM', 'operator' => $operator2->id ?? $operator1->id],
             ['nama' => 'Perpustakaan', 'kode' => 'PERPUS', 'operator' => $operator2->id ?? $operator1->id],
             ['nama' => 'Ruang Kepala Sekolah', 'kode' => 'KS-01', 'operator' => $operator2->id ?? $operator1->id],
-        ];
+        ]; // 
 
         foreach ($ruangan as $data) {
             Ruangan::firstOrCreate(
-                ['kode_ruangan' => $data['kode']], // Menggunakan kode_ruangan sebagai unique key [cite: 26]
+                ['kode_ruangan' => $data['kode']],
                 [
-                    'nama_ruangan' => $data['nama'], // [cite: 26]
-                    'id_operator' => $data['operator'], // [cite: 26]
+                    'nama_ruangan' => $data['nama'],
+                    'id_operator' => $data['operator'],
                 ]
-            );
+            ); // 
         }
     }
 }

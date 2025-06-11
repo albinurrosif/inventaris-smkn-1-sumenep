@@ -260,6 +260,9 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/pengaturan', [App\Http\Controllers\PengaturanController::class, 'index'])->name('pengaturan.index');
         Route::post('/pengaturan', [App\Http\Controllers\PengaturanController::class, 'update'])->name('pengaturan.update');
+
+        Route::get('/barang-qr-code/search-for-maintenance', [App\Http\Controllers\BarangQrCodeController::class, 'searchForMaintenance'])->name('barang-qr-code.search-for-maintenance');
+
     });
 
 
@@ -351,6 +354,9 @@ Route::middleware(['auth'])->group(function () {
         });
 
         Route::resource('mutasi-barang', App\Http\Controllers\MutasiBarangController::class)->only(['index', 'show']);
+
+        Route::get('/barang-qr-code/search-for-maintenance', [App\Http\Controllers\BarangQrCodeController::class, 'searchForMaintenance'])->name('barang-qr-code.search-for-maintenance');
+
     });
 
 
@@ -363,6 +369,10 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('dashboard', [App\Http\Controllers\DashboardController::class, 'guru'])->name('dashboard');
 
+        Route::get('katalog-barang', [\App\Http\Controllers\KatalogController::class, 'index'])->name('katalog.index');
+
+        Route::get('peminjaman/search-items', [\App\Http\Controllers\PeminjamanController::class, 'searchAvailableItems'])->name('peminjaman.search-items');
+
         // --- PEMINJAMAN ---
         // Resource ini sudah mencakup: index, create, store, show, edit, update
         Route::resource('peminjaman', App\Http\Controllers\PeminjamanController::class)->only([
@@ -374,9 +384,10 @@ Route::middleware(['auth'])->group(function () {
             'update'
         ]);
 
+        // File: routes/web.php (di dalam grup 'isGuru')
+
         // Route custom untuk membatalkan peminjaman
         Route::post('peminjaman/{peminjaman}/cancel-by-user', [App\Http\Controllers\PeminjamanController::class, 'cancelByUser'])->name('peminjaman.cancelByUser');
-
 
         // --- PEMELIHARAAN (TAMBAHAN BARU) ---
         // Guru hanya bisa membuat laporan baru dan melihat/mengedit laporannya sendiri.
@@ -396,6 +407,8 @@ Route::middleware(['auth'])->group(function () {
 
         // Rute AJAX jika diperlukan di masa depan (tidak perlu diubah)
         Route::get('/get-units-by-ruangan/{ruangan}', [App\Http\Controllers\PeminjamanController::class, 'getAvailableUnitsByRuangan'])->name('peminjaman.getAvailableUnitsByRuangan');
+        Route::get('/barang-qr-code/search-for-maintenance', [App\Http\Controllers\BarangQrCodeController::class, 'searchForMaintenance'])->name('barang-qr-code.search-for-maintenance');
+
     });
 
 

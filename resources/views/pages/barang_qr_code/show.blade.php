@@ -193,6 +193,7 @@
                                 <i class="fas fa-edit"></i> Edit Info Unit
                             </button>
                         @endcan --}}
+                        {{-- Jika barang diarsipkan, hanya tampilkan tombol Pulihkan --}}
                         @if ($qrCode->trashed())
                             @can('restore', $qrCode)
                                 <form action="{{ route($rolePrefix . 'barang-qr-code.restore', $qrCode->id) }}" method="POST">
@@ -204,51 +205,64 @@
                                 </form>
                             @endcan
                         @else
-                            {{-- @can('update', $qrCode)
-                       
-                            <button type="button" class="btn btn-warning text-dark w-100 btn-edit-unit-trigger" data-bs-toggle="modal" data-bs-target="#modalEditUnitBarang" data-unit='@json($qrCode->load("barang"))' title="Edit Atribut Dasar Unit">
-                                <i class="fas fa-edit me-1"></i> Edit Info Unit
-                            </button>
-                        @endcan --}}
+                            @can('update', $qrCode)
+                                <button type="button" class="btn btn-warning text-dark w-100 btn-edit-unit-trigger"
+                                    data-bs-toggle="modal" data-bs-target="#modalEditUnitBarang"
+                                    data-unit='@json($qrCode->load('barang'))' title="Edit Atribut Dasar Unit">
+                                    <i class="fas fa-edit me-1"></i> Edit Info Unit
+                                </button>
+                            @endcan
 
-                            @if ($qrCode->id_pemegang_personal)
-                                {{-- Aksi jika dipegang personal --}}
-                                @can('returnPersonal', $qrCode)
-                                    <button type="button" class="btn btn-sm btn-success w-100 btn-return-personal-trigger"
-                                        data-bs-toggle="modal" data-bs-target="#modalReturnPersonal"
-                                        data-unit-id="{{ $qrCode->id }}"
-                                        data-unit-kode="{{ $qrCode->kode_inventaris_sekolah ?? 'N/A' }}"
-                                        data-unit-pemegang="{{ $qrCode->pemegangPersonal->username ?? 'N/A' }}"
-                                        data-url-action="{{ route($rolePrefix . 'barang-qr-code.return-personal', $qrCode->id) }}">
-                                        <i class="fas fa-undo me-1"></i> Kembalikan ke Ruangan
-                                    </button>
-                                @endcan
-                            @else
-                                {{-- Aksi jika di ruangan atau mengambang --}}
-                                @can('mutasi', $qrCode)
-                                    <button type="button" class="btn btn-primary w-100 btn-mutasi-unit-trigger"
-                                        data-bs-toggle="modal" data-bs-target="#modalMutasiUnit"
-                                        data-unit-id="{{ $qrCode->id }}"
-                                        data-unit-kode="{{ $qrCode->kode_inventaris_sekolah }}"
-                                        data-ruangan-asal-id="{{ $qrCode->id_ruangan }}"
-                                        data-ruangan-asal-nama="{{ $qrCode->ruangan?->nama_ruangan ?? 'Belum Ditempatkan' }}">
-                                        <i class="fas fa-truck me-1"></i>
-                                        {{ $qrCode->id_ruangan ? 'Pindahkan' : 'Tempatkan di Ruangan' }}
-                                    </button>
-                                @endcan
-                                @can('assignPersonal', $qrCode)
-                                    {{-- Tombol Serahkan Personal dengan semua data-attribute yang benar --}}
-                                    <button type="button" class="btn btn-sm btn-info w-100 btn-assign-personal-trigger"
-                                        data-bs-toggle="modal" data-bs-target="#modalAssignPersonal"
-                                        data-unit-id="{{ $qrCode->id }}"
-                                        data-unit-kode="{{ $qrCode->kode_inventaris_sekolah ?? 'N/A' }}"
-                                        data-url-action="{{ route($rolePrefix . 'barang-qr-code.assign-personal', $qrCode->id) }}">
-                                        <i class="fas fa-user-plus me-1"></i> Serahkan ke Personal
-                                    </button>
-                                @endcan
-                            @endif
-
+                            {{-- Hanya tampilkan aksi perpindahan jika barang TIDAK SEDANG DIPINJAM --}}
                             @if ($qrCode->status !== \App\Models\BarangQrCode::STATUS_DIPINJAM)
+
+                                @if ($qrCode->id_pemegang_personal)
+                                    {{-- Aksi jika dipegang personal --}}
+                                    @can('returnPersonal', $qrCode)
+                                        <button type="button" class="btn btn-success w-100 btn-return-personal-trigger"
+                                            data-bs-toggle="modal" data-bs-target="#modalReturnPersonal"
+                                            data-unit-kode="{{ $qrCode->kode_inventaris_sekolah ?? 'N/A' }}"
+                                            data-unit-pemegang="{{ $qrCode->pemegangPersonal->username ?? 'N/A' }}"
+                                            data-url-action="{{ route($rolePrefix . 'barang-qr-code.return-personal', $qrCode->id) }}">
+                                            <i class="fas fa-undo me-1"></i> Kembalikan ke Ruangan
+                                        </button>
+                                    @endcan
+                                    @can('transferPersonal', $qrCode)
+                                        <button type="button" class="btn btn-primary w-100 btn-transfer-personal-trigger"
+                                            data-bs-toggle="modal" data-bs-target="#modalTransferPersonal"
+                                            data-unit-kode="{{ $qrCode->kode_inventaris_sekolah ?? 'N/A' }}"
+                                            data-unit-pemegang-lama="{{ $qrCode->pemegangPersonal->username ?? 'N/A' }}"
+                                            data-url-action="{{ route($rolePrefix . 'barang-qr-code.transfer-personal', $qrCode->id) }}">
+                                            <i class="fas fa-exchange-alt me-1"></i> Transfer Personal
+                                        </button>
+                                    @endcan
+                                @else
+                                    {{-- Aksi jika di ruangan atau mengambang --}}
+                                    @can('mutasi', $qrCode)
+                                        <button type="button" class="btn btn-primary w-100 btn-mutasi-unit-trigger"
+                                            data-bs-toggle="modal" data-bs-target="#modalMutasiUnit"
+                                            data-unit-id="{{ $qrCode->id }}"
+                                            data-unit-kode="{{ $qrCode->kode_inventaris_sekolah }}"
+                                            data-ruangan-asal-id="{{ $qrCode->id_ruangan }}"
+                                            data-ruangan-asal-nama="{{ $qrCode->ruangan?->nama_ruangan ?? 'Belum Ditempatkan' }}"
+                                            data-url-action="{{ route($rolePrefix . 'barang-qr-code.mutasi', $qrCode->id) }}">
+                                            <i class="fas fa-truck me-1"></i>
+                                            {{ $qrCode->id_ruangan ? 'Pindahkan' : 'Tempatkan di Ruangan' }}
+                                        </button>
+                                    @endcan
+                                    @can('assignPersonal', $qrCode)
+                                        @if ($qrCode->status === \App\Models\BarangQrCode::STATUS_TERSEDIA)
+                                            <button type="button" class="btn btn-info w-100 btn-assign-personal-trigger"
+                                                data-bs-toggle="modal" data-bs-target="#modalAssignPersonal"
+                                                data-unit-id="{{ $qrCode->id }}"
+                                                data-unit-kode="{{ $qrCode->kode_inventaris_sekolah ?? 'N/A' }}"
+                                                data-url-action="{{ route($rolePrefix . 'barang-qr-code.assign-personal', $qrCode->id) }}">
+                                                <i class="fas fa-user-plus me-1"></i> Serahkan ke Personal
+                                            </button>
+                                        @endif
+                                    @endcan
+                                @endif
+
                                 @can('archive', $qrCode)
                                     <button type="button" class="btn btn-danger w-100 btn-arsip-unit-trigger"
                                         data-bs-toggle="modal" data-bs-target="#modalArsipUnit"
@@ -257,8 +271,13 @@
                                         <i class="fas fa-archive me-1"></i> Arsipkan Unit Ini
                                     </button>
                                 @endcan
+                            @else
+                                <div class="alert alert-info text-center py-2 mb-0">
+                                    <i class="fas fa-info-circle me-1"></i> Barang sedang dipinjam.
+                                </div>
                             @endif
                         @endif
+
                     </div>
                 </div>
             </div>
@@ -438,30 +457,30 @@
     </div>
 
     {{-- Modal untuk Edit Unit --}}
-    @include($rolePrefix . 'barang_qr_code.partials.modal_edit_unit', [
+    @include('pages.barang_qr_code.partials.modal_edit_unit', [
         'qrCode' => $qrCode, // $qrCode dari controller show
         'kondisiOptionsAll' => $kondisiOptionsAll,
         'statusOptionsAll' => $statusOptionsAll,
     ])
     {{-- Modal untuk Arsip Unit --}}
-    @include($rolePrefix . 'barang_qr_code.partials.modal_arsip_unit', [
+    @include('pages.barang_qr_code.partials.modal_arsip_unit', [
         'jenisPenghapusanOptions' => $jenisPenghapusanOptions,
     ])
     {{-- Modal untuk Mutasi Unit --}}
-    @include($rolePrefix . 'barang_qr_code.partials.modal_mutasi_unit', [
+    @include('pages.barang_qr_code.partials.modal_mutasi_unit', [
         'ruanganListAll' => $ruanganListAll,
     ])
 
     {{--  modal_assign_personal, modal_return_personal dan modal_transfer_personal --}}
-    @include($rolePrefix . 'barang_qr_code.partials.modal_assign_personal', [
+    @include('pages.barang_qr_code.partials.modal_assign_personal', [
         'usersForAssignForm' => $eligibleUsersForAssign, // Data dari controller show
         'barangQrCodeInstance' => $qrCode, // Untuk referensi jika perlu di dalam partial (opsional)
     ])
-    @include($rolePrefix . 'barang_qr_code.partials.modal_return_personal', [
+    @include('pages.barang_qr_code.partials.modal_return_personal', [
         'ruangansForReturnForm' => $ruanganListAll,
         'barangQrCodeInstance' => $qrCode,
     ])
-    @include($rolePrefix . 'barang_qr_code.partials.modal_transfer_personal', [
+    @include('pages.barang_qr_code.partials.modal_transfer_personal', [
         'usersForTransferForm' => $eligibleUsersForTransfer,
         'barangQrCodeInstance' => $qrCode,
     ])

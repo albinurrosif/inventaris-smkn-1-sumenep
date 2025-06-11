@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -220,9 +221,10 @@ class PemeliharaanController extends Controller
         $validated = $request->validate([
             'id_barang_qr_code' => 'required|exists:barang_qr_codes,id',
             'tanggal_pengajuan' => 'required|date|before_or_equal:today',
-            'deskripsi_kerusakan' => 'required|string|max:1000',
+            'catatan_pengajuan' => 'required|string|max:1000',
             'prioritas' => ['required', Rule::in(array_keys(Pemeliharaan::getValidPrioritas()))],
-            'catatan_pengajuan' => 'nullable|string|max:1000',
+            // Validasi untuk foto kerusakan
+            'foto_kerusakan' => 'nullable|image|mimes:jpeg,png,jpg|max:2048', // max 2MB
         ]);
 
         $barangQr = BarangQrCode::find($validated['id_barang_qr_code']);
@@ -240,12 +242,17 @@ class PemeliharaanController extends Controller
 
         try {
             DB::beginTransaction();
-            $pemeliharaan = new Pemeliharaan();
-            $pemeliharaan->fill($validated); // Mengisi dari $validated
-            $pemeliharaan->id_user_pengaju = Auth::id();
-            // status_pengajuan, status_pengerjaan, prioritas (default) di set di model creating event
+            // Handle upload file
+            $pathKerusakan = null;
+            if ($request->hasFile('foto_kerusakan')) {
+                $pathKerusakan = $request->file('foto_kerusakan')->store('pemeliharaan/kerusakan', 'public');
+            }
 
-            $pemeliharaan->save(); // Akan mentrigger event 'creating' dan 'saved' di model
+            $pemeliharaan = new Pemeliharaan();
+            $pemeliharaan->fill($validated);
+            $pemeliharaan->id_user_pengaju = $user->id;
+            $pemeliharaan->foto_kerusakan_path = $pathKerusakan; // Simpan path
+            $pemeliharaan->save();
 
             LogAktivitas::create([
                 'id_user' => Auth::id(),
@@ -400,7 +407,26 @@ class PemeliharaanController extends Controller
         try {
             DB::beginTransaction();
             $dataLamaPemeliharaan = $pemeliharaan->getAttributes();
-            $pemeliharaan->fill($validated);
+          // Handle upload/update foto kerusakan
+          if ($request->hasFile('foto_kerusakan')) {
+            // Hapus file lama jika ada
+            if ($pemeliharaan->foto_kerusakan_path) {
+                Storage::disk('public')->delete($pemeliharaan->foto_kerusakan_path);
+            }
+            $validated['foto_kerusakan_path'] = $request->file('foto_kerusakan')->store('pemeliharaan/kerusakan', 'public');
+        }
+
+        // Handle upload/update foto perbaikan
+        if ($request->hasFile('foto_perbaikan')) {
+             // Hapus file lama jika ada
+            if ($pemeliharaan->foto_perbaikan_path) {
+                Storage::disk('public')->delete($pemeliharaan->foto_perbaikan_path);
+            }
+            $validated['foto_perbaikan_path'] = $request->file('foto_perbaikan')->store('pemeliharaan/perbaikan', 'public');
+        }
+
+        $pemeliharaan->fill($validated);
+
 
             if ($user->hasRole(User::ROLE_ADMIN)) {
                 if (in_array($pemeliharaan->status_pengajuan, [Pemeliharaan::STATUS_PENGAJUAN_DISETUJUI, Pemeliharaan::STATUS_PENGAJUAN_DITOLAK]) && $pemeliharaan->isDirty('status_pengajuan')) {

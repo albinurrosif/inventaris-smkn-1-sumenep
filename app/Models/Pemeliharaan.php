@@ -30,6 +30,7 @@ class Pemeliharaan extends Model
         'id_user_penyetuju',
         'tanggal_persetujuan',
         'catatan_persetujuan',
+        'foto_kerusakan_path', 
         'id_operator_pengerjaan',
         'tanggal_mulai_pengerjaan',
         'tanggal_selesai_pengerjaan',
@@ -39,6 +40,7 @@ class Pemeliharaan extends Model
         'hasil_pemeliharaan',
         'kondisi_barang_setelah_pemeliharaan', // Ditambahkan
         'catatan_pengerjaan',
+        'foto_perbaikan_path',
     ];
 
     protected $casts = [
