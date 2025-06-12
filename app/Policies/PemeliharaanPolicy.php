@@ -20,6 +20,7 @@ class PemeliharaanPolicy
         if ($user->hasRole(User::ROLE_ADMIN)) {
             return true;
         }
+        return null;
     }
 
     /**
@@ -64,9 +65,14 @@ class PemeliharaanPolicy
     /**
      * PERUBAHAN: Izinkan Guru untuk bisa membuat laporan kerusakan.
      */
-    public function create(User $user)
+    public function create(User $user): bool
     {
-        return $user->hasAnyRole([User::ROLE_OPERATOR, User::ROLE_GURU]);
+        // Izinkan jika perannya Admin, Operator, ATAU Guru.
+        return $user->hasAnyRole([
+            User::ROLE_ADMIN,
+            User::ROLE_OPERATOR,
+            User::ROLE_GURU
+        ]);
     }
 
     /**
@@ -77,6 +83,9 @@ class PemeliharaanPolicy
      */
     public function update(User $user, Pemeliharaan $pemeliharaan)
     {
+
+
+
         // 1. Jika user adalah pelapor dan status masih Diajukan, dia boleh edit.
         if ($pemeliharaan->id_user_pengaju === $user->id && $pemeliharaan->status_pengajuan === Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN) {
             return true;
@@ -85,6 +94,20 @@ class PemeliharaanPolicy
         // 2. Jika user adalah Operator yang ditugaskan (PIC) dan status sudah Disetujui, dia boleh update progres.
         if ($user->hasRole(User::ROLE_OPERATOR) && $pemeliharaan->id_operator_pengerjaan === $user->id && $pemeliharaan->status_pengajuan === Pemeliharaan::STATUS_PENGAJUAN_DISETUJUI) {
             return true;
+        }
+
+        // Daftar status final yang mengunci record dari pengeditan.
+        $finalStatuses = [
+            \App\Models\Pemeliharaan::STATUS_PENGERJAAN_SELESAI,
+            \App\Models\Pemeliharaan::STATUS_PENGERJAAN_GAGAL,
+            \App\Models\Pemeliharaan::STATUS_PENGERJAAN_TIDAK_DAPAT_DIPERBAIKI,
+            \App\Models\Pemeliharaan::STATUS_PENGAJUAN_DITOLAK,
+            \App\Models\Pemeliharaan::STATUS_PENGAJUAN_DIBATALKAN, // Jika ada
+        ];
+
+        // Jika status saat ini ada di dalam daftar final, langsung tolak izin update.
+        if (in_array($pemeliharaan->status_pengerjaan, $finalStatuses) || in_array($pemeliharaan->status_pengajuan, $finalStatuses)) {
+            return false;
         }
 
         return false;

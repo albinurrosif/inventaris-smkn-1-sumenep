@@ -203,6 +203,16 @@ class ArsipBarang extends Model
         if ($barangQr->trashed()) {
             DB::beginTransaction();
             try {
+
+                // Cek dan pulihkan "Jenis Barang" (induk) jika ikut terhapus
+                $barangInduk = $barangQr->barang()->withTrashed()->first();
+                if ($barangInduk && $barangInduk->trashed()) {
+                    // Pulihkan induk TANPA memicu event 'restoring' agar tidak me-restore unit lain
+                    Barang::withoutEvents(function () use ($barangInduk) {
+                        $barangInduk->restore();
+                    });
+                }
+
                 // 1. Ambil data penting dari snapshot SEBELUM di-restore
                 $snapshot = $this->data_unit_snapshot ?? [];
                 $kondisiSaatDiarsip = $snapshot['kondisi'] ?? 'Tidak Diketahui';

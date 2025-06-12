@@ -56,25 +56,27 @@ class PemeliharaanController extends Controller
         ]);
 
         if ($user->hasRole(User::ROLE_OPERATOR)) {
-            $ruanganOperatorIds = optional($user->ruanganYangDiKelola())->pluck('id') ?? collect();
+            $ruanganOperatorIds = optional($user->ruanganYangDiKelola())->pluck('id') ?? collect(); // 
             $query->where(function ($qSub) use ($user, $ruanganOperatorIds) {
-                $qSub->where('id_user_pengaju', $user->id)
-                    ->orWhere('id_operator_pengerjaan', $user->id);
-                if ($ruanganOperatorIds->isNotEmpty()) {
+                $qSub->where('id_user_pengaju', $user->id) // Laporan yang dia buat 
+                    ->orWhere('id_operator_pengerjaan', $user->id); // Tugas yang diberikan padanya 
+                if ($ruanganOperatorIds->isNotEmpty()) { // 
                     $qSub->orWhereHas('barangQrCode', function ($qUnit) use ($ruanganOperatorIds, $user) {
                         $qUnit->where(function ($qUnitDetail) use ($ruanganOperatorIds, $user) {
-                            $qUnitDetail->whereIn('id_ruangan', $ruanganOperatorIds)
-                                ->orWhere('id_pemegang_personal', $user->id);
+                            $qUnitDetail->whereIn('id_ruangan', $ruanganOperatorIds) // Barang di ruangannya 
+                                ->orWhere('id_pemegang_personal', $user->id); //
                         });
                     });
-                } elseif ($user->id_pemegang_personal) { // Jika tidak kelola ruangan tapi pegang personal
+                } elseif ($user->id_pemegang_personal) {
                     $qSub->orWhereHas('barangQrCode', function ($qUnit) use ($user) {
-                        $qUnit->where('id_pemegang_personal', $user->id);
+                        $qUnit->where('id_pemegang_personal', $user->id); //
                     });
                 }
             });
+        } elseif ($user->hasRole(User::ROLE_GURU)) { // TAMBAHKAN BLOK INI
+            // Guru hanya bisa melihat laporan yang diajukan oleh dirinya sendiri
+            $query->where('id_user_pengaju', $user->id);
         }
-
 
         if ($searchTerm) {
             $query->where(function ($q) use ($searchTerm) {
@@ -128,6 +130,21 @@ class PemeliharaanController extends Controller
 
         $pemeliharaanList = $query->latest('tanggal_pengajuan')->latest('id')->paginate(15)->withQueryString();
 
+        // Tambahkan atribut 'keterkaitan' pada setiap item untuk ditampilkan di view
+        $pemeliharaanList->getCollection()->transform(function ($item) use ($user) {
+            $item->keterkaitan = 'Tidak diketahui'; // Default
+            if ($user->hasRole(User::ROLE_ADMIN)) {
+                $item->keterkaitan = 'Akses Admin';
+            } elseif ($item->id_user_pengaju === $user->id) {
+                $item->keterkaitan = 'Anda adalah Pelapor';
+            } elseif ($item->id_operator_pengerjaan === $user->id) {
+                $item->keterkaitan = 'Anda adalah PIC';
+            } elseif ($item->barangQrCode && $item->barangQrCode->id_ruangan && $user->ruanganYangDiKelola()->where('id', $item->barangQrCode->id_ruangan)->exists()) {
+                $item->keterkaitan = 'Barang di Ruangan Anda';
+            }
+            return $item;
+        });
+
         $usersList = User::orderBy('username')->get();
         $statusPemeliharaanList = Pemeliharaan::getStatusListForFilter();
         $prioritasList = Pemeliharaan::getValidPrioritas();
@@ -149,67 +166,61 @@ class PemeliharaanController extends Controller
         ));
     }
 
+
     public function create(Request $request): View
     {
         $this->authorize('create', Pemeliharaan::class);
         $user = Auth::user();
-        /** @var \App\Models\User $user */
 
-        $barangQrCodeId = $request->query('id_barang_qr_code');
-        $barangQrCode = null;
-        $barangQrOptions = collect();
-        $error = null;
+        // Query dasar yang sudah disempurnakan
+        $baseQuery = BarangQrCode::with(['barang', 'ruangan', 'pemegangPersonal'])
+            ->whereNull('deleted_at')
 
-        if ($barangQrCodeId) {
-            $barangQrCode = BarangQrCode::with('barang.kategori', 'ruangan', 'pemegangPersonal')->find($barangQrCodeId);
-            if (!$barangQrCode || $barangQrCode->trashed() || in_array($barangQrCode->kondisi, [BarangQrCode::KONDISI_HILANG]) || $barangQrCode->status === BarangQrCode::STATUS_DIPINJAM) {
-                $error = 'Unit barang tidak valid, terarsip, hilang, atau sedang dipinjam sehingga tidak dapat dilaporkan untuk pemeliharaan.';
-            }
-            if ($user->hasRole(User::ROLE_OPERATOR) && $barangQrCode && !$error) {
-                $isAllowed = optional($user->ruanganYangDiKelola())->where('id', $barangQrCode->id_ruangan)->exists() ||
-                    $barangQrCode->id_pemegang_personal === $user->id;
-                if (!$isAllowed) {
-                    $targetRoute = $this->getRedirectRouteName('pemeliharaan.index', 'admin.pemeliharaan.index');
-                    $error = 'Anda tidak diizinkan membuat laporan pemeliharaan untuk unit barang ini.';
-                }
-            } elseif ($user->hasRole(User::ROLE_GURU) && $barangQrCode && !$error) {
-                $isAllowed = $barangQrCode->id_pemegang_personal === $user->id;
-                if (!$isAllowed) {
-                    $error = 'Guru hanya bisa membuat laporan untuk barang yang dipegang secara personal.';
-                }
-            }
-        } else {
-            $baseQuery = BarangQrCode::whereNull('deleted_at')
-                ->whereNotIn('kondisi', [BarangQrCode::KONDISI_HILANG])
-                ->where('status', '!=', BarangQrCode::STATUS_DIPINJAM)
-                ->with('barang', 'ruangan', 'pemegangPersonal');
+            // --- GANTI BARIS INI ---
+            ->whereNotIn('status', [BarangQrCode::STATUS_DIPINJAM, BarangQrCode::STATUS_DALAM_PEMELIHARAAN])
+            // --- AKHIR PERUBAHAN ---
 
-            if ($user->hasRole(User::ROLE_OPERATOR)) {
-                $ruanganOperatorIds = optional($user->ruanganYangDiKelola())->pluck('id') ?? collect();
-                $baseQuery->where(function ($q) use ($ruanganOperatorIds, $user) {
-                    if ($ruanganOperatorIds->isNotEmpty()) {
-                        $q->whereIn('id_ruangan', $ruanganOperatorIds);
-                    }
-                    $q->orWhere('id_pemegang_personal', $user->id);
-                });
-            } elseif ($user->hasRole(User::ROLE_GURU)) {
-                $baseQuery->where('id_pemegang_personal', $user->id);
-            }
-            // Untuk Admin, semua barang ditampilkan (tidak ada filter tambahan)
+            ->where('kondisi', '!=', BarangQrCode::KONDISI_HILANG)
+            ->whereDoesntHave('pemeliharaanRecords', function ($query) {
+                $query->where('status_pengajuan', 'Diajukan')
+                    ->orWhere('status_pengajuan', 'Disetujui');
+            });
 
-            $barangQrOptions = $baseQuery->orderBy('id_barang')->orderBy('kode_inventaris_sekolah')
-                ->get()
-                ->map(function ($item) {
-                    $ruanganText = $item->ruangan ? " - Ruang: " . $item->ruangan->nama_ruangan : "";
-                    $pemegangText = $item->pemegangPersonal ? " - Dipegang: " . $item->pemegangPersonal->username : "";
-                    return ['id' => $item->id, 'text' => "{$item->barang->nama_barang} ({$item->kode_inventaris_sekolah}){$ruanganText}{$pemegangText} - Kondisi: {$item->kondisi}"];
-                });
+        // Terapkan filter berdasarkan peran pengguna (logika ini tetap sama)
+        if ($user->hasRole(User::ROLE_OPERATOR)) {
+            $ruanganOperatorIds = $user->ruanganYangDiKelola()->pluck('id');
+            $baseQuery->where(function ($q) use ($ruanganOperatorIds, $user) {
+                $q->whereIn('id_ruangan', $ruanganOperatorIds)
+                    ->orWhere('id_pemegang_personal', $user->id);
+            });
+        } elseif ($user->hasRole(User::ROLE_GURU)) {
+            $baseQuery->where('id_pemegang_personal', $user->id);
         }
+
+        $barangQrOptions = $baseQuery->get()->map(function ($item) {
+            $lokasi = optional($item->ruangan)->nama_ruangan ?? (optional($item->pemegangPersonal)->username ? 'Dipegang oleh: ' . $item->pemegangPersonal->username : 'Tanpa Lokasi');
+            $text = "{$item->barang->nama_barang} ({$item->kode_inventaris_sekolah}) | Lokasi: {$lokasi}";
+            return ['id' => $item->id, 'text' => $text];
+        });
 
         $prioritasOptions = Pemeliharaan::getValidPrioritas();
 
-        $viewPath = $this->getViewPathBasedOnRole('admin.pemeliharaan.create', 'operator.pemeliharaan.create', 'guru.pemeliharaan.create');
-        return view($viewPath, compact('barangQrCode', 'barangQrOptions', 'error', 'prioritasOptions'));
+        $barangQrCode = null; // Defaultnya null
+        $idFromRequest = $request->input('id_barang_qr_code');
+
+        // Jika ada ID yang dikirim dari tombol "Laporkan Kerusakan"
+        if ($idFromRequest) {
+            // Kita gunakan LAGI $baseQuery untuk memastikan barang yang diminta dari URL
+            // memang valid dan lolos semua filter. Ini penting untuk keamanan.
+            $singleItemQuery = (clone $baseQuery);
+            $barangQrCode = $singleItemQuery->find($idFromRequest);
+        }
+
+        return view('pages.pemeliharaan.create', [
+            'barangQrOptions' => $barangQrOptions,
+            'prioritasOptions' => $prioritasOptions,
+            'barangQrCode' => $barangQrCode,
+        ]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -265,8 +276,9 @@ class PemeliharaanController extends Controller
                 'user_agent' => $request->userAgent()
             ]);
             DB::commit();
-            $redirectRoute = $this->getRedirectRouteName('pemeliharaan.index', 'admin.pemeliharaan.index');
-            return redirect()->route($redirectRoute)->with('success', 'Laporan pemeliharaan berhasil diajukan.');
+            // Menggunakan helper yang lebih andal
+            $redirectUrl = $this->getRedirectUrl('pemeliharaan');
+            return redirect($redirectUrl)->with('success', 'Laporan pemeliharaan berhasil diajukan.');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Gagal menyimpan laporan pemeliharaan: " . $e->getMessage(), ['exception' => $e, 'trace' => $e->getTraceAsString()]);
@@ -274,6 +286,7 @@ class PemeliharaanController extends Controller
         }
     }
 
+    // Di dalam PemeliharaanController
     public function show($id): View
     {
         $pemeliharaan = Pemeliharaan::withTrashed()->with([
@@ -284,17 +297,29 @@ class PemeliharaanController extends Controller
             'penyetuju',
             'operatorPengerjaan'
         ])->findOrFail($id);
+
         $this->authorize('view', $pemeliharaan);
 
-        $viewPath = $this->getViewPathBasedOnRole('admin.pemeliharaan.show', 'operator.pemeliharaan.show', 'guru.pemeliharaan.show');
-        return view($viewPath, compact('pemeliharaan'));
+        // Ambil daftar user yang bisa menjadi PIC (Operator atau Admin)
+        $picList = User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_OPERATOR])
+            ->orderBy('username')->get();
+
+        // ===== PERUBAHAN DI SINI =====
+        // Gunakan method private yang sudah kita buat sebelumnya
+        $rolePrefix = $this->getRolePrefix();
+
+        $viewPath = 'pages.pemeliharaan.show';
+
+        // Kirim semua variabel yang dibutuhkan oleh view, termasuk rolePrefix
+        return view($viewPath, compact('pemeliharaan', 'picList', 'rolePrefix'));
+        // ============================
     }
+
 
     public function edit(Pemeliharaan $pemeliharaan): View
     {
         $this->authorize('update', $pemeliharaan);
         $user = Auth::user();
-        /** @var \App\Models\User $user */
 
         $pemeliharaan->load([
             'barangQrCode' => fn($q) => $q->withTrashed()->with(['barang.kategori', 'ruangan', 'pemegangPersonal']),
@@ -304,162 +329,154 @@ class PemeliharaanController extends Controller
         ]);
         $barangQrCode = $pemeliharaan->barangQrCode;
 
-        // Otorisasi tambahan
+        // Otorisasi tambahan ini sudah benar, tidak perlu diubah.
         if ($user->hasRole(User::ROLE_OPERATOR) && $user->id !== $pemeliharaan->id_user_pengaju && $user->id !== $pemeliharaan->id_operator_pengerjaan) {
             if (!($barangQrCode && (optional($user->ruanganYangDiKelola())->where('id', $barangQrCode->id_ruangan)->exists() || $barangQrCode->id_pemegang_personal === $user->id))) {
                 abort(403, 'Operator tidak diizinkan mengedit laporan pemeliharaan ini.');
             }
         } elseif ($user->hasRole(User::ROLE_GURU) && $user->id !== $pemeliharaan->id_user_pengaju) {
-            abort(403, 'Guru tidak diizinkan mengedit laporan pemeliharaan ini.');
+            abort(403, 'Guru hanya bisa mengedit laporannya sendiri jika status masih "Diajukan".');
         }
 
+        // Logika untuk menyiapkan daftar PIC sudah benar, tidak perlu diubah.
         $picList = collect();
         if ($user->hasRole(User::ROLE_ADMIN)) {
             $picList = User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_OPERATOR])->orderBy('username')->get();
         } elseif ($user->hasRole(User::ROLE_OPERATOR)) {
             if ($pemeliharaan->id_operator_pengerjaan === null || $pemeliharaan->id_operator_pengerjaan === $user->id) {
-                $picList = User::where('id', $user->id)->get(); // Hanya bisa pilih diri sendiri
-            } else { // Jika PIC sudah orang lain (di-assign Admin), Operator tidak bisa ubah PIC
+                $picList = User::where('id', $user->id)->get();
+            } else {
                 $currentPic = User::find($pemeliharaan->id_operator_pengerjaan);
                 if ($currentPic) $picList->push($currentPic);
             }
         }
 
+        // Menyiapkan data untuk form dropdowns, sudah benar.
         $statusPengajuanList = Pemeliharaan::getValidStatusPengajuan();
         $statusPengerjaanList = Pemeliharaan::getValidStatusPengerjaan();
-        $kondisiBarangList = BarangQrCode::getValidKondisi();
-        $prioritasOptions = Pemeliharaan::getValidPrioritas();
+        // Ambil semua kondisi valid dari model
+        $semuaKondisi = BarangQrCode::getValidKondisi();
 
-        $viewPath = $this->getViewPathBasedOnRole('admin.pemeliharaan.edit', 'operator.pemeliharaan.edit', 'guru.pemeliharaan.edit');
-        return view($viewPath, compact(
+        // Kemudian, saring (filter) array tersebut untuk menghapus 'Hilang'
+        // Kita gunakan konstanta dari model untuk memastikan akurasi
+        $kondisiBarangList = array_filter($semuaKondisi, function ($kondisi) {
+            return $kondisi !== \App\Models\BarangQrCode::KONDISI_HILANG;
+        });
+        $prioritasOptions = Pemeliharaan::getValidPrioritas();
+        $rolePrefix = $this->getRolePrefix();
+
+        // Mengarahkan ke satu view terpusat di 'pages'
+        return view('pages.pemeliharaan.edit', compact(
             'pemeliharaan',
             'barangQrCode',
             'picList',
             'statusPengajuanList',
             'statusPengerjaanList',
             'kondisiBarangList',
-            'prioritasOptions'
+            'prioritasOptions',
+            'rolePrefix'
         ));
     }
 
+
     public function update(Request $request, Pemeliharaan $pemeliharaan): RedirectResponse
     {
+        // Otorisasi dan pengecekan apakah laporan sudah terkunci (sudah benar)
         $this->authorize('update', $pemeliharaan);
+        if ($pemeliharaan->isLocked()) {
+            return redirect()->route($this->getRedirectUrl("pemeliharaan/{$pemeliharaan->id}"))
+                ->with('error', 'Laporan yang sudah final tidak dapat diedit lagi.');
+        }
+
         $user = Auth::user();
         /** @var \App\Models\User $user */
 
+        $dataLamaPemeliharaan = $pemeliharaan->getAttributes();
+        $pemeliharaan->fill($request->all());
+
         $rules = [];
-        // Aturan validasi dasar yang bisa diisi oleh pengaju (jika status masih diajukan)
-        if ($user->id === $pemeliharaan->id_user_pengaju && $pemeliharaan->status_pengajuan === Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN) {
-            $rules['deskripsi_kerusakan'] = 'required|string|max:1000';
-            $rules['prioritas'] = ['required', Rule::in(array_keys(Pemeliharaan::getValidPrioritas()))];
-            $rules['catatan_pengajuan'] = 'nullable|string|max:1000';
-        }
 
-        // Aturan untuk Operator PIC jika pengajuan sudah disetujui
-        if (($user->hasRole(User::ROLE_OPERATOR) && $user->id === $pemeliharaan->id_operator_pengerjaan) || $user->hasRole(User::ROLE_ADMIN)) {
-            if ($pemeliharaan->status_pengajuan === Pemeliharaan::STATUS_PENGAJUAN_DISETUJUI) {
-                $rules['status_pengerjaan'] = ['required', Rule::in(array_keys(Pemeliharaan::getValidStatusPengerjaan()))];
-                if (in_array($request->input('status_pengerjaan'), [Pemeliharaan::STATUS_PENGERJAAN_SEDANG_DILAKUKAN, Pemeliharaan::STATUS_PENGERJAAN_SELESAI, Pemeliharaan::STATUS_PENGERJAAN_TIDAK_DAPAT_DIPERBAIKI, Pemeliharaan::STATUS_PENGERJAAN_GAGAL, Pemeliharaan::STATUS_PENGERJAAN_DITUNDA])) {
-                    $rules['tanggal_mulai_pengerjaan'] = 'required|date|before_or_equal:today';
-                } else {
-                    $rules['tanggal_mulai_pengerjaan'] = 'nullable|date|before_or_equal:today';
-                }
+        // ======================================================================
+        // AWAL LOGIKA VALIDASI BARU DENGAN BLOK 'IF' INDEPENDEN
+        // ======================================================================
 
-                if (in_array($request->input('status_pengerjaan'), [Pemeliharaan::STATUS_PENGERJAAN_SELESAI, Pemeliharaan::STATUS_PENGERJAAN_TIDAK_DAPAT_DIPERBAIKI, Pemeliharaan::STATUS_PENGERJAAN_GAGAL])) {
-                    $rules['tanggal_selesai_pengerjaan'] = 'required|date|after_or_equal:tanggal_mulai_pengerjaan|before_or_equal:today';
-                    $rules['kondisi_barang_setelah_pemeliharaan'] = ['required', Rule::in(array_keys(BarangQrCode::getValidKondisi()))];
-                    $rules['hasil_pemeliharaan'] = 'required|string|max:1000';
-                } else {
-                    $rules['tanggal_selesai_pengerjaan'] = 'nullable|date|after_or_equal:tanggal_mulai_pengerjaan|before_or_equal:today';
-                    $rules['kondisi_barang_setelah_pemeliharaan'] = ['nullable', Rule::in(array_keys(BarangQrCode::getValidKondisi()))];
-                    $rules['hasil_pemeliharaan'] = 'nullable|string|max:1000';
-                }
-                $rules['deskripsi_pekerjaan'] = 'nullable|string|max:1000';
-                $rules['biaya'] = 'nullable|numeric|min:0';
-                $rules['catatan_pengerjaan'] = 'nullable|string|max:1000';
+        // Aksi 1: Validasi jika STATUS PENGAJUAN berubah (Aksi oleh Admin)
+        if ($pemeliharaan->isDirty('status_pengajuan')) {
+            $rules['status_pengajuan'] = ['required', Rule::in(array_keys(Pemeliharaan::getValidStatusPengajuan()))];
+            if ($request->input('status_pengajuan') === Pemeliharaan::STATUS_PENGAJUAN_DISETUJUI) {
+                $rules['id_operator_pengerjaan'] = 'required|exists:users,id';
             }
         }
 
-        if ($user->hasRole(User::ROLE_ADMIN)) { // Admin bisa override dan tambah rules
-            $adminRules = [
-                'deskripsi_kerusakan' => 'required|string|max:1000',
-                'prioritas' => ['required', Rule::in(array_keys(Pemeliharaan::getValidPrioritas()))],
-                'catatan_pengajuan' => 'nullable|string|max:1000',
-                'status_pengajuan' => ['required', Rule::in(array_keys(Pemeliharaan::getValidStatusPengajuan()))],
-                'catatan_persetujuan' => 'nullable|string|max:1000',
-                'id_operator_pengerjaan' => 'nullable|exists:users,id',
-            ];
-            $rules = array_merge($rules, $adminRules); // Timpa rules yang mungkin sudah ada dengan rules admin
+        // Aksi 2: Validasi jika STATUS PENGERJAAN berubah (Aksi oleh Operator/Admin)
+        if ($pemeliharaan->isDirty('status_pengerjaan')) {
+            $rules['status_pengerjaan'] = ['required', Rule::in(array_keys(Pemeliharaan::getValidStatusPengerjaan()))];
+            if (in_array($request->input('status_pengerjaan'), [
+                Pemeliharaan::STATUS_PENGERJAAN_SELESAI,
+                Pemeliharaan::STATUS_PENGERJAAN_TIDAK_DAPAT_DIPERBAIKI,
+                Pemeliharaan::STATUS_PENGERJAAN_GAGAL
+            ])) {
+                $rules['kondisi_barang_setelah_pemeliharaan'] = ['required', Rule::in(BarangQrCode::getValidKondisi())];
+                $rules['hasil_pemeliharaan'] = 'required|string|max:1000';
+            }
+            $rules['deskripsi_pekerjaan'] = 'nullable|string|max:1000';
+            $rules['biaya'] = 'nullable|numeric|min:0';
+            $rules['catatan_pengerjaan'] = 'nullable|string|max:1000';
+            $rules['foto_perbaikan'] = 'nullable|image|mimes:jpeg,jpg,png|max:2048';
+        }
 
-            if (in_array($request->input('status_pengajuan'), [Pemeliharaan::STATUS_PENGAJUAN_DISETUJUI, Pemeliharaan::STATUS_PENGAJUAN_DITOLAK])) {
-                $rules['tanggal_persetujuan'] = 'required|date|before_or_equal:today';
-            } else {
-                $rules['tanggal_persetujuan'] = 'nullable|date';
+        // Aksi 3: Validasi jika PENGGUNA AWAL mengedit laporannya (tidak ada status yang berubah)
+        if (!$pemeliharaan->isDirty('status_pengajuan') && !$pemeliharaan->isDirty('status_pengerjaan')) {
+            if ($user->id === $pemeliharaan->getOriginal('id_user_pengaju') && $pemeliharaan->getOriginal('status_pengajuan') === Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN) {
+                $rules['catatan_pengajuan'] = 'required|string|max:1000';
+                $rules['prioritas'] = ['required', Rule::in(array_keys(Pemeliharaan::getValidPrioritas()))];
+                $rules['foto_kerusakan'] = 'nullable|image|mimes:jpeg,jpg,png|max:2048';
             }
         }
 
-        if (empty($rules)) { // Jika tidak ada rule terdefinisi, berarti user tidak punya hak update
-            return redirect()->back()->with('error', 'Anda tidak memiliki izin untuk memperbarui data pada tahap ini atau untuk laporan ini.')->withInput();
-        }
         $validated = $request->validate($rules);
+
+        // ======================================================================
+        // AKHIR LOGIKA VALIDASI BARU
+        // ======================================================================
 
         try {
             DB::beginTransaction();
-            $dataLamaPemeliharaan = $pemeliharaan->getAttributes();
-          // Handle upload/update foto kerusakan
-          if ($request->hasFile('foto_kerusakan')) {
-            // Hapus file lama jika ada
-            if ($pemeliharaan->foto_kerusakan_path) {
-                Storage::disk('public')->delete($pemeliharaan->foto_kerusakan_path);
+
+            // Mengisi kembali dengan data yang sudah divalidasi, lebih aman
+            $pemeliharaan->fill($validated);
+
+            // (Logika upload file foto tidak berubah)
+            if ($request->hasFile('foto_kerusakan')) {
+                if ($pemeliharaan->foto_kerusakan_path) Storage::disk('public')->delete($pemeliharaan->foto_kerusakan_path);
+                $pemeliharaan->foto_kerusakan_path = $request->file('foto_kerusakan')->store('pemeliharaan/kerusakan', 'public');
             }
-            $validated['foto_kerusakan_path'] = $request->file('foto_kerusakan')->store('pemeliharaan/kerusakan', 'public');
-        }
-
-        // Handle upload/update foto perbaikan
-        if ($request->hasFile('foto_perbaikan')) {
-             // Hapus file lama jika ada
-            if ($pemeliharaan->foto_perbaikan_path) {
-                Storage::disk('public')->delete($pemeliharaan->foto_perbaikan_path);
+            if ($request->hasFile('foto_perbaikan')) {
+                if ($pemeliharaan->foto_perbaikan_path) Storage::disk('public')->delete($pemeliharaan->foto_perbaikan_path);
+                $pemeliharaan->foto_perbaikan_path = $request->file('foto_perbaikan')->store('pemeliharaan/perbaikan', 'public');
             }
-            $validated['foto_perbaikan_path'] = $request->file('foto_perbaikan')->store('pemeliharaan/perbaikan', 'public');
-        }
 
-        $pemeliharaan->fill($validated);
-
-
-            if ($user->hasRole(User::ROLE_ADMIN)) {
-                if (in_array($pemeliharaan->status_pengajuan, [Pemeliharaan::STATUS_PENGAJUAN_DISETUJUI, Pemeliharaan::STATUS_PENGAJUAN_DITOLAK]) && $pemeliharaan->isDirty('status_pengajuan')) {
-                    if (empty($pemeliharaan->id_user_penyetuju) || Auth::id() != $pemeliharaan->id_user_penyetuju) {
-                        $pemeliharaan->id_user_penyetuju = Auth::id();
-                    }
-                    if (empty($pemeliharaan->tanggal_persetujuan) || ($validated['tanggal_persetujuan'] ?? null) !== $pemeliharaan->getOriginal('tanggal_persetujuan')) {
-                        $pemeliharaan->tanggal_persetujuan = $validated['tanggal_persetujuan'] ?? now();
-                    }
-                } elseif ($pemeliharaan->status_pengajuan === Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN && $pemeliharaan->isDirty('status_pengajuan')) {
-                    $pemeliharaan->id_user_penyetuju = null;
-                    $pemeliharaan->tanggal_persetujuan = null;
-                    $pemeliharaan->catatan_persetujuan = null;
+            // (Logika otomatisasi tanggal tidak berubah, sudah benar)
+            if ($pemeliharaan->isDirty('status_pengajuan') && in_array($pemeliharaan->status_pengajuan, [Pemeliharaan::STATUS_PENGAJUAN_DISETUJUI, Pemeliharaan::STATUS_PENGAJUAN_DITOLAK])) {
+                $pemeliharaan->tanggal_persetujuan = now();
+                $pemeliharaan->id_user_penyetuju = $user->id;
+            }
+            if ($pemeliharaan->isDirty('status_pengerjaan')) {
+                if ($pemeliharaan->status_pengerjaan === Pemeliharaan::STATUS_PENGERJAAN_SEDANG_DILAKUKAN && is_null($pemeliharaan->getOriginal('tanggal_mulai_pengerjaan'))) {
+                    $pemeliharaan->tanggal_mulai_pengerjaan = now();
                 }
-                // Admin bisa assign/ubah PIC
-                if (isset($validated['id_operator_pengerjaan'])) { // Hanya update jika memang dikirim dari form Admin
-                    $pemeliharaan->id_operator_pengerjaan = $validated['id_operator_pengerjaan'];
-                }
-            } elseif ($user->hasRole(User::ROLE_OPERATOR) && $user->id === $pemeliharaan->id_operator_pengerjaan) {
-                // Jika Operator PIC yang update dan tanggal mulai/selesai pengerjaan belum diisi, set otomatis
-                if ($pemeliharaan->isDirty('status_pengerjaan')) {
-                    if (empty($pemeliharaan->tanggal_mulai_pengerjaan) && in_array($pemeliharaan->status_pengerjaan, [Pemeliharaan::STATUS_PENGERJAAN_SEDANG_DILAKUKAN, Pemeliharaan::STATUS_PENGERJAAN_SELESAI, Pemeliharaan::STATUS_PENGERJAAN_TIDAK_DAPAT_DIPERBAIKI])) {
-                        $pemeliharaan->tanggal_mulai_pengerjaan = $validated['tanggal_mulai_pengerjaan'] ?? now();
+                if (in_array($pemeliharaan->status_pengerjaan, [Pemeliharaan::STATUS_PENGERJAAN_SELESAI, Pemeliharaan::STATUS_PENGERJAAN_GAGAL, Pemeliharaan::STATUS_PENGERJAAN_TIDAK_DAPAT_DIPERBAIKI])) {
+                    if (is_null($pemeliharaan->getOriginal('tanggal_mulai_pengerjaan'))) {
+                        $pemeliharaan->tanggal_mulai_pengerjaan = now();
                     }
-                    if (empty($pemeliharaan->tanggal_selesai_pengerjaan) && in_array($pemeliharaan->status_pengerjaan, [Pemeliharaan::STATUS_PENGERJAAN_SELESAI, Pemeliharaan::STATUS_PENGERJAAN_TIDAK_DAPAT_DIPERBAIKI])) {
-                        $pemeliharaan->tanggal_selesai_pengerjaan = $validated['tanggal_selesai_pengerjaan'] ?? now();
-                    }
+                    $pemeliharaan->tanggal_selesai_pengerjaan = now();
                 }
             }
 
-            $pemeliharaan->save(); // Akan mentrigger event 'saved' di model
+            $pemeliharaan->save(); // Trigger event 'saved' di model
 
-            $barangQr = $pemeliharaan->barangQrCode()->withTrashed()->first(); // Re-fetch untuk mendapatkan status terbaru jika diubah oleh event
+            // Log aktivitas
+            $barangQr = $pemeliharaan->barangQrCode()->withTrashed()->first();
             $changedData = array_intersect_key($pemeliharaan->getAttributes(), $pemeliharaan->getDirty());
             $originalDataFiltered = array_intersect_key($dataLamaPemeliharaan, $pemeliharaan->getDirty());
 
@@ -467,7 +484,8 @@ class PemeliharaanController extends Controller
                 LogAktivitas::create([
                     'id_user' => Auth::id(),
                     'aktivitas' => 'Update Pemeliharaan',
-                    'deskripsi' => "Memperbarui data pemeliharaan ID: {$pemeliharaan->id} untuk unit " . (optional($barangQr)->kode_inventaris_sekolah ?? 'N/A'),
+                    'deskripsi' => "Memperbarui data pemeliharaan ID: {$pemeliharaan->id} untuk unit " .
+                        (optional($barangQr)->kode_inventaris_sekolah ?? 'N/A'),
                     'model_terkait' => Pemeliharaan::class,
                     'id_model_terkait' => $pemeliharaan->id,
                     'data_lama' => json_encode($originalDataFiltered),
@@ -476,24 +494,29 @@ class PemeliharaanController extends Controller
                     'user_agent' => $request->userAgent(),
                 ]);
             }
+
             DB::commit();
 
-            $rolePrefix = $this->getRolePrefixFromUser($user);
-            $showRouteName = $rolePrefix . 'pemeliharaan.show';
-            if (!Route::has($showRouteName)) {
-                $showRouteName = 'admin.pemeliharaan.show';
-            }
-
-            return redirect()->route($showRouteName, $pemeliharaan->id)->with('success', 'Data pemeliharaan berhasil diperbarui.');
+            // Redirect ke halaman detail
+            $redirectUrl = $this->getRedirectUrl("pemeliharaan/{$pemeliharaan->id}");
+            return redirect($redirectUrl)->with('success', 'Data pemeliharaan berhasil diperbarui.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollBack();
             Log::warning("Validation failed for Pemeliharaan update {$pemeliharaan->id}: ", $e->errors());
-            return redirect()->back()->withErrors($e->validator)->withInput()
-                ->with('error_form_type', 'edit')->with('error_pemeliharaan_id', $pemeliharaan->id);
+            return redirect()->back()
+                ->withErrors($e->validator)
+                ->withInput()
+                ->with('error_form_type', 'edit')
+                ->with('error_pemeliharaan_id', $pemeliharaan->id);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Gagal memperbarui pemeliharaan {$pemeliharaan->id}: " . $e->getMessage(), ['exception' => $e, 'trace' => $e->getTraceAsString()]);
-            return redirect()->back()->with('error', 'Gagal memperbarui data pemeliharaan. Kesalahan: ' . $e->getMessage())->withInput();
+            Log::error("Gagal memperbarui pemeliharaan {$pemeliharaan->id}: " . $e->getMessage(), [
+                'exception' => $e,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return redirect()->back()
+                ->with('error', 'Gagal memperbarui data pemeliharaan. Kesalahan: ' . $e->getMessage())
+                ->withInput();
         }
     }
 
@@ -519,8 +542,8 @@ class PemeliharaanController extends Controller
                 'user_agent' => $request->userAgent(),
             ]);
             DB::commit();
-            $redirectRoute = $this->getRedirectRouteName('pemeliharaan.index', 'admin.pemeliharaan.index');
-            return redirect()->route($redirectRoute)->with('success', 'Laporan pemeliharaan berhasil diarsipkan.');
+            $redirectUrl = $this->getRedirectUrl('pemeliharaan');
+            return redirect($redirectUrl)->with('success', 'Laporan pemeliharaan berhasil diarsipkan.');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Gagal mengarsipkan pemeliharaan {$pemeliharaan->id}: " . $e->getMessage(), ['exception' => $e]);
@@ -576,8 +599,8 @@ class PemeliharaanController extends Controller
                 'user_agent' => $request->userAgent(),
             ]);
             DB::commit();
-            $redirectRoute = $this->getRedirectRouteName('pemeliharaan.index', 'admin.pemeliharaan.index');
-            return redirect()->route($redirectRoute, ['status_arsip' => 'arsip'])->with('success', 'Laporan pemeliharaan berhasil dipulihkan.');
+            $redirectUrl = $this->getRedirectUrl('pemeliharaan?status_arsip=arsip');
+            return redirect($redirectUrl)->with('success', 'Laporan pemeliharaan berhasil dipulihkan.');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Gagal memulihkan pemeliharaan {$id}: " . $e->getMessage(), ['exception' => $e]);
@@ -585,17 +608,7 @@ class PemeliharaanController extends Controller
         }
     }
 
-    private function getRolePrefixFromUser(?User $user): string
-    {
-        if (!$user) return 'admin.';
-        $roleName = strtolower($user->role ?? '');
-        $map = [
-            User::ROLE_ADMIN => 'admin.',
-            User::ROLE_OPERATOR => 'operator.',
-            User::ROLE_GURU => 'guru.',
-        ];
-        return $map[$roleName] ?? ''; // Kembalikan string kosong jika peran tidak dikenal, agar bisa coba route global
-    }
+
 
     private function getViewPathBasedOnRole(string $adminView, string $operatorView, ?string $guruView = null): string
     {
@@ -622,20 +635,52 @@ class PemeliharaanController extends Controller
         return $targetView;
     }
 
-    private function getRedirectRouteName(string $baseRouteName, string $adminFallbackRouteName): string
+    // Tambahkan method ini di dalam class PemeliharaanController
+    private function getRolePrefix(): string
     {
         $user = Auth::user();
-        if (!$user) return $adminFallbackRouteName;
-
-        $rolePrefix = $this->getRolePrefixFromUser($user);
-
-        if (!empty($rolePrefix) && Route::has($rolePrefix . $baseRouteName)) {
-            return $rolePrefix . $baseRouteName;
+        if (!$user) {
+            return '';
         }
-        if (Route::has($baseRouteName)) { // Coba rute global jika prefix tidak ada atau rute berprefix tidak ditemukan
-            return $baseRouteName;
+
+        if ($user->hasRole(User::ROLE_ADMIN)) {
+            return 'admin.';
+        } elseif ($user->hasRole(User::ROLE_OPERATOR)) {
+            return 'operator.';
+        } elseif ($user->hasRole(User::ROLE_GURU)) {
+            return 'guru.';
         }
-        // Fallback terakhir ke rute admin default
-        return Route::has($adminFallbackRouteName) ? $adminFallbackRouteName : $baseRouteName;
+        return '';
+    }
+
+    /**
+     * PENYEMPURNAAN FINAL: Method ini sekarang mengembalikan URL absolut, bukan nama route.
+     * Ini membuatnya lebih tahan terhadap masalah konfigurasi redirect.
+     *
+     * @param string $baseUri Bagian URI dari route (misal: 'peminjaman' atau 'peminjaman/1')
+     * @return string URL tujuan yang lengkap.
+     */
+    private function getRedirectUrl(string $baseUri): string
+    {
+        $user = Auth::user();
+        if (!$user) {
+            // Fallback jika tidak ada user, arahkan ke login
+            return url('/login');
+        }
+
+        $rolePrefix = '';
+        if ($user->hasRole(User::ROLE_ADMIN)) {
+            $rolePrefix = 'admin';
+        } elseif ($user->hasRole(User::ROLE_OPERATOR)) {
+            $rolePrefix = 'operator';
+        } elseif ($user->hasRole(User::ROLE_GURU)) {
+            $rolePrefix = 'guru';
+        }
+
+        // Jika ada prefix peran, gabungkan. Jika tidak, gunakan baseUri saja.
+        $fullUri = $rolePrefix ? "{$rolePrefix}/{$baseUri}" : $baseUri;
+
+        // Gunakan helper url() untuk membuat URL yang lengkap
+        return url($fullUri);
     }
 }

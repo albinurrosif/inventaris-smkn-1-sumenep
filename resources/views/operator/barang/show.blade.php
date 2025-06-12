@@ -248,7 +248,7 @@
     @endif
     @include('admin.barang.partials.modal_hapus_jenis')
     {{-- Modal arsip unit tetap di-include jika ada tombol lain yang mungkin memicunya, atau jika JS-nya digunakan bersama --}}
-    @include('admin.barang_qr_code.partials.modal_arsip_unit')
+    @include('pages.barang_qr_code.partials.modal_arsip_unit')
 
 @endsection
 

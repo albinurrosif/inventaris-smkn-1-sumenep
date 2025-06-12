@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Pagination\Paginator;
+use Carbon\Carbon;
+
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -37,6 +39,8 @@ class AppServiceProvider extends ServiceProvider
             });
         }
 
+
+        Carbon::setLocale('id');
         Paginator::useBootstrapFive();
     }
 }

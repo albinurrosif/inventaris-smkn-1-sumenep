@@ -752,7 +752,7 @@
                     // Show the custom install prompt
                     setTimeout(() => {
                         pwaInstallContainer.classList.add('show');
-                    }, 5000); // Show after 10 seconds
+                    }, 10000); // Show after 10 seconds
                 });
 
                 pwaInstallAccept.addEventListener('click', () => {

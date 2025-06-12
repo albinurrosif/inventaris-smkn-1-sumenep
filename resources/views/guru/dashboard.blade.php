@@ -140,6 +140,80 @@
             </div>
         </div>
 
+        {{-- ====================================================================== --}}
+        {{-- ===== AWAL BLOK KODE BARU UNTUK DAFTAR ASET PERSONAL ===== --}}
+        {{-- ====================================================================== --}}
+
+        <div class="row mt-3">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="fas fa-user-check me-2"></i>Daftar Aset Dipegang Personal</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            @forelse ($asetDipegangPersonal as $aset)
+                                <div class="list-group-item list-group-item-action">
+                                    <div class="d-flex align-items-center">
+                                        {{-- Informasi Aset --}}
+                                        <div class="flex-grow-1">
+                                            <div class="fw-bold">{{ optional($aset->barang)->nama_barang ?? 'N/A' }}</div>
+                                            <small class="text-muted">
+                                                Kode: <code>{{ $aset->kode_inventaris_sekolah }}</code>
+                                                @if ($aset->no_seri_pabrik)
+                                                    • SN: {{ $aset->no_seri_pabrik }}
+                                                @endif
+                                            </small>
+                                        </div>
+
+                                        {{-- Status Kondisi --}}
+                                        <div class="flex-shrink-0 mx-4">
+                                            <span
+                                                class="badge {{ \App\Models\BarangQrCode::getKondisiColor($aset->kondisi) }}">
+                                                Kondisi: {{ $aset->kondisi }}
+                                            </span>
+                                        </div>
+
+                                        {{-- Tombol Aksi --}}
+                                        <div class="flex-shrink-0" style="width: 200px; text-align: right;">
+                                            {{-- Cek apakah ada record pemeliharaan yang aktif untuk aset ini --}}
+                                            @if ($aset->pemeliharaanRecords->isNotEmpty())
+                                                {{-- Jika ada, tampilkan statusnya sebagai badge --}}
+                                                @php
+                                                    $pemeliharaanAktif = $aset->pemeliharaanRecords->first();
+                                                @endphp
+                                                <a href="{{ route($rolePrefix . 'pemeliharaan.show', $pemeliharaanAktif->id) }}"
+                                                    class="btn btn-info btn-sm" data-bs-toggle="tooltip"
+                                                    title="Lihat detail laporan">
+                                                    <i class="fas fa-info-circle me-1"></i> Dalam Proses Lapor
+                                                </a>
+                                            @else
+                                                {{-- Jika tidak ada, tampilkan tombol untuk lapor --}}
+                                                <a href="{{ route($rolePrefix . 'pemeliharaan.create', ['id_barang_qr_code' => $aset->id]) }}"
+                                                    class="btn btn-warning btn-sm" data-bs-toggle="tooltip"
+                                                    title="Laporkan kerusakan untuk aset ini">
+                                                    <i class="fas fa-tools me-1"></i> Laporkan Kerusakan
+                                                </a>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+                            @empty
+                                <div class="list-group-item">
+                                    <p class="text-center text-muted my-3">Anda tidak sedang memegang aset personal saat
+                                        ini.</p>
+                                </div>
+                            @endforelse
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- ====================================================================== --}}
+        {{-- ===== AKHIR BLOK KODE BARU ===== --}}
+        {{-- ====================================================================== --}}
+
         {{-- Daftar Aktivitas Terbaru --}}
         <div class="row mt-3">
             <div class="col-lg-12">

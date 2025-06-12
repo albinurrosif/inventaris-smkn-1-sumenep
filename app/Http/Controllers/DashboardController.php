@@ -295,7 +295,13 @@ class DashboardController extends Controller
 
         // Aset yang menjadi tanggung jawab personal guru
         $asetDipegangPersonal = BarangQrCode::where('id_pemegang_personal', $user->id)
-            ->with('barang')
+            ->with([
+                'barang',
+                // Eager load relasi pemeliharaan HANYA yang statusnya masih aktif
+                'pemeliharaanRecords' => function ($query) {
+                    $query->whereIn('status_pengajuan', ['Diajukan', 'Disetujui']);
+                }
+            ])
             ->whereNull('deleted_at')
             ->get();
 

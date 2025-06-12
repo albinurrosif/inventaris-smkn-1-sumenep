@@ -128,13 +128,20 @@
                                     </td>
                                     <td>{{ $arsip->barangQrCode->no_seri_pabrik ?? ($arsip->barangQrCode->no_seri_internal ?? '-') }}
                                     </td>
-                                    <td>{{ $arsip->barangQrCode->barang->nama_barang ?? 'N/A' }}</td>
+                                    <td>{{ $arsip->data_unit_snapshot['barang']['nama_barang'] ?? 'Data Hilang' }}</td>
                                     <td>
                                         <span
-                                            class="badge bg-secondary">{{ $arsip->barangQrCode->barang->kategori->nama_kategori ?? '-' }}</span>
+                                            class="badge bg-secondary">{{ $arsip->data_unit_snapshot['barang']['kategori']['nama_kategori'] ?? '-' }}</span>
                                     </td>
                                     <td>
-                                        {{ $arsip->ruanganSaatDiarsipkan->nama_ruangan ?? ($arsip->pemegangSaatDiarsipkan && $arsip->pemegangSaatDiarsipkan->username ? 'Pribadi: ' . $arsip->pemegangSaatDiarsipkan->username : 'Tidak Diketahui') }}
+                                        @php
+                                            // Logika untuk menampilkan lokasi terakhir dari snapshot
+                                            $lokasi_terakhir =
+                                                $arsip->data_unit_snapshot['ruangan']['nama_ruangan'] ??
+                                                ($arsip->data_unit_snapshot['pemegang_personal']['username'] ??
+                                                    'Tidak Diketahui');
+                                        @endphp
+                                        {{ $lokasi_terakhir }}
                                     </td>
                                     <td><span class="badge bg-warning text-dark">{{ $arsip->jenis_penghapusan }}</span>
                                     </td>

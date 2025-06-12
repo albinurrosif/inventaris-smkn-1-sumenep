@@ -12,6 +12,7 @@ use App\Models\ArsipBarang;
 use App\Models\MutasiBarang;
 use App\Models\BarangStatus; // Pastikan ini di-use
 use App\Models\Peminjaman;
+use App\Models\Pemeliharaan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -198,7 +199,7 @@ class BarangQrCodeController extends Controller
         $kondisiOptions = BarangQrCode::getValidKondisi();
         // SESUDAH (BENAR)
         $jumlah_unit = filter_var($request->query('jumlah_unit', 1), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'default' => 1]]);
-        
+
         return view('pages.barang_qr_code.create_units', compact(
             'barang',
             'jumlah_unit',
@@ -350,6 +351,51 @@ class BarangQrCodeController extends Controller
         $user = Auth::user();
         /** @var \App\Models\User $user */
 
+
+        // ===== AWAL LOGIKA BARU UNTUK TOMBOL PEMELIHARAAN =====
+
+        $bisaLaporkanKerusakan = false; // Default-nya tidak bisa
+
+        // 1. Cek hak akses dasar untuk membuat laporan
+        if ($user->can('create', \App\Models\Pemeliharaan::class)) {
+            // 2. Cek apakah barang ini dalam status yang valid (tidak sedang dipinjam atau sudah dalam pemeliharaan)
+            $statusValid = !in_array($qrCode->status, [BarangQrCode::STATUS_DIPINJAM, BarangQrCode::STATUS_DALAM_PEMELIHARAAN]);
+
+            // 3. Cek apakah sudah ada laporan aktif untuk barang ini
+            $tidakAdaLaporanAktif = !$qrCode->pemeliharaanRecords()
+                ->where(function ($query) {
+                    // Laporan dianggap aktif jika statusnya 'Diajukan'
+                    $query->where('status_pengajuan', \App\Models\Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN)
+                        // ATAU jika statusnya 'Disetujui' TAPI pengerjaannya BELUM final
+                        ->orWhere(function ($q) {
+                            $q->where('status_pengajuan', \App\Models\Pemeliharaan::STATUS_PENGAJUAN_DISETUJUI)
+                                ->whereNotIn('status_pengerjaan', [
+                                    \App\Models\Pemeliharaan::STATUS_PENGERJAAN_SELESAI,
+                                    \App\Models\Pemeliharaan::STATUS_PENGERJAAN_GAGAL,
+                                    \App\Models\Pemeliharaan::STATUS_PENGERJAAN_TIDAK_DAPAT_DIPERBAIKI,
+                                ]);
+                        });
+                })
+                ->exists();
+
+            // 4. Cek kepemilikan atau kewenangan (Guru hanya bisa lapor miliknya, Operator lapor miliknya atau di ruangannya)
+            $punyaKewenangan = false;
+            if ($user->hasRole(User::ROLE_ADMIN)) {
+                $punyaKewenangan = true;
+            } elseif ($user->hasRole(User::ROLE_GURU)) {
+                $punyaKewenangan = ($qrCode->id_pemegang_personal === $user->id);
+            } elseif ($user->hasRole(User::ROLE_OPERATOR)) {
+                $punyaKewenangan = ($qrCode->id_pemegang_personal === $user->id) || ($qrCode->id_ruangan && $user->ruanganYangDiKelola()->where('id', $qrCode->id_ruangan)->exists());
+            }
+
+            // Jika semua kondisi terpenuhi, maka tombol boleh muncul
+            if ($statusValid && $tidakAdaLaporanAktif && $punyaKewenangan) {
+                $bisaLaporkanKerusakan = true;
+            }
+        }
+        // ===== AKHIR LOGIKA BARU =====
+
+
         // 1. Data untuk Modal "Serahkan ke Personal"
         // Pengguna yang bisa dipilih untuk diserahi barang (semua user aktif)
         $eligibleUsersForAssign = User::orderBy('username', 'asc')->get();
@@ -383,7 +429,8 @@ class BarangQrCodeController extends Controller
             'eligibleUsersForAssign',
             'ruangansForReturnForm',
             'eligibleUsersForTransfer',
-            'rolePrefix'
+            'rolePrefix',
+            'bisaLaporkanKerusakan'
         ));
     }
 
@@ -748,6 +795,8 @@ class BarangQrCodeController extends Controller
             $beritaAcaraPath = $request->hasFile('berita_acara_path') ? $request->file('berita_acara_path')->store('arsip/berita_acara_unit', 'public') : null;
             $fotoBuktiPath = $request->hasFile('foto_bukti_path') ? $request->file('foto_bukti_path')->store('arsip/foto_bukti_unit', 'public') : null;
 
+            $barangQrCode->load('barang.kategori', 'ruangan', 'pemegangPersonal');
+
             $arsipData = [
                 'id_user_pengaju' => $userActor->id,
                 'jenis_penghapusan' => $validated['jenis_penghapusan'],
@@ -782,6 +831,7 @@ class BarangQrCodeController extends Controller
                 $logAktivitasDeskripsi = "Pengajuan arsip untuk unit {$barangQrCode->kode_inventaris_sekolah} oleh {$userActor->username}";
                 $redirectMessage = "Pengajuan arsip unit {$barangQrCode->kode_inventaris_sekolah} berhasil.";
             }
+
 
             $arsip = ArsipBarang::updateOrCreate(
                 ['id_barang_qr_code' => $barangQrCode->id],
@@ -1066,44 +1116,90 @@ class BarangQrCodeController extends Controller
      * Method baru untuk mencari unit barang yang bisa dilaporkan untuk pemeliharaan.
      * Mengembalikan data dalam format JSON untuk Select2.
      */
+    /**
+     * Method untuk mencari unit barang yang bisa dilaporkan untuk pemeliharaan.
+     * Mengembalikan data dalam format JSON untuk Select2.
+     */
     public function searchForMaintenance(Request $request): JsonResponse
     {
-        // Otorisasi sederhana, pastikan pengguna yang mengakses adalah pengguna terautentikasi
-        // Anda bisa menambahkan policy yang lebih spesifik jika perlu
-        $this->authorize('viewAny', Pemeliharaan::class);
+        try {
+            // Otorisasi sederhana, pastikan pengguna yang mengakses adalah pengguna terautentikasi
+            // Anda bisa menambahkan policy yang lebih spesifik jika perlu
+            $this->authorize('viewAny', Pemeliharaan::class);
 
-        $term = $request->input('q', '');
+            $term = $request->input('q', '');
+            $page = $request->input('page', 1);
+            $perPage = 15;
 
-        $query = BarangQrCode::with(['barang:id,nama_barang', 'ruangan:id,nama_ruangan', 'pemegangPersonal:id,username'])
-            // Kriteria barang yang bisa dilaporkan:
-            ->whereNull('deleted_at') // 1. Tidak diarsipkan
-            ->where('status', '!=', BarangQrCode::STATUS_DIPINJAM) // 2. Tidak sedang dipinjam
-            ->where('kondisi', '!=', BarangQrCode::KONDISI_HILANG); // 3. Tidak hilang
+            $query = BarangQrCode::with(['barang:id,nama_barang', 'ruangan:id,nama_ruangan', 'pemegangPersonal:id,username'])
+                // Kriteria barang yang bisa dilaporkan:
+                ->whereNull('deleted_at') // 1. Tidak diarsipkan
+                ->where('status', '!=', BarangQrCode::STATUS_DIPINJAM) // 2. Tidak sedang dipinjam
+                ->where('kondisi', '!=', BarangQrCode::KONDISI_HILANG); // 3. Tidak hilang
 
-        // Logika pencarian berdasarkan term
-        if (!empty($term)) {
-            $query->where(function ($q) use ($term) {
-                $q->where('kode_inventaris_sekolah', 'LIKE', "%{$term}%")
-                    ->orWhere('no_seri_pabrik', 'LIKE', "%{$term}%")
-                    ->orWhereHas('barang', function ($qBarang) use ($term) {
-                        $qBarang->where('nama_barang', 'LIKE', "%{$term}%");
-                    });
+            // Logika pencarian berdasarkan term
+            if (!empty($term)) {
+                $query->where(function ($q) use ($term) {
+                    $q->where('kode_inventaris_sekolah', 'LIKE', "%{$term}%")
+                        ->orWhere('no_seri_pabrik', 'LIKE', "%{$term}%")
+                        ->orWhereHas('barang', function ($qBarang) use ($term) {
+                            $qBarang->where('nama_barang', 'LIKE', "%{$term}%");
+                        });
+                });
+            }
+
+            // Pagination
+            $offset = ($page - 1) * $perPage;
+            $totalCount = $query->count();
+            $items = $query->skip($offset)->take($perPage)->get();
+
+            $results = $items->map(function ($item) {
+                $lokasi = '';
+                if ($item->ruangan) {
+                    $lokasi = $item->ruangan->nama_ruangan;
+                } elseif ($item->pemegangPersonal) {
+                    $lokasi = 'Pemegang: ' . $item->pemegangPersonal->username;
+                } else {
+                    $lokasi = 'Tidak Berlokasi';
+                }
+
+                $displayText = $item->barang->nama_barang .
+                    ' (' . $item->kode_inventaris_sekolah . ')';
+
+                if ($item->no_seri_pabrik) {
+                    $displayText .= ' - SN: ' . $item->no_seri_pabrik;
+                }
+
+                $displayText .= ' - Kondisi: ' . $item->kondisi .
+                    ' - Lokasi: ' . $lokasi;
+
+                return [
+                    'id' => $item->id,
+                    'text' => $displayText,
+                    'nama_barang_induk' => $item->barang->nama_barang,
+                    'kode_inventaris_sekolah' => $item->kode_inventaris_sekolah,
+                    'no_seri_pabrik' => $item->no_seri_pabrik,
+                    'kondisi_saat_ini' => $item->kondisi,
+                    'ruangan_saat_ini' => $item->ruangan ? $item->ruangan->nama_ruangan : null,
+                    'pemegang_saat_ini' => $item->pemegangPersonal ? $item->pemegangPersonal->username : null
+                ];
             });
+
+            return response()->json([
+                'items' => $results,
+                'total_count' => $totalCount,
+                'results' => $results // Untuk kompatibilitas dengan frontend yang sudah ada
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error in searchForMaintenance: ' . $e->getMessage());
+
+            return response()->json([
+                'items' => [],
+                'total_count' => 0,
+                'results' => [],
+                'error' => 'Terjadi kesalahan saat mencari data'
+            ], 500);
         }
-
-        $items = $query->limit(20)->get();
-
-        $results = $items->map(function ($item) {
-            $lokasi = optional($item->ruangan)->nama_ruangan ?? (optional($item->pemegangPersonal)->username ? 'Pemegang: ' . $item->pemegangPersonal->username : 'Tidak Berlokasi');
-            $displayText = "{$item->barang->nama_barang} ({$item->kode_inventaris_sekolah}) - Kondisi: {$item->kondisi} - Lokasi: {$lokasi}";
-
-            return [
-                'id' => $item->id,
-                'text' => $displayText
-            ];
-        });
-
-        return response()->json(['results' => $results]);
     }
 
 

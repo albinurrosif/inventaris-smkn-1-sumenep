@@ -3,7 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use App\Models\Pemeliharaan; // Digunakan untuk mengakses konstanta enum
+use App\Models\Pemeliharaan;
 
 return new class extends Migration
 {
@@ -26,9 +26,7 @@ return new class extends Migration
             $table->foreignId('id_user_penyetuju')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('tanggal_persetujuan')->nullable();
             $table->text('catatan_persetujuan')->nullable();
-
-            // Kolom untuk foto kerusakan
-            $table->string('foto_kerusakan_path')->nullable()->after('catatan_persetujuan')->comment('Path foto bukti kerusakan'); // <-- TAMBAHAN
+            $table->string('foto_kerusakan_path')->nullable()->comment('Path foto bukti kerusakan');
 
             // Kolom untuk pelaksanaan pemeliharaan
             $table->foreignId('id_operator_pengerjaan')->nullable()->constrained('users')->onDelete('set null');
@@ -43,9 +41,7 @@ return new class extends Migration
             $table->text('hasil_pemeliharaan')->nullable()->comment('Hasil dari pemeliharaan');
             $table->string('kondisi_barang_setelah_pemeliharaan')->nullable()->comment('Kondisi barang setelah pemeliharaan selesai');
             $table->text('catatan_pengerjaan')->nullable()->comment('Catatan tambahan dari teknisi/operator');
-
-            // Kolom untuk foto perbaikan
-            $table->string('foto_perbaikan_path')->nullable()->after('catatan_pengerjaan')->comment('Path foto bukti setelah perbaikan'); // <-- TAMBAHAN
+            $table->string('foto_perbaikan_path')->nullable()->comment('Path foto bukti setelah perbaikan');
 
             $table->timestamps();
             $table->softDeletes();
@@ -59,13 +55,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // PERUBAHAN: Tambahkan dropColumn agar migrasi bisa di-rollback
-        Schema::table('pemeliharaans', function (Blueprint $table) {
-            $table->dropColumn(['foto_kerusakan_path', 'foto_perbaikan_path']);
-        });
-
-        // Baris dropIfExists di bawah ini hanya dijalankan jika Anda ingin menghapus seluruh tabel
-        // Jika hanya ingin rollback migrasi ini, biarkan seperti di atas.
-        // Schema::dropIfExists('pemeliharaans');
+        Schema::dropIfExists('pemeliharaans');
     }
 };

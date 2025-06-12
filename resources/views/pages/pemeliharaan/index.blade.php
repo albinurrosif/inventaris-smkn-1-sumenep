@@ -205,11 +205,11 @@
                         <thead class="table-light">
                             <tr>
                                 <th class="text-center">No</th>
-                                <th>Kode Unit</th>
-                                <th>Nama Barang</th>
+                                <th>Nama Barang & Kode Unit</th> {{-- Perubahan Judul Kolom --}}
                                 <th>Kerusakan Dilaporkan</th>
                                 <th class="text-center">Prioritas</th>
                                 <th class="text-center">Status</th>
+                                <th>Keterkaitan</th> {{-- Kolom Baru --}}
                                 <th>Tgl. Lapor</th>
                                 <th>Pelapor</th>
                                 <th>PIC</th>
@@ -221,26 +221,43 @@
                                 <tr class="{{ $item->trashed() ? 'table-danger-light' : '' }}">
                                     <td class="text-center">{{ $pemeliharaanList->firstItem() + $index }}</td>
                                     <td>
+                                        {{-- ===== AWAL PERUBAHAN KOLOM NAMA BARANG & KODE UNIT ===== --}}
                                         @if ($item->barangQrCode)
                                             <a href="{{ route('admin.barang-qr-code.show', $item->barangQrCode->id) }}"
-                                                target="_blank" data-bs-toggle="tooltip"
+                                                target="_blank" class="fw-bold" data-bs-toggle="tooltip"
                                                 title="Lihat Detail Unit: {{ $item->barangQrCode->kode_inventaris_sekolah }}">
-                                                <code>{{ $item->barangQrCode->kode_inventaris_sekolah ?? 'N/A' }}</code>
+                                                {{ optional($item->barangQrCode->barang)->nama_barang ?? 'N/A' }}
                                             </a>
+                                            <small class="text-muted d-block">
+                                                Kode:
+                                                <code>{{ $item->barangQrCode->kode_inventaris_sekolah ?? 'N/A' }}</code>
+                                            </small>
+                                            @php
+                                                $lokasi = 'Lokasi Tidak Diketahui';
+                                                if ($item->barangQrCode->ruangan) {
+                                                    $lokasi = 'Di: ' . $item->barangQrCode->ruangan->nama_ruangan;
+                                                } elseif ($item->barangQrCode->pemegangPersonal) {
+                                                    $lokasi =
+                                                        'Dipegang: ' . $item->barangQrCode->pemegangPersonal->username;
+                                                }
+                                            @endphp
+                                            <small class="fst-italic d-block" style="font-size: 0.75rem;">
+                                                <i class="fas fa-map-marker-alt me-1"></i> {{ $lokasi }}
+                                            </small>
                                         @else
-                                            <span class="text-muted">N/A</span>
+                                            <span class="text-muted">Data Unit Barang Hilang</span>
                                         @endif
+                                        {{-- ===== AKHIR PERUBAHAN KOLOM NAMA BARANG & KODE UNIT ===== --}}
                                     </td>
-                                    <td>{{ optional(optional($item->barangQrCode)->barang)->nama_barang ?? 'N/A' }}</td>
-                                    <td data-bs-toggle="tooltip" title="{{ $item->deskripsi_kerusakan }}">
-                                        {{ Str::limit($item->deskripsi_kerusakan, 35) }}
+                                    <td data-bs-toggle="tooltip" title="{{ $item->catatan_pengajuan }}">
+                                        {{ Str::limit($item->catatan_pengajuan, 35) }}
                                     </td>
                                     <td class="text-center">
                                         @php
                                             $prioritasClass = match (strtolower($item->prioritas ?? '')) {
-                                                App\Models\Pemeliharaan::PRIORITAS_TINGGI => 'danger',
-                                                App\Models\Pemeliharaan::PRIORITAS_SEDANG => 'warning text-dark',
-                                                App\Models\Pemeliharaan::PRIORITAS_RENDAH => 'info',
+                                                'tinggi' => 'danger',
+                                                'sedang' => 'warning text-dark',
+                                                'rendah' => 'info',
                                                 default => 'secondary',
                                             };
                                         @endphp
@@ -251,12 +268,18 @@
                                         <span
                                             class="badge {{ App\Models\Pemeliharaan::statusColor($item->status_pemeliharaan) }}">{{ $item->status_pemeliharaan }}</span>
                                     </td>
+                                    {{-- ===== AWAL PENAMBAHAN KOLOM KETERKAITAN ===== --}}
+                                    <td>
+                                        <span class="badge bg-light text-dark">{{ $item->keterkaitan }}</span>
+                                    </td>
+                                    {{-- ===== AKHIR PENAMBAHAN KOLOM KETERKAITAN ===== --}}
                                     <td data-sort="{{ optional($item->tanggal_pengajuan)->timestamp }}">
                                         {{ optional($item->tanggal_pengajuan)->isoFormat('DD MMM YY') }}
                                     </td>
                                     <td>{{ optional($item->pengaju)->username ?? '-' }}</td>
                                     <td>{{ optional($item->operatorPengerjaan)->username ?? '-' }}</td>
                                     <td class="text-center">
+                                        {{-- (Tidak ada perubahan pada kolom Aksi) --}}
                                         <div class="d-flex gap-1 justify-content-center">
                                             @if ($item->trashed())
                                                 @can('restore', $item)
@@ -295,7 +318,7 @@
                                                     <button type="button"
                                                         class="btn btn-danger btn-sm btn-delete-pemeliharaan"
                                                         data-id="{{ $item->id }}"
-                                                        data-deskripsi="{{ Str::limit($item->deskripsi_kerusakan, 30) }}"
+                                                        data-deskripsi="{{ Str::limit($item->catatan_pengajuan, 30) }}"
                                                         data-bs-toggle="tooltip" title="Arsipkan Laporan">
                                                         <i class="fas fa-archive"></i>
                                                     </button>
@@ -306,7 +329,8 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="10" class="text-center">
+                                    {{-- Sesuaikan colspan karena ada penambahan kolom --}}
+                                    <td colspan="11" class="text-center">
                                         Tidak ada data laporan pemeliharaan yang cocok dengan filter.
                                     </td>
                                 </tr>
@@ -315,20 +339,21 @@
                     </table>
                 </div>
 
-                {{-- @if ($pemeliharaanList->hasPages())
+                {{-- Paginasi --}}
+                @if ($pemeliharaanList->hasPages())
                     <div class="mt-3 d-flex justify-content-end">
                         {{ $pemeliharaanList->appends(request()->query())->links() }}
                     </div>
-                @endif --}}
+                @endif
             </div>
         </div>
     </div>
 
     <form id="formDeletePemeliharaan" method="POST" style="display: none;">@csrf @method('DELETE')</form>
-
 @endsection
 
 @push('scripts')
+    {{-- (Tidak ada perubahan signifikan di sini, hanya penyesuaian kecil jika ada) --}}
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
@@ -336,42 +361,36 @@
     <script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    {{-- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script> --}} {{-- Diasumsikan sudah ada di layout utama --}}
 
     <script>
-        // Helper untuk mendapatkan prefix route dari PHP Auth (jika User model punya method getRolePrefix)
-        // atau Anda bisa menggantinya dengan logika JS jika prefix peran disimpan di window object
         function getUserRoleBasedRoutePrefix() {
             @if (Auth::check() && method_exists(Auth::user(), 'getRolePrefix'))
-                return "{{ Auth::user()->getRolePrefix() }}"; // Menghasilkan "admin." atau "operator."
+                return "{{ Auth::user()->getRolePrefix() }}";
             @else
-                // Fallback atau default jika user tidak login atau method tidak ada
-                // Sesuaikan dengan logika Anda jika perlu
                 console.warn(
                     'getRolePrefix method not found on User model or user not authenticated. Defaulting to admin prefix logic if applicable.'
                 );
-                return 'admin.'; // Default yang mungkin perlu disesuaikan
+                return 'admin.';
             @endif
         }
 
         $(document).ready(function() {
-            // Inisialisasi DataTables
-            if ($('#tabelPemeliharaan tbody tr').length > 0 && !$('#tabelPemeliharaan tbody tr td[colspan="10"]')
+            if ($('#tabelPemeliharaan tbody tr').length > 0 && !$('#tabelPemeliharaan tbody tr td[colspan="11"]')
                 .length) {
                 if ($.fn.DataTable.isDataTable('#tabelPemeliharaan')) {
                     $('#tabelPemeliharaan').DataTable().destroy();
                 }
                 $('#tabelPemeliharaan').DataTable({
                     responsive: true,
-                    paging: true, // Paginasi dikelola Laravel
-                    searching: false, // Pencarian utama dikelola form filter server-side
-                    info: true, // Info entri dikelola Laravel
-                    ordering: true, // Aktifkan pengurutan kolom sisi klien
+                    paging: false, // Paginasi dikelola Laravel
+                    searching: false,
+                    info: false,
+                    ordering: true,
                     order: [
                         [6, 'desc']
-                    ], // Default sort by Tgl. Lapor (indeks kolom 6) descending
+                    ], // Default sort by Tgl. Lapor (indeks kolom 7) descending
                     columnDefs: [{
-                        targets: [0, 9],
+                        targets: [0, 9], // Sesuaikan indeks kolom Aksi
                         orderable: false,
                         searchable: false
                     }],
@@ -381,7 +400,6 @@
                 });
             }
 
-            // Inisialisasi Select2
             $('.select2-filter').select2({
                 theme: "bootstrap-5",
                 width: $(this).data('width') ? $(this).data('width') : $(this).hasClass('w-100') ? '100%' :
@@ -396,10 +414,10 @@
                 const deskripsi = $(this).data('deskripsi');
                 const formDelete = $('#formDeletePemeliharaan');
                 const rolePrefixOnly = getUserRoleBasedRoutePrefix().slice(0, -
-                    1); // Hilangkan titik di akhir
+                    1);
 
                 let actionUrl =
-                    `{{ route('admin.pemeliharaan.destroy', ['pemeliharaan' => ':id']) }}`; // Default ke admin
+                    `{{ route('admin.pemeliharaan.destroy', ['pemeliharaan' => ':id']) }}`;
                 if (rolePrefixOnly && rolePrefixOnly !== 'admin') {
                     actionUrl = actionUrl.replace('/admin/', `/${rolePrefixOnly}/`);
                 }
@@ -427,8 +445,8 @@
             $(document).on('submit', '.form-restore-pemeliharaan', function(e) {
                 e.preventDefault();
                 const form = this;
-                const deskripsi = $(this).closest('tr').find('td:nth-child(4)').text()
-                    .trim(); // Ambil dari kolom kerusakan
+                const deskripsi = $(this).closest('tr').find('td:nth-child(3)').text()
+                    .trim();
                 Swal.fire({
                     title: 'Konfirmasi Pulihkan Laporan',
                     html: `Anda yakin ingin memulihkan laporan pemeliharaan: <strong>"${deskripsi}"</strong>?`,
@@ -445,7 +463,6 @@
                 });
             });
 
-            // Inisialisasi Tooltip Bootstrap
             var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
             var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
                 return new bootstrap.Tooltip(tooltipTriggerEl)

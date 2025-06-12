@@ -195,15 +195,21 @@
                         @endcan --}}
                         {{-- Jika barang diarsipkan, hanya tampilkan tombol Pulihkan --}}
                         @if ($qrCode->trashed())
-                            @can('restore', $qrCode)
-                                <form action="{{ route($rolePrefix . 'barang-qr-code.restore', $qrCode->id) }}" method="POST">
-                                    @csrf
-                                    <button type="submit" class="btn btn-success w-100"
-                                        onclick="return confirm('Anda yakin ingin memulihkan unit ini dari arsip?')">
-                                        <i class="fas fa-undo me-1"></i> Pulihkan dari Arsip
-                                    </button>
-                                </form>
-                            @endcan
+                            {{-- Pastikan ada data arsip terkait sebelum menampilkan tombol --}}
+                            @if ($qrCode->arsip)
+                                @can('restore', $qrCode)
+                                    {{-- Ubah action form untuk menunjuk ke route arsip --}}
+                                    <form action="{{ route('admin.arsip-barang.restore', $qrCode->arsip->id) }}" method="POST"
+                                        class="form-restore-arsip">
+                                        @csrf
+                                        <button type="submit" class="btn btn-success w-100 btn-restore"
+                                            data-bs-toggle="tooltip"
+                                            title="Pulihkan Unit Barang {{ $qrCode->kode_inventaris_sekolah }}">
+                                            <i class="fas fa-undo me-1"></i> Pulihkan dari Arsip
+                                        </button>
+                                    </form>
+                                @endcan
+                            @endif
                         @else
                             @can('update', $qrCode)
                                 <button type="button" class="btn btn-warning text-dark w-100 btn-edit-unit-trigger"
@@ -261,6 +267,14 @@
                                             </button>
                                         @endif
                                     @endcan
+                                @endif
+
+                                {{-- Tampilkan tombol ini HANYA jika semua kondisi di controller terpenuhi --}}
+                                @if ($bisaLaporkanKerusakan)
+                                    <a href="{{ route($rolePrefix . 'pemeliharaan.create', ['id_barang_qr_code' => $qrCode->id]) }}"
+                                        class="btn btn-secondary">
+                                        <i class="fas fa-tools me-2"></i>Ajukan Pemeliharaan
+                                    </a>
                                 @endif
 
                                 @can('archive', $qrCode)

@@ -30,7 +30,7 @@ class Pemeliharaan extends Model
         'id_user_penyetuju',
         'tanggal_persetujuan',
         'catatan_persetujuan',
-        'foto_kerusakan_path', 
+        'foto_kerusakan_path',
         'id_operator_pengerjaan',
         'tanggal_mulai_pengerjaan',
         'tanggal_selesai_pengerjaan',
@@ -193,6 +193,32 @@ class Pemeliharaan extends Model
             default => 'text-bg-light text-dark',
         };
     }
+
+    /**
+     * Memeriksa apakah laporan pemeliharaan sudah dalam status final (terkunci)
+     * dan seharusnya tidak bisa diedit lagi.
+     *
+     * @return bool
+     */
+    public function isLocked(): bool
+    {
+        // Daftar status pengerjaan yang dianggap final
+        $finalPengerjaan = [
+            self::STATUS_PENGERJAAN_SELESAI,
+            self::STATUS_PENGERJAAN_GAGAL,
+            self::STATUS_PENGERJAAN_TIDAK_DAPAT_DIPERBAIKI,
+        ];
+
+        // Daftar status pengajuan yang dianggap final
+        $finalPengajuan = [
+            self::STATUS_PENGAJUAN_DITOLAK,
+            self::STATUS_PENGAJUAN_DIBATALKAN,
+        ];
+
+        // Laporan dianggap terkunci jika status pengerjaan ATAU status pengajuannya final.
+        return in_array($this->status_pengerjaan, $finalPengerjaan) || in_array($this->status_pengajuan, $finalPengajuan);
+    }
+
 
     // --- MODEL EVENTS (BOOT METHOD) ---
     protected static function boot()

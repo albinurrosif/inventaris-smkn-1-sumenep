@@ -498,6 +498,9 @@ class BarangController extends Controller
             $listUnitYangDiarsipkan = [];
 
             foreach ($barang->qrCodes()->whereNull('deleted_at')->get() as $unit) {
+
+                $unit->load('barang.kategori', 'ruangan', 'pemegangPersonal');
+
                 $arsip = ArsipBarang::create([
                     'id_barang_qr_code' => $unit->id,
                     'id_user_pengaju' => $user->id,
@@ -541,7 +544,8 @@ class BarangController extends Controller
                 'user_agent' => $request->userAgent(),
             ]);
             DB::commit();
-            return redirect()->route($this->getRolePrefix('barang.index', 'admin.barang.index'))->with('success', 'Jenis barang dan semua unit aktifnya berhasil dihapus (diarsipkan).');
+            // Kode Perbaikan
+            return redirect($this->getRedirectUrl('barang'))->with('success', 'Jenis barang dan semua unit aktifnya berhasil dihapus (diarsipkan).');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Gagal hapus jenis barang (ID: {$barang->id}): {$e->getMessage()}", ['exception' => $e]);
@@ -642,5 +646,36 @@ class BarangController extends Controller
         }
         $viewPath = $this->getViewPathBasedOnRole('admin.barang.print_qrcodes', 'operator.barang.print_qrcodes');
         return view($viewPath, compact('barang', 'qrCodesToPrint'));
+    }
+
+    /**
+     * PENYEMPURNAAN FINAL: Method ini sekarang mengembalikan URL absolut, bukan nama route.
+     * Ini membuatnya lebih tahan terhadap masalah konfigurasi redirect.
+     *
+     * @param string $baseUri Bagian URI dari route (misal: 'peminjaman' atau 'peminjaman/1')
+     * @return string URL tujuan yang lengkap.
+     */
+    private function getRedirectUrl(string $baseUri): string
+    {
+        $user = Auth::user();
+        if (!$user) {
+            // Fallback jika tidak ada user, arahkan ke login
+            return url('/login');
+        }
+
+        $rolePrefix = '';
+        if ($user->hasRole(User::ROLE_ADMIN)) {
+            $rolePrefix = 'admin';
+        } elseif ($user->hasRole(User::ROLE_OPERATOR)) {
+            $rolePrefix = 'operator';
+        } elseif ($user->hasRole(User::ROLE_GURU)) {
+            $rolePrefix = 'guru';
+        }
+
+        // Jika ada prefix peran, gabungkan. Jika tidak, gunakan baseUri saja.
+        $fullUri = $rolePrefix ? "{$rolePrefix}/{$baseUri}" : $baseUri;
+
+        // Gunakan helper url() untuk membuat URL yang lengkap
+        return url($fullUri);
     }
 }

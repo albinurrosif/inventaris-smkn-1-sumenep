@@ -453,33 +453,59 @@ class StokOpnameController extends Controller
     public function cancel(Request $request, StokOpname $stokOpname): RedirectResponse
     {
         $this->authorize('cancel', $stokOpname);
+
         if ($stokOpname->status !== StokOpname::STATUS_DRAFT) {
             return redirect()->route($this->getRedirectRouteName('stok-opname.show', 'admin.stok-opname.show'), $stokOpname->id)
                 ->with('error', 'Hanya sesi stok opname dengan status DRAFT yang dapat dibatalkan.');
         }
+
+        DB::beginTransaction();
         try {
-            DB::beginTransaction();
-            $dataLama = $stokOpname->toArray();
+            // 1. Cari semua LOG PERUBAHAN yang dipicu oleh sesi SO ini
+            $statusLogsToRevert = BarangStatus::where('deskripsi_kejadian', 'LIKE', "%Stok Opname ID: {$stokOpname->id}%")
+                ->whereNotNull('id_ruangan_sebelumnya') // Filter hanya untuk barang temuan yang pindah lokasi
+                ->orderBy('tanggal_pencatatan', 'desc')
+                ->get();
+
+            foreach ($statusLogsToRevert as $log) {
+                $barangQr = $log->barangQrCode()->withTrashed()->first();
+                if ($barangQr) {
+                    // 2. Kembalikan barang ke LOKASI dan STATUS semula berdasarkan log
+                    $barangQr->id_ruangan = $log->id_ruangan_sebelumnya;
+                    $barangQr->id_pemegang_personal = $log->id_pemegang_personal_sebelumnya;
+                    $barangQr->status = $log->status_ketersediaan_sebelumnya;
+
+                    // Jika barang sebelumnya diarsipkan (trashed), arsipkan kembali
+                    if ($log->status_ketersediaan_sebelumnya === BarangQrCode::STATUS_DIARSIPKAN) {
+                        $barangQr->save(); // Simpan perubahan dulu
+                        $barangQr->delete(); // Kemudian soft delete
+                    } else {
+                        $barangQr->save();
+                    }
+                }
+            }
+
+            // 3. Hapus semua detail pemeriksaan dari sesi SO yang dibatalkan ini
+            $stokOpname->detailStokOpname()->delete();
+
+            // 4. Baru ubah status sesi SO menjadi Dibatalkan
             $stokOpname->status = StokOpname::STATUS_DIBATALKAN;
             $stokOpname->save();
-            $dataBaru = $stokOpname->refresh()->toArray();
+
             LogAktivitas::create([
                 'id_user' => Auth::id(),
                 'aktivitas' => 'Batal Sesi Stok Opname',
-                'deskripsi' => "Sesi Stok Opname untuk ruangan {$stokOpname->ruangan->nama_ruangan} tanggal {$stokOpname->tanggal_opname->format('d-m-Y')} telah dibatalkan.",
+                'deskripsi' => "Sesi Stok Opname untuk ruangan {$stokOpname->ruangan->nama_ruangan} tanggal {$stokOpname->tanggal_opname->format('d-m-Y')} telah dibatalkan dan semua perubahan dikembalikan.",
                 'model_terkait' => StokOpname::class,
                 'id_model_terkait' => $stokOpname->id,
-                'data_lama' => $dataLama,
-                'data_baru' => $dataBaru,
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
             ]);
+
             DB::commit();
             $redirectRoute = $this->getRedirectRouteName('stok-opname.index', 'admin.stok-opname.index');
-            return redirect()->route($redirectRoute)->with('success', 'Sesi stok opname berhasil dibatalkan.');
+            return redirect()->route($redirectRoute)->with('success', 'Sesi stok opname berhasil dibatalkan dan semua perubahan telah dikembalikan.');
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Gagal membatalkan stok opname {$stokOpname->id}: " . $e->getMessage());
+            Log::error("Gagal membatalkan stok opname {$stokOpname->id}: " . $e->getMessage(), ['exception' => $e]);
             return redirect()->back()->with('error', 'Gagal membatalkan sesi stok opname.');
         }
     }
@@ -542,8 +568,6 @@ class StokOpnameController extends Controller
 
     public function searchBarangQr(Request $request): JsonResponse
     {
-        $this->authorize('viewAny', StokOpname::class);
-
         $term = $request->input('q');
         $idStokOpname = $request->input('id_stok_opname');
 
@@ -556,6 +580,8 @@ class StokOpnameController extends Controller
             return response()->json(['items' => [], 'message' => 'Sesi Stok Opname tidak valid.'], 400);
         }
 
+        $this->authorize('view', $stokOpname);
+
         $existingDetailBarangQrIds = DetailStokOpname::where('id_stok_opname', $idStokOpname)
             ->pluck('id_barang_qr_code')
             ->all();
@@ -564,7 +590,11 @@ class StokOpnameController extends Controller
             ->with(['barang:id,nama_barang', 'ruangan:id,nama_ruangan', 'pemegangPersonal:id,username'])
             ->where(function ($q) use ($term) {
                 $q->where('kode_inventaris_sekolah', 'LIKE', "%{$term}%")
-                    ->orWhere('no_seri_pabrik', 'LIKE', "%{$term}%");
+                    ->orWhere('no_seri_pabrik', 'LIKE', "%{$term}%")
+                    // TAMBAHKAN BARIS INI untuk mencari di nama barang induk
+                    ->orWhereHas('barang', function ($q_barang) use ($term) {
+                        $q_barang->where('nama_barang', 'LIKE', "%{$term}%");
+                    });
             })
             ->whereNotIn('id', $existingDetailBarangQrIds)
             ->limit(15);
@@ -725,7 +755,7 @@ class StokOpnameController extends Controller
             $detailSo = DetailStokOpname::create([
                 'id_stok_opname' => $stokOpname->id,
                 'id_barang_qr_code' => $barangQrCode->id,
-                'kondisi_tercatat' => $isNewUnitCreated ? null : ($barangQrCode->getOriginal('kondisi') ?? $barangQrCode->kondisi),
+                'kondisi_tercatat' => $isNewUnitCreated ? 'Baru' : ($barangQrCode->getOriginal('kondisi') ?? $barangQrCode->kondisi),
                 'kondisi_fisik' => $kondisiFisikTemuan,
                 'catatan_fisik' => $validated['catatan_fisik_temuan'],
             ]);
@@ -751,11 +781,13 @@ class StokOpnameController extends Controller
             DB::commit();
 
             $kondisiFisikList = DetailStokOpname::getValidKondisiFisik();
-            $newRowHtml = view('admin.stok-opname._item_detail_row', [
+            $rolePrefix = $this->getRolePrefix();
+            $newRowHtml = view('pages.stok-opname._item_detail_row', [
                 'detail' => $detailSo->load(['barangQrCode.barang', 'barangQrCode.ruangan', 'barangQrCode.pemegangPersonal']),
                 'index' => $stokOpname->detailStokOpname()->count(),
                 'stokOpname' => $stokOpname,
-                'kondisiFisikList' => $kondisiFisikList
+                'kondisiFisikList' => $kondisiFisikList,
+                'rolePrefix' => $rolePrefix
             ])->render();
 
             return response()->json([

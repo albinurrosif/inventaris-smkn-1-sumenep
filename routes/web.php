@@ -168,6 +168,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/barang/import-all', [BarangController::class, 'importAll'])->name('barang.import.all');
         Route::resource('barang-qr-code', BarangQrCodeController::class)->parameters(['barang-qr-code' => 'barangQrCode'])->withTrashed();;
         // Custom routes untuk Barang & BarangQrCode
+        Route::get('/barang-qr-code/search-for-maintenance', [App\Http\Controllers\BarangQrCodeController::class, 'searchForMaintenance'])->name('barang-qr-code.search-for-maintenance');
+   
         Route::post('barang-qr-code/{barangQrCode}/mutasi', [BarangQrCodeController::class, 'mutasi'])->name('barang-qr-code.mutasi');
         Route::post('barang-qr-code/{barangQrCode}/archive', [BarangQrCodeController::class, 'archive'])->name('barang-qr-code.archive');
         Route::post('barang-qr-code/{barangQrCode}/restore', [BarangQrCodeController::class, 'restore'])->name('barang-qr-code.restore');
@@ -211,6 +213,12 @@ Route::middleware(['auth'])->group(function () {
         Route::prefix('stok-opname')->name('stok-opname.')->group(function () {
             Route::get('/', [StokOpnameController::class, 'index'])->name('index');
             Route::get('/create', [StokOpnameController::class, 'create'])->name('create');
+
+            // PINDAHKAN ROUTE SPESIFIK INI KE ATAS
+            Route::get('/search-barang-qr', [StokOpnameController::class, 'searchBarangQr'])->name('search-barang-qr'); // Tidak perlu {stokOpname} di URL jika dikirim via query param
+            Route::post('/add-barang-temuan', [StokOpnameController::class, 'addBarangTemuan'])->name('add-barang-temuan'); // Tidak perlu {stokOpname} di URL jika dikirim via form data
+
+            // ROUTE UMUM/DINAMIS TETAP DI BAWAH
             Route::post('/', [StokOpnameController::class, 'store'])->name('store');
             Route::get('/{stokOpname}', [StokOpnameController::class, 'show'])->name('show');
             Route::get('/{stokOpname}/edit', [StokOpnameController::class, 'edit'])->name('edit');
@@ -220,8 +228,6 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/{stokOpname}/finalize', [StokOpnameController::class, 'finalize'])->name('finalize');
             Route::post('/{stokOpname}/cancel', [StokOpnameController::class, 'cancel'])->name('cancel');
             Route::put('/{stokOpname}/detail/{detail}', [StokOpnameController::class, 'updateDetail'])->name('updateDetail');
-            Route::get('/search-barang-qr', [StokOpnameController::class, 'searchBarangQr'])->name('search-barang-qr'); // Tidak perlu {stokOpname} di URL jika dikirim via query param
-            Route::post('/add-barang-temuan', [StokOpnameController::class, 'addBarangTemuan'])->name('add-barang-temuan'); // Tidak perlu {stokOpname} di URL jika dikirim via form data
         });
 
         // Grup untuk Rekap Stok
@@ -261,9 +267,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/pengaturan', [App\Http\Controllers\PengaturanController::class, 'index'])->name('pengaturan.index');
         Route::post('/pengaturan', [App\Http\Controllers\PengaturanController::class, 'update'])->name('pengaturan.update');
 
-        Route::get('/barang-qr-code/search-for-maintenance', [App\Http\Controllers\BarangQrCodeController::class, 'searchForMaintenance'])->name('barang-qr-code.search-for-maintenance');
-
-    });
+         });
 
 
 
@@ -323,9 +327,16 @@ Route::middleware(['auth'])->group(function () {
         Route::post('peminjaman/detail/{detailPeminjaman}/handover', [PeminjamanController::class, 'processItemHandover'])->name('peminjaman.item.handover');
         Route::post('peminjaman/detail/{detailPeminjaman}/return', [PeminjamanController::class, 'processItemReturn'])->name('peminjaman.item.return');
 
+        // Grup untuk Stok Opname
         Route::prefix('stok-opname')->name('stok-opname.')->group(function () {
             Route::get('/', [StokOpnameController::class, 'index'])->name('index');
             Route::get('/create', [StokOpnameController::class, 'create'])->name('create');
+
+            // PINDAHKAN ROUTE SPESIFIK INI KE ATAS
+            Route::get('/search-barang-qr', [StokOpnameController::class, 'searchBarangQr'])->name('search-barang-qr');
+            Route::post('/add-barang-temuan', [StokOpnameController::class, 'addBarangTemuan'])->name('add-barang-temuan');
+
+            // ROUTE UMUM/DINAMIS TETAP DI BAWAHNYA
             Route::post('/', [StokOpnameController::class, 'store'])->name('store');
             Route::get('/{stokOpname}', [StokOpnameController::class, 'show'])->name('show');
             Route::get('/{stokOpname}/edit', [StokOpnameController::class, 'edit'])->name('edit');
@@ -335,8 +346,6 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/{stokOpname}/finalize', [StokOpnameController::class, 'finalize'])->name('finalize');
             Route::post('/{stokOpname}/cancel', [StokOpnameController::class, 'cancel'])->name('cancel');
             Route::put('/{stokOpname}/detail/{detail}', [StokOpnameController::class, 'updateDetail'])->name('updateDetail');
-            Route::get('/search-barang-qr', [StokOpnameController::class, 'searchBarangQr'])->name('search-barang-qr'); // Tidak perlu {stokOpname} di URL jika dikirim via query param
-            Route::post('/add-barang-temuan', [StokOpnameController::class, 'addBarangTemuan'])->name('add-barang-temuan'); // Tidak perlu {stokOpname} di URL jika dikirim via form data
         });
 
         Route::prefix('laporan')->name('laporan.')->group(function () {
@@ -356,7 +365,6 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('mutasi-barang', App\Http\Controllers\MutasiBarangController::class)->only(['index', 'show']);
 
         Route::get('/barang-qr-code/search-for-maintenance', [App\Http\Controllers\BarangQrCodeController::class, 'searchForMaintenance'])->name('barang-qr-code.search-for-maintenance');
-
     });
 
 
@@ -408,7 +416,6 @@ Route::middleware(['auth'])->group(function () {
         // Rute AJAX jika diperlukan di masa depan (tidak perlu diubah)
         Route::get('/get-units-by-ruangan/{ruangan}', [App\Http\Controllers\PeminjamanController::class, 'getAvailableUnitsByRuangan'])->name('peminjaman.getAvailableUnitsByRuangan');
         Route::get('/barang-qr-code/search-for-maintenance', [App\Http\Controllers\BarangQrCodeController::class, 'searchForMaintenance'])->name('barang-qr-code.search-for-maintenance');
-
     });
 
 

@@ -36,7 +36,6 @@
                     <div class="page-title-right">
                         <ol class="breadcrumb m-0">
                             <li class="breadcrumb-item"><a href="{{ route('redirect-dashboard') }}">Dashboard</a></li>
-                            {{-- PERUBAHAN: Route dinamis --}}
                             <li class="breadcrumb-item"><a
                                     href="{{ route($rolePrefix . 'pemeliharaan.index', request()->query()) }}">Pemeliharaan</a>
                             </li>
@@ -50,6 +49,101 @@
         <div class="row">
             {{-- Kolom Kiri: Detail Unit Barang & Aksi Cepat --}}
             <div class="col-xl-4 col-lg-5">
+                {{-- Tampilkan form persetujuan HANYA jika user adalah Admin & status masih Diajukan --}}
+                {{-- Gunakan 'process' ability yang lebih spesifik untuk Admin --}}
+                @can('process', $pemeliharaan)
+                    @if ($pemeliharaan->status_pengajuan === 'Diajukan')
+                        <div class="card border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="card-title mb-0 text-white"><i class="fas fa-check-double me-2"></i>Form Persetujuan
+                                    (Admin)</h5>
+                            </div>
+                            <div class="card-body">
+                                {{-- Display Success Message --}}
+                                @if (session('success'))
+                                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                                        {{ session('success') }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert"
+                                            aria-label="Close"></button>
+                                    </div>
+                                @endif
+
+                                {{-- Display Error Message --}}
+                                @if (session('error'))
+                                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                        {{ session('error') }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert"
+                                            aria-label="Close"></button>
+                                    </div>
+                                @endif
+
+                                {{-- Display Validation Errors --}}
+                                @if ($errors->any())
+                                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                        <strong>Terjadi Kesalahan Validasi:</strong>
+                                        <ul class="mb-0">
+                                            @foreach ($errors->all() as $error)
+                                                <li>{{ $error }}</li>
+                                            @endforeach
+                                        </ul>
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert"
+                                            aria-label="Close"></button>
+                                    </div>
+                                @endif
+
+                                <form id="form-approval" action="{{ route('admin.pemeliharaan.update', $pemeliharaan->id) }}"
+                                    method="POST">
+                                    @csrf
+                                    @method('PUT')
+
+                                    <div class="mb-3">
+                                        <label for="id_operator_pengerjaan" class="form-label">Tugaskan PIC (Penanggung
+                                            Jawab)</label>
+                                        <select name="id_operator_pengerjaan" id="id_operator_pengerjaan"
+                                            class="form-select select2-pic @error('id_operator_pengerjaan') is-invalid @enderror">
+                                            <option value="">-- Pilih Operator --</option>
+                                            @foreach ($picList as $pic)
+                                                <option value="{{ $pic->id }}"
+                                                    {{ old('id_operator_pengerjaan') == $pic->id ? 'selected' : '' }}>
+                                                    {{ $pic->username }} ({{ $pic->role }})
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        @error('id_operator_pengerjaan')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                        <small class="form-text text-muted">PIC wajib diisi jika laporan disetujui.</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="catatan_persetujuan" class="form-label">Catatan Persetujuan/Penolakan
+                                            (Opsional)</label>
+                                        <textarea name="catatan_persetujuan" id="catatan_persetujuan"
+                                            class="form-control @error('catatan_persetujuan') is-invalid @enderror" rows="3"
+                                            placeholder="Contoh: Setuju, segera proses.">{{ old('catatan_persetujuan') }}</textarea>
+                                        @error('catatan_persetujuan')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="d-flex justify-content-end gap-2">
+                                        <button type="button" id="btn-tolak" class="btn btn-danger">
+                                            <i class="fas fa-times me-1"></i> Tolak Laporan
+                                        </button>
+                                        <button type="button" id="btn-setujui" class="btn btn-success">
+                                            <i class="fas fa-check me-1"></i> Setujui & Tugaskan
+                                        </button>
+                                    </div>
+
+                                    {{-- Hidden input for status --}}
+                                    <input type="hidden" name="status_pengajuan" id="status_pengajuan_input">
+                                    <input type="hidden" name="tanggal_persetujuan" value="{{ now()->format('Y-m-d') }}">
+                                </form>
+                            </div>
+                        </div>
+                    @endif
+                @endcan
+
                 <div class="card sticky-top" style="top: 80px;">
                     <div class="card-header">
                         <h5 class="card-title mb-0"><i class="fas fa-box me-2"></i>Detail Unit Barang</h5>
@@ -57,8 +151,7 @@
                     <div class="card-body">
                         @if ($pemeliharaan->barangQrCode)
                             @php $barangQr = $pemeliharaan->barangQrCode; @endphp
-                            <p class="mb-2"><span class="detail-label">Kode Unit:</span>
-                                {{-- PERUBAHAN: Route dinamis --}}
+                            <p class="mb-2"><span class="detail-label">Kode Inventaris Unit:</span>
                                 <a href="{{ route($rolePrefix . 'barang-qr-code.show', $barangQr->id) }}" target="_blank">
                                     <code>{{ $barangQr->kode_inventaris_sekolah }}</code>
                                 </a>
@@ -91,7 +184,6 @@
                             <h5 class="card-title mb-0"><i class="fas fa-bolt me-2"></i>Aksi</h5>
                         </div>
                         <div class="card-body">
-                            {{-- PERUBAHAN: Menggunakan @can untuk tombol --}}
                             @can('update', $pemeliharaan)
                                 <a href="{{ route($rolePrefix . 'pemeliharaan.edit', $pemeliharaan->id) }}"
                                     class="btn btn-warning w-100 mb-2">
@@ -116,7 +208,7 @@
                             <h5 class="card-title text-dark"><i class="fas fa-archive me-2 text-warning"></i>Laporan
                                 Diarsipkan</h5>
                             <p>Laporan ini telah diarsipkan pada
-                                {{ $pemeliharaan->deleted_at->isoFormat('DD MMMM YYYY, HH:mm') }}.</p>
+                                {{ $pemeliharaan->deleted_at->isoFormat('DD MMMM YYYY') }}.</p>
                             @can('restore', $pemeliharaan)
                                 <form action="{{ route('admin.pemeliharaan.restore', $pemeliharaan->id) }}" method="POST"
                                     class="d-inline form-restore-pemeliharaan-show">
@@ -144,12 +236,23 @@
                                 <h6 class="mb-1">Pengajuan Laporan</h6>
                                 <p class="text-muted mb-2">Diajukan oleh
                                     <strong>{{ optional($pemeliharaan->pengaju)->username ?? 'N/A' }}</strong> pada
-                                    {{ $pemeliharaan->tanggal_pengajuan->isoFormat('dddd, DD MMMM YYYY, HH:mm') }}
+                                    {{ $pemeliharaan->tanggal_pengajuan->isoFormat('dddd, DD MMMM YYYY') }}
                                 </p>
                                 <div class="p-3 card-item-detail">
                                     <p class="detail-label mb-1">Deskripsi Kerusakan/Keluhan:</p>
                                     <p class="mb-0">{{ $pemeliharaan->catatan_pengajuan ?: '-' }}</p>
                                 </div>
+                                @if ($pemeliharaan->foto_kerusakan_path)
+                                    <div class="p-3 card-item-detail mt-2">
+                                        <p class="detail-label mb-1">Foto Bukti Kerusakan:</p>
+                                        <a href="{{ asset('storage/' . $pemeliharaan->foto_kerusakan_path) }}"
+                                            target="_blank">
+                                            <img src="{{ asset('storage/' . $pemeliharaan->foto_kerusakan_path) }}"
+                                                alt="Foto Kerusakan" class="img-fluid rounded"
+                                                style="max-height: 200px;">
+                                        </a>
+                                    </div>
+                                @endif
                             </div>
                         </div>
                         <hr>
@@ -159,12 +262,13 @@
                             <div class="flex-grow-1">
                                 <h6 class="mb-1">Tahap Persetujuan</h6>
                                 <p class="text-muted mb-2">Status: <span
-                                        class="badge badge-status bg-{{ \App\Models\Pemeliharaan::statusColor($pemeliharaan->status_pengajuan) }}">{{ $pemeliharaan->status_pengajuan }}</span>
+                                        class="badge badge-status bg-{{ \App\Models\Pemeliharaan::statusColor($pemeliharaan->status_pengajuan) }}">{{ $pemeliharaan->status_pengajuan }}
+                                    </span>
                                 </p>
                                 @if ($pemeliharaan->id_user_penyetuju)
                                     <p class="text-muted mb-2">Diproses oleh
                                         <strong>{{ optional($pemeliharaan->penyetuju)->username ?? 'N/A' }}</strong> pada
-                                        {{ optional($pemeliharaan->tanggal_persetujuan)->isoFormat('DD MMM YYYY, HH:mm') }}
+                                        {{ optional($pemeliharaan->tanggal_persetujuan)->isoFormat('DD MMM YYYY') }}
                                     </p>
                                 @endif
                                 @if ($pemeliharaan->catatan_persetujuan)
@@ -208,26 +312,19 @@
                                     <p class="mt-2 mb-0"><span class="detail-label">Biaya Perbaikan:</span> Rp
                                         {{ number_format($pemeliharaan->biaya, 0, ',', '.') }}</p>
                                 @endif
-                                @if ($pemeliharaan->hasil_pemeliharaan)
+                                @if ($pemeliharaan->foto_perbaikan_path)
                                     <div class="p-3 card-item-detail mt-2">
-                                        <p class="detail-label mb-1">Hasil Akhir:</p>
-                                        <p class="mb-2">{{ $pemeliharaan->hasil_pemeliharaan }}</p>
-
-                                        {{-- BARIS BARU UNTUK MENAMPILKAN FOTO --}}
-                                        @if ($pemeliharaan->foto_perbaikan_path)
-                                            <p class="detail-label mb-1 mt-3">Foto Bukti Perbaikan:</p>
-                                            <a href="{{ asset('storage/' . $pemeliharaan->foto_perbaikan_path) }}"
-                                                target="_blank">
-                                                <img src="{{ asset('storage/' . $pemeliharaan->foto_perbaikan_path) }}"
-                                                    alt="Foto Perbaikan" class="img-fluid rounded"
-                                                    style="max-height: 200px;">
-                                            </a>
-                                        @endif
+                                        <p class="detail-label mb-1 mt-3">Foto Bukti Perbaikan:</p>
+                                        <a href="{{ asset('storage/' . $pemeliharaan->foto_perbaikan_path) }}"
+                                            target="_blank">
+                                            <img src="{{ asset('storage/' . $pemeliharaan->foto_perbaikan_path) }}"
+                                                alt="Foto Perbaikan" class="img-fluid rounded"
+                                                style="max-height: 200px;">
+                                        </a>
                                     </div>
                                 @endif
                             </div>
                         </div>
-
                     </div>
                 </div>
             </div>
@@ -238,11 +335,72 @@
 @endsection
 
 @push('scripts')
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const rolePrefix = "{{ $rolePrefix }}";
             const deleteForm = $('#formDeletePemeliharaanShow');
+
+            // Initialize Select2
+            $('.select2-pic').select2({
+                theme: "bootstrap-5",
+                placeholder: 'Pilih Operator sebagai PIC',
+            });
+
+            // Handler untuk tombol SETUJUI
+            $('#btn-setujui').on('click', function(e) {
+                e.preventDefault();
+
+                // Cek apakah PIC sudah dipilih
+                if (!$('#id_operator_pengerjaan').val()) {
+                    Swal.fire({
+                        title: 'Peringatan!',
+                        text: 'Harap pilih seorang Operator sebagai PIC sebelum menyetujui.',
+                        icon: 'warning',
+                        confirmButtonText: 'OK'
+                    });
+                    return;
+                }
+
+                Swal.fire({
+                    title: 'Setujui Laporan?',
+                    text: "Anda akan menyetujui laporan ini dan menugaskannya. Aksi ini akan mengubah status barang.",
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, Setujui!',
+                    cancelButtonText: 'Batal',
+                    confirmButtonColor: '#28a745',
+                    cancelButtonColor: '#6c757d'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $('#status_pengajuan_input').val('Disetujui');
+                        $('#form-approval').submit();
+                    }
+                });
+            });
+
+            // Handler untuk tombol TOLAK
+            $('#btn-tolak').on('click', function(e) {
+                e.preventDefault();
+
+                Swal.fire({
+                    title: 'Tolak Laporan Ini?',
+                    text: "Anda yakin ingin menolak laporan pemeliharaan ini?",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, Tolak!',
+                    cancelButtonText: 'Batal',
+                    confirmButtonColor: '#d33',
+                    cancelButtonColor: '#6c757d'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        $('#status_pengajuan_input').val('Ditolak');
+                        $('#form-approval').submit();
+                    }
+                });
+            });
 
             // Konfirmasi Arsipkan
             $(document).on('click', '.btn-delete-pemeliharaan-show', function() {
@@ -280,6 +438,7 @@
                     confirmButtonText: 'Ya, Pulihkan!',
                     cancelButtonText: 'Batal',
                     confirmButtonColor: '#28a745',
+                    cancelButtonColor: '#6c757d'
                 }).then((result) => {
                     if (result.isConfirmed) {
                         form.submit();
