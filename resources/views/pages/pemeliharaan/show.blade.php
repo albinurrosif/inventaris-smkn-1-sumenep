@@ -53,7 +53,8 @@
                 {{-- Gunakan 'process' ability yang lebih spesifik untuk Admin --}}
                 @can('process', $pemeliharaan)
                     @if ($pemeliharaan->status_pengajuan === 'Diajukan')
-                        <div class="card border-primary">
+                        <!-- Card Persetujuan Admin -->
+                        <div class="card border-primary mb-4"> <!-- Tambah margin-bottom -->
                             <div class="card-header bg-primary text-white">
                                 <h5 class="card-title mb-0 text-white"><i class="fas fa-check-double me-2"></i>Form Persetujuan
                                     (Admin)</h5>
@@ -144,42 +145,48 @@
                     @endif
                 @endcan
 
-                <div class="card sticky-top" style="top: 80px;">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0"><i class="fas fa-box me-2"></i>Detail Unit Barang</h5>
-                    </div>
-                    <div class="card-body">
-                        @if ($pemeliharaan->barangQrCode)
-                            @php $barangQr = $pemeliharaan->barangQrCode; @endphp
-                            <p class="mb-2"><span class="detail-label">Kode Inventaris Unit:</span>
-                                <a href="{{ route($rolePrefix . 'barang-qr-code.show', $barangQr->id) }}" target="_blank">
-                                    <code>{{ $barangQr->kode_inventaris_sekolah }}</code>
-                                </a>
-                            </p>
-                            <p class="mb-2"><span class="detail-label">Nama Barang:</span>
-                                {{ optional($barangQr->barang)->nama_barang ?? 'N/A' }}</p>
-                            <p class="mb-2"><span class="detail-label">No. Seri:</span>
-                                {{ $barangQr->no_seri_pabrik ?: '-' }}</p>
-                            <p class="mb-2"><span class="detail-label">Lokasi/Pemegang:</span>
-                                {{ optional($barangQr->ruangan)->nama_ruangan ?? (optional($barangQr->pemegangPersonal)->username ? 'Dipegang: ' . $barangQr->pemegangPersonal->username : 'Tidak Diketahui') }}
-                            </p>
-                            <p class="mb-2"><span class="detail-label">Kondisi:</span>
-                                <span
-                                    class="badge {{ \App\Models\BarangQrCode::getKondisiColor($barangQr->kondisi) }}">{{ $barangQr->kondisi }}</span>
-                            </p>
-                            <p class="mb-0"><span class="detail-label">Status:</span>
-                                <span
-                                    class="badge {{ \App\Models\BarangQrCode::getStatusColor($barangQr->status) }}">{{ $barangQr->status }}</span>
-                            </p>
-                        @else
-                            <p class="text-danger">Data unit barang tidak ditemukan (mungkin terhapus permanen).</p>
-                        @endif
+                <!-- Grid System untuk mengatur layout -->
+                <div class="row">
+
+                    <!-- Card Detail Unit Barang -->
+                    <div class="card mb-4"> <!-- Tambah margin-bottom -->
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="fas fa-box me-2"></i>Detail Unit Barang</h5>
+                        </div>
+                        <div class="card-body">
+                            @if ($pemeliharaan->barangQrCode)
+                                @php $barangQr = $pemeliharaan->barangQrCode; @endphp
+                                <p class="mb-2"><span class="detail-label">Kode Inventaris Unit:</span>
+                                    <a href="{{ route($rolePrefix . 'barang-qr-code.show', $barangQr->id) }}"
+                                        target="_blank">
+                                        <code>{{ $barangQr->kode_inventaris_sekolah }}</code>
+                                    </a>
+                                </p>
+                                <p class="mb-2"><span class="detail-label">Nama Barang:</span>
+                                    {{ optional($barangQr->barang)->nama_barang ?? 'N/A' }}</p>
+                                <p class="mb-2"><span class="detail-label">No. Seri:</span>
+                                    {{ $barangQr->no_seri_pabrik ?: '-' }}</p>
+                                <p class="mb-2"><span class="detail-label">Lokasi/Pemegang:</span>
+                                    {{ optional($barangQr->ruangan)->nama_ruangan ?? (optional($barangQr->pemegangPersonal)->username ? 'Dipegang: ' . $barangQr->pemegangPersonal->username : 'Tidak Diketahui') }}
+                                </p>
+                                <p class="mb-2"><span class="detail-label">Kondisi:</span>
+                                    <span
+                                        class="badge {{ \App\Models\BarangQrCode::getKondisiColor($barangQr->kondisi) }}">{{ $barangQr->kondisi }}</span>
+                                </p>
+                                <p class="mb-0"><span class="detail-label">Status:</span>
+                                    <span
+                                        class="badge {{ \App\Models\BarangQrCode::getStatusColor($barangQr->status) }}">{{ $barangQr->status }}</span>
+                                </p>
+                            @else
+                                <p class="text-danger">Data unit barang tidak ditemukan (mungkin terhapus permanen).</p>
+                            @endif
+                        </div>
                     </div>
                 </div>
 
                 {{-- Aksi hanya untuk yang punya hak akses dan jika laporan belum diarsipkan --}}
                 @if (!$pemeliharaan->trashed())
-                    <div class="card sticky-top" style="top: 400px;">
+                    <div class="card mb-4"> <!-- Tambah margin-bottom -->
                         <div class="card-header">
                             <h5 class="card-title mb-0"><i class="fas fa-bolt me-2"></i>Aksi</h5>
                         </div>
@@ -202,24 +209,27 @@
                 @endif
 
                 {{-- Info jika laporan sudah diarsipkan --}}
-                @if ($pemeliharaan->trashed())
-                    <div class="card bg-light">
-                        <div class="card-body">
-                            <h5 class="card-title text-dark"><i class="fas fa-archive me-2 text-warning"></i>Laporan
-                                Diarsipkan</h5>
-                            <p>Laporan ini telah diarsipkan pada
-                                {{ $pemeliharaan->deleted_at->isoFormat('DD MMMM YYYY') }}.</p>
-                            @can('restore', $pemeliharaan)
-                                <form action="{{ route('admin.pemeliharaan.restore', $pemeliharaan->id) }}" method="POST"
-                                    class="d-inline form-restore-pemeliharaan-show">
-                                    @csrf
-                                    <button type="submit" class="btn btn-success w-100 btn-restore"><i
-                                            class="fas fa-undo me-2"></i>Pulihkan Laporan</button>
-                                </form>
-                            @endcan
+                <!-- Kolom Kanan - Arsip/Notifikasi -->
+                <div class="col-md-6">
+                    @if ($pemeliharaan->trashed())
+                        <div class="card bg-light mb-4"> <!-- Tambah margin-bottom -->
+                            <div class="card-body">
+                                <h5 class="card-title text-dark"><i class="fas fa-archive me-2 text-warning"></i>Laporan
+                                    Diarsipkan</h5>
+                                <p>Laporan ini telah diarsipkan pada
+                                    {{ $pemeliharaan->deleted_at->isoFormat('DD MMMM YYYY') }}.</p>
+                                @can('restore', $pemeliharaan)
+                                    <form action="{{ route('admin.pemeliharaan.restore', $pemeliharaan->id) }}"
+                                        method="POST" class="d-inline form-restore-pemeliharaan-show">
+                                        @csrf
+                                        <button type="submit" class="btn btn-success w-100 btn-restore"><i
+                                                class="fas fa-undo me-2"></i>Pulihkan Laporan</button>
+                                    </form>
+                                @endcan
+                            </div>
                         </div>
-                    </div>
-                @endif
+                    @endif
+                </div>
             </div>
 
             {{-- Kolom Kanan: Detail Laporan Pemeliharaan --}}
@@ -258,7 +268,8 @@
                         <hr>
                         {{-- Bagian Persetujuan --}}
                         <div class="d-flex">
-                            <div class="flex-shrink-0 me-3"><i class="fas fa-user-check text-success fs-4"></i></div>
+                            <div class="flex-shrink-0 me-3"><i class="fas fa-user-check text-success fs-4"></i>
+                            </div>
                             <div class="flex-grow-1">
                                 <h6 class="mb-1">Tahap Persetujuan</h6>
                                 <p class="text-muted mb-2">Status: <span
@@ -267,7 +278,8 @@
                                 </p>
                                 @if ($pemeliharaan->id_user_penyetuju)
                                     <p class="text-muted mb-2">Diproses oleh
-                                        <strong>{{ optional($pemeliharaan->penyetuju)->username ?? 'N/A' }}</strong> pada
+                                        <strong>{{ optional($pemeliharaan->penyetuju)->username ?? 'N/A' }}</strong>
+                                        pada
                                         {{ optional($pemeliharaan->tanggal_persetujuan)->isoFormat('DD MMM YYYY') }}
                                     </p>
                                 @endif

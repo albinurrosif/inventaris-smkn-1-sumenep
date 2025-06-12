@@ -1,7 +1,9 @@
 @extends('layouts.app') {{-- Sesuaikan dengan layout utama Anda --}}
 
 @section('title', 'Manajemen Pemeliharaan Barang')
-
+@php
+    $rolePrefix = Auth::user()->getRolePrefix();
+@endphp
 @push('styles')
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css">
@@ -223,7 +225,7 @@
                                     <td>
                                         {{-- ===== AWAL PERUBAHAN KOLOM NAMA BARANG & KODE UNIT ===== --}}
                                         @if ($item->barangQrCode)
-                                            <a href="{{ route('admin.barang-qr-code.show', $item->barangQrCode->id) }}"
+                                            <a href="{{ route($rolePrefix . 'barang-qr-code.show', $item->id) }}"
                                                 target="_blank" class="fw-bold" data-bs-toggle="tooltip"
                                                 title="Lihat Detail Unit: {{ $item->barangQrCode->kode_inventaris_sekolah }}">
                                                 {{ optional($item->barangQrCode->barang)->nama_barang ?? 'N/A' }}
