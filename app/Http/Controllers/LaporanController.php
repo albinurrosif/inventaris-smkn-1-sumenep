@@ -85,7 +85,7 @@ class LaporanController extends Controller
         $kategoriList = KategoriBarang::orderBy('nama_kategori')->get();
         $kondisiList = BarangQrCode::getValidKondisi();
 
-        return view('pages.laporan.inventaris', compact(
+        return view('pages.Laporan.inventaris', compact(
             'inventaris',
             'ruanganList',
             'kategoriList',
@@ -134,7 +134,7 @@ class LaporanController extends Controller
         }
 
         // Membuat PDF
-        $pdf = PDF::loadView('pages.laporan.pdf.inventaris_pdf', compact('inventaris'))
+        $pdf = PDF::loadView('pages.Laporan.pdf.inventaris_pdf', compact('inventaris'))
             ->setPaper('a4', 'landscape'); // Atur ukuran kertas dan orientasi
 
         $namaFile = 'laporan-inventaris-' . now()->format('Ymd-His') . '.pdf';
@@ -233,7 +233,7 @@ class LaporanController extends Controller
         $statusList = Peminjaman::getValidStatuses();
         $guruList = User::where('role', User::ROLE_GURU)->orderBy('username')->get();
 
-        return view('pages.laporan.peminjaman', compact(
+        return view('pages.Laporan.peminjaman', compact(
             'peminjamanList',
             'statusList',
             'guruList',
@@ -279,7 +279,7 @@ class LaporanController extends Controller
             return redirect()->back()->with('error', 'Tidak ada data untuk di-export.');
         }
 
-        $pdf = PDF::loadView('pages.laporan.pdf.peminjaman_pdf', compact('peminjamanList'))
+        $pdf = PDF::loadView('pages.Laporan.pdf.peminjaman_pdf', compact('peminjamanList'))
             ->setPaper('a4', 'portrait');
 
         return $pdf->download('laporan-peminjaman-' . now()->format('Ymd') . '.pdf');
@@ -370,7 +370,7 @@ class LaporanController extends Controller
         $statusPengerjaanList = Pemeliharaan::getValidStatusPengerjaan();
         $userList = User::orderBy('username')->get();
 
-        return view('pages.laporan.pemeliharaan', compact(
+        return view('pages.Laporan.pemeliharaan', compact(
             'pemeliharaanList',
             'statusPengajuanList',
             'statusPengerjaanList',
@@ -416,7 +416,7 @@ class LaporanController extends Controller
             return redirect()->back()->with('error', 'Tidak ada data untuk di-export.');
         }
 
-        $pdf = PDF::loadView('pages.laporan.pdf.pemeliharaan_pdf', compact('pemeliharaanList'))
+        $pdf = PDF::loadView('pages.Laporan.pdf.pemeliharaan_pdf', compact('pemeliharaanList'))
             ->setPaper('a4', 'landscape');
 
         return $pdf->download('laporan-pemeliharaan-' . now()->format('Ymd') . '.pdf');
