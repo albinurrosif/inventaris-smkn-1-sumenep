@@ -43,32 +43,46 @@
                     @csrf
                     <div class="row">
                         {{-- Kolom Kiri --}}
+                        {{-- GANTI ISI DARI <div class="col-md-6"> PERTAMA DENGAN INI --}}
+
                         <div class="col-md-6">
+                            {{-- 1. Area untuk Menampilkan Barang yang Sudah Dipilih (Keranjang) --}}
                             <div class="mb-3">
-                                <label for="id_barang_qr_code" class="form-label">Pilih Barang yang Akan Dipinjam <span
-                                        class="text-danger">*</span></label>
-
-                                <select class="form-control" id="id_barang_qr_code" name="id_barang_qr_code[]"
-                                    multiple="multiple" required>
-                                    {{-- JIKA ADA BARANG YANG DIPILIH DARI KATALOG, SISIPKAN SEBAGAI OPTION DI SINI --}}
-                                    {{-- Ini akan dibaca oleh JavaScript untuk inisialisasi --}}
-                                    @if (isset($selectedBarang) && $selectedBarang)
-                                        @php
-                                            $lokasi = optional($selectedBarang->ruangan)->nama_ruangan ?? 'N/A';
-                                            $text = "{$selectedBarang->barang->nama_barang} ({$selectedBarang->kode_inventaris_sekolah}) - Lokasi: {$lokasi}";
-                                        @endphp
-                                        <option value="{{ $selectedBarang->id }}" selected>{{ $text }}</option>
-                                    @endif
-                                </select>
-
-                                {{-- Info ruangan terkunci akan di-handle oleh JavaScript --}}
-                                <div id="info-ruangan-terkunci" class="form-text text-primary mt-1" style="display: none;">
+                                <label class="form-label">Barang yang Akan Dipinjam:</label>
+                                <div id="keranjang-peminjaman" class="border rounded p-3"
+                                    style="min-height: 150px; background-color: #f8f9fa;">
+                                    {{-- Pesan jika keranjang kosong --}}
+                                    <div id="keranjang-kosong" class="text-center text-muted">
+                                        <p class="mb-0">Keranjang masih kosong.</p>
+                                        <small>Silakan cari dan tambah barang di bawah.</small>
+                                    </div>
+                                    {{-- Daftar barang akan ditambahkan di sini oleh JavaScript --}}
                                 </div>
-
+                                {{-- Input hidden untuk menampung semua ID barang yang dipilih --}}
+                                <div id="hidden-inputs-container"></div>
                                 @error('id_barang_qr_code')
                                     <div class="text-danger mt-1 small">{{ $message }}</div>
                                 @enderror
                             </div>
+
+                            {{-- 2. Area untuk Mencari dan Menambah Barang --}}
+                            <div class="mb-3">
+                                <label for="search-barang-input" class="form-label">Cari & Tambah Barang:</label>
+                                {{-- Ini adalah input Select2 untuk mencari barang --}}
+                                <select class="form-control" id="search-barang-input" style="width: 100%;">
+                                    {{-- Opsi akan diisi oleh AJAX --}}
+                                </select>
+
+                                {{-- Info ruangan terkunci akan muncul di sini --}}
+                                <div id="info-ruangan-terkunci" class="alert alert-warning p-2 mt-2" style="display: none;">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Hanya menampilkan barang dari ruangan: <strong id="nama-ruangan-terkunci"></strong>
+                                    <button type="button" id="reset-keranjang-btn"
+                                        class="btn btn-sm btn-outline-danger float-end py-0">Reset</button>
+                                </div>
+                            </div>
+
+                            {{-- Sisa form (Tujuan & Catatan) bisa tetap di sini atau dipindah ke kolom kanan --}}
                             <div class="mb-3">
                                 <label for="tujuan_peminjaman" class="form-label">Tujuan Peminjaman <span
                                         class="text-danger">*</span></label>
@@ -145,87 +159,123 @@
     <script>
         $(document).ready(function() {
             let lockedRuanganId = null;
-            let lockedRuanganNama = '';
-            const selectBarang = $('#id_barang_qr_code');
+            const keranjangDiv = $('#keranjang-peminjaman');
+            const hiddenInputsContainer = $('#hidden-inputs-container');
+            const searchInput = $('#search-barang-input');
+            const keranjangKosongMsg = $('#keranjang-kosong');
+            const infoRuanganDiv = $('#info-ruangan-terkunci');
+            const namaRuanganSpan = $('#nama-ruangan-terkunci');
+            const resetBtn = $('#reset-keranjang-btn');
 
-            // Fungsi untuk mengunci atau membuka kunci ruangan
-            function handleRoomLock() {
-                const selectedItems = selectBarang.select2('data');
+            // Fungsi untuk menambahkan item ke keranjang visual dan input hidden
+            function addItemToCart(item) {
+                // Cek duplikat
+                if ($(`#hidden-input-${item.id}`).length > 0) {
+                    // Beri feedback bahwa item sudah ada
+                    searchInput.select2('open'); // buka lagi dropdown
+                    return;
+                }
 
-                if (selectedItems && selectedItems.length > 0) {
-                    // Kunci ruangan jika belum terkunci
-                    if (lockedRuanganId === null) {
-                        // Ambil data dari item PERTAMA yang dipilih
-                        const firstItemData = selectedItems[0];
+                keranjangKosongMsg.hide();
 
-                        // Cek apakah data custom (ruangan_id, ruangan_nama) ada. 
-                        // Jika tidak, ambil dari option yang sudah ada (kasus dari katalog)
-                        if (firstItemData.ruangan_id) {
-                            lockedRuanganId = firstItemData.ruangan_id;
-                            lockedRuanganNama = firstItemData.ruangan_nama;
-                        } else {
-                            // Fallback untuk item dari katalog yang option-nya sudah dirender di HTML
-                            // Kita butuh query controller untuk memberikan data ini
-                            @if (isset($selectedBarang) && $selectedBarang)
-                                lockedRuanganId = {{ $selectedBarang->id_ruangan ?? 'null' }};
-                                lockedRuanganNama = '{{ optional($selectedBarang->ruangan)->nama_ruangan ?? '' }}';
-                            @endif
-                        }
+                // Tambahkan ke keranjang visual
+                const itemHtml = `
+                    <div class="d-flex justify-content-between align-items-center p-2 border-bottom" id="item-cart-${item.id}">
+                        <span>${item.text}</span>
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn py-0" data-id="${item.id}" title="Hapus">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                keranjangDiv.append(itemHtml);
 
-                        if (lockedRuanganId) {
-                            $('#info-ruangan-terkunci').text(
-                                `Dalam satu sesi peminjaman anda hanya bisa memilih barang dengan asal ruangan yang sama\n
-                                Saat ini hanya menampilkan barang dari ruangan: ${lockedRuanganNama}`).slideDown();
-                        }
-                    }
-                } else {
-                    // Jika tidak ada item terpilih, buka kunci
-                    lockedRuanganId = null;
-                    lockedRuanganNama = '';
-                    $('#info-ruangan-terkunci').slideUp();
+                // Tambahkan ke input hidden untuk dikirim ke server
+                const hiddenInputHtml =
+                    `<input type="hidden" id="hidden-input-${item.id}" name="id_barang_qr_code[]" value="${item.id}">`;
+                hiddenInputsContainer.append(hiddenInputHtml);
+
+                // Kunci ruangan jika ini item pertama
+                if (lockedRuanganId === null) {
+                    lockedRuanganId = item.ruangan_id;
+                    namaRuanganSpan.text(item.ruangan_nama);
+                    infoRuanganDiv.show();
                 }
             }
 
-            // Inisialisasi Select2
-            selectBarang.select2({
-                placeholder: "Ketik nama barang atau kode unit...",
+            // Fungsi untuk menghapus item dari keranjang
+            function removeItemFromCart(itemId) {
+                $(`#item-cart-${itemId}`).remove();
+                $(`#hidden-input-${itemId}`).remove();
+
+                // Jika keranjang jadi kosong, reset kunci ruangan
+                if (hiddenInputsContainer.children().length === 0) {
+                    resetCart();
+                }
+            }
+
+            // Fungsi untuk mereset seluruh keranjang dan kunci ruangan
+            function resetCart() {
+                keranjangDiv.find('.border-bottom').remove();
+                hiddenInputsContainer.empty();
+                keranjangKosongMsg.show();
+                lockedRuanganId = null;
+                infoRuanganDiv.hide();
+            }
+
+            // Event listener untuk tombol hapus
+            keranjangDiv.on('click', '.remove-item-btn', function() {
+                const itemId = $(this).data('id');
+                removeItemFromCart(itemId);
+            });
+
+            // Event listener untuk tombol reset
+            resetBtn.on('click', resetCart);
+
+            // Inisialisasi Select2 untuk pencarian
+            searchInput.select2({
+                placeholder: "Ketik untuk mencari barang...",
                 minimumInputLength: 2,
                 ajax: {
                     url: "{{ route('guru.peminjaman.search-items') }}",
                     dataType: 'json',
                     delay: 250,
                     data: function(params) {
-                        // Kirim ID ruangan yang terkunci sebagai parameter query
                         return {
-                            q: params.term, // term pencarian
-                            ruangan_id: lockedRuanganId // hanya cari di ruangan ini
+                            q: params.term,
+                            ruangan_id: lockedRuanganId
                         };
                     },
                     processResults: function(data) {
-                        // Map data untuk Select2, pastikan semua data custom ikut terbawa
-                        const mappedResults = data.results.map(item => {
-                            return {
-                                id: item.id,
-                                text: item.text,
-                                ruangan_id: item.ruangan_id,
-                                ruangan_nama: item.ruangan_nama
-                            };
-                        });
                         return {
-                            results: mappedResults
+                            results: data.results
                         };
                     },
                     cache: true
                 }
-            }).on('change', handleRoomLock); // Panggil fungsi setiap kali ada perubahan
+            });
 
-            // ======================================================
-            // BAGIAN BARU: Cek saat halaman pertama kali dimuat
-            // ======================================================
-            // Jika ada item yang sudah dipilih dari katalog, panggil handleRoomLock() secara manual
-            if (selectBarang.val() && selectBarang.val().length > 0) {
-                handleRoomLock();
-            }
+            // Event listener saat item dipilih dari Select2
+            searchInput.on('select2:select', function(e) {
+                var data = e.params.data;
+                addItemToCart(data);
+                // Reset input select2 agar bisa memilih lagi
+                $(this).val(null).trigger('change');
+            });
+
+            // Logika untuk menangani item yang sudah dipilih dari katalog
+            @if (isset($selectedBarang) && $selectedBarang)
+                @php
+                    $lokasi = optional($selectedBarang->ruangan)->nama_ruangan ?? 'N/A';
+                    $text = "{$selectedBarang->barang->nama_barang} ({$selectedBarang->kode_inventaris_sekolah}) - Lokasi: {$lokasi}";
+                @endphp
+
+                addItemToCart({
+                    id: '{{ $selectedBarang->id }}',
+                    text: '{{ addslashes($text) }}',
+                    ruangan_id: {{ $selectedBarang->id_ruangan ?? 'null' }},
+                    ruangan_nama: '{{ addslashes(optional($selectedBarang->ruangan)->nama_ruangan) }}'
+                });
+            @endif
         });
     </script>
 @endpush
