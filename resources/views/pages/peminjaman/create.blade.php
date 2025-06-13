@@ -49,9 +49,10 @@
                                         class="text-danger">*</span></label>
 
                                 <select class="form-control" id="id_barang_qr_code" name="id_barang_qr_code[]"
-                                    multiple="multiple">
-                                    {{-- Jika ada barang yang dipilih dari katalog, tampilkan di sini --}}
-                                    @if ($selectedBarang)
+                                    multiple="multiple" required>
+                                    {{-- JIKA ADA BARANG YANG DIPILIH DARI KATALOG, SISIPKAN SEBAGAI OPTION DI SINI --}}
+                                    {{-- Ini akan dibaca oleh JavaScript untuk inisialisasi --}}
+                                    @if (isset($selectedBarang) && $selectedBarang)
                                         @php
                                             $lokasi = optional($selectedBarang->ruangan)->nama_ruangan ?? 'N/A';
                                             $text = "{$selectedBarang->barang->nama_barang} ({$selectedBarang->kode_inventaris_sekolah}) - Lokasi: {$lokasi}";
@@ -60,12 +61,14 @@
                                     @endif
                                 </select>
 
-                                <div id="info-ruangan-terkunci" class="form-text text-primary" style="display: none;"></div>
+                                {{-- Info ruangan terkunci akan di-handle oleh JavaScript --}}
+                                <div id="info-ruangan-terkunci" class="form-text text-primary mt-1" style="display: none;">
+                                </div>
+
                                 @error('id_barang_qr_code')
                                     <div class="text-danger mt-1 small">{{ $message }}</div>
                                 @enderror
                             </div>
-
                             <div class="mb-3">
                                 <label for="tujuan_peminjaman" class="form-label">Tujuan Peminjaman <span
                                         class="text-danger">*</span></label>
@@ -152,25 +155,34 @@
                 if (selectedItems && selectedItems.length > 0) {
                     // Kunci ruangan jika belum terkunci
                     if (lockedRuanganId === null) {
-                        const firstItem = selectedItems[0];
+                        // Ambil data dari item PERTAMA yang dipilih
+                        const firstItemData = selectedItems[0];
 
-                        // Cek properti ruangan_id langsung dari objek data Select2
-                        if (firstItem.ruangan_id) {
-                            lockedRuanganId = firstItem.ruangan_id;
-                            lockedRuanganNama = firstItem.ruangan_nama;
-                            $('#info-ruangan-terkunci').text(`Hanya menampilkan barang dari: ${lockedRuanganNama}`)
-                                .slideDown();
+                        // Cek apakah data custom (ruangan_id, ruangan_nama) ada. 
+                        // Jika tidak, ambil dari option yang sudah ada (kasus dari katalog)
+                        if (firstItemData.ruangan_id) {
+                            lockedRuanganId = firstItemData.ruangan_id;
+                            lockedRuanganNama = firstItemData.ruangan_nama;
                         } else {
-                            // Ini seharusnya tidak terjadi jika query controller sudah benar
-                            selectBarang.val(null).trigger('change');
-                            alert('Error: Data ruangan untuk item terpilih tidak ditemukan. Silakan coba lagi.');
+                            // Fallback untuk item dari katalog yang option-nya sudah dirender di HTML
+                            // Kita butuh query controller untuk memberikan data ini
+                            @if (isset($selectedBarang) && $selectedBarang)
+                                lockedRuanganId = {{ $selectedBarang->id_ruangan ?? 'null' }};
+                                lockedRuanganNama = '{{ optional($selectedBarang->ruangan)->nama_ruangan ?? '' }}';
+                            @endif
+                        }
+
+                        if (lockedRuanganId) {
+                            $('#info-ruangan-terkunci').text(
+                                `Dalam satu sesi peminjaman anda hanya bisa memilih barang dengan asal ruangan yang sama\n
+                                Saat ini hanya menampilkan barang dari ruangan: ${lockedRuanganNama}`).slideDown();
                         }
                     }
                 } else {
                     // Jika tidak ada item terpilih, buka kunci
                     lockedRuanganId = null;
                     lockedRuanganNama = '';
-                    $('#info-ruangan-terkunci').hide();
+                    $('#info-ruangan-terkunci').slideUp();
                 }
             }
 
@@ -183,35 +195,37 @@
                     dataType: 'json',
                     delay: 250,
                     data: function(params) {
+                        // Kirim ID ruangan yang terkunci sebagai parameter query
                         return {
-                            q: params.term,
-                            ruangan_id: lockedRuanganId
+                            q: params.term, // term pencarian
+                            ruangan_id: lockedRuanganId // hanya cari di ruangan ini
                         };
                     },
-                    // PENYESUAIAN KUNCI: Pastikan semua data (termasuk ruangan_id) diteruskan
                     processResults: function(data) {
+                        // Map data untuk Select2, pastikan semua data custom ikut terbawa
+                        const mappedResults = data.results.map(item => {
+                            return {
+                                id: item.id,
+                                text: item.text,
+                                ruangan_id: item.ruangan_id,
+                                ruangan_nama: item.ruangan_nama
+                            };
+                        });
                         return {
-                            results: data.results // Cukup teruskan semua data dari server
+                            results: mappedResults
                         };
                     },
                     cache: true
                 }
-            }).on('change', handleRoomLock); // Gunakan event 'change' yang lebih umum
+            }).on('change', handleRoomLock); // Panggil fungsi setiap kali ada perubahan
 
-            // Logika untuk menangani item yang sudah dipilih dari katalog
-            @if ($selectedBarang)
-                // Buat <option> baru secara manual dengan data lengkap
-                var preselectedOption = new Option(
-                    "{{ $selectedBarang->barang->nama_barang }} ({{ $selectedBarang->kode_inventaris_sekolah }}) - Lokasi: {{ optional($selectedBarang->ruangan)->nama_ruangan }}",
-                    '{{ $selectedBarang->id }}', true, true
-                );
-
-                // Tambahkan option ke select2
-                selectBarang.append(preselectedOption).trigger('change');
-
-                // Panggil handleRoomLock secara manual untuk mengunci ruangan
+            // ======================================================
+            // BAGIAN BARU: Cek saat halaman pertama kali dimuat
+            // ======================================================
+            // Jika ada item yang sudah dipilih dari katalog, panggil handleRoomLock() secara manual
+            if (selectBarang.val() && selectBarang.val().length > 0) {
                 handleRoomLock();
-            @endif
+            }
         });
     </script>
 @endpush

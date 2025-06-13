@@ -194,7 +194,7 @@
                                     <li class="list-group-item d-flex justify-content-between align-items-center">
                                         <div>
                                             <a
-                                                href="{{ route('barang-qr-code.show', $item->id) }}">{{ $item->barang->nama_barang ?? 'N/A' }}</a>
+                                                href="{{ route('admin.barang-qr-code.show', $item->id) }}">{{ $item->barang->nama_barang ?? 'N/A' }}</a>
                                             <small class="d-block text-muted">{{ $item->kode_inventaris_sekolah }}</small>
                                         </div>
                                         <span class="badge bg-info">{{ $item->kondisi }}</span>

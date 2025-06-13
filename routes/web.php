@@ -383,6 +383,12 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('peminjaman/search-items', [\App\Http\Controllers\PeminjamanController::class, 'searchAvailableItems'])->name('peminjaman.search-items');
 
+        Route::prefix('keranjang-peminjaman')->name('keranjang.')->group(function () {
+            Route::post('/tambah', [App\Http\Controllers\KeranjangPeminjamanController::class, 'tambahItem'])->name('tambah');
+            Route::post('/hapus/{id_barang_qr_code}', [App\Http\Controllers\KeranjangPeminjamanController::class, 'hapusItem'])->name('hapus');
+            Route::post('/reset', [App\Http\Controllers\KeranjangPeminjamanController::class, 'resetKeranjang'])->name('reset');
+        });
+
         // --- PEMINJAMAN ---
         // Resource ini sudah mencakup: index, create, store, show, edit, update
         Route::resource('peminjaman', App\Http\Controllers\PeminjamanController::class)->only([
