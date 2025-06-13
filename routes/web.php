@@ -289,6 +289,8 @@ Route::middleware(['auth'])->group(function () {
         ]);
 
         Route::resource('barang', BarangController::class);
+        Route::get('barang/{barang}/print-all-qrcodes', [BarangController::class, 'printAllQrCodes'])->name('barang.print-all-qrcodes');
+
         Route::resource('barang-qr-code', BarangQrCodeController::class)->parameters(['barang-qr-code' => 'barangQrCode'])->withTrashed();;
         Route::post('barang-qr-code/{barangQrCode}/mutasi', [BarangQrCodeController::class, 'mutasi'])->name('barang-qr-code.mutasi');
         Route::post('barang-qr-code/{barangQrCode}/archive', [BarangQrCodeController::class, 'archive'])->name('barang-qr-code.archive');

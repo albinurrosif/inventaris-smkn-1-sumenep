@@ -52,7 +52,7 @@
                 <h5 class="card-title mb-0"><i class="fas fa-filter me-2"></i>Filter & Pencarian Jenis Barang</h5>
             </div>
             <div class="card-body">
-                <form method="GET" action="{{ route('admin.barang.index') }}" id="filterFormJenisBarang">
+                <form method="GET" action="{{ route($rolePrefix . 'barang.index') }}" id="filterFormJenisBarang">
                     <div class="row g-3 align-items-end">
                         <div class="col-md-3">
                             <label for="id_kategori_filter" class="form-label mb-1">Kategori</label>
@@ -102,7 +102,7 @@
                         <div class="col-md-2 d-grid">
                             <label for="btn_reset_filter_barang" class="form-label mb-1">&nbsp;</label>
                             {{-- Label kosong untuk alignment --}}
-                            <a href="{{ route('admin.barang.index') }}" id="btn_reset_filter_barang"
+                            <a href="{{ route($rolePrefix . 'barang.index') }}" id="btn_reset_filter_barang"
                                 class="btn btn-outline-secondary btn-sm">
                                 <i class="fas fa-sync-alt me-1"></i> Reset
                             </a>
@@ -116,15 +116,15 @@
         <div class="mb-3 d-flex justify-content-end align-items-center">
             <div class="d-flex align-items-center gap-2">
                 {{-- @can('export', App\Models\BarangQrCode::class)
-                    <a href="{{ route('admin.barang-qr-code.export-excel', array_merge(request()->query(), ['search' => $searchTerm ?? null, 'id_ruangan' => $ruanganId ?? null, 'id_kategori' => $kategoriId ?? null])) }}"
+                    <a href="{{ route($rolePrefix . 'barang-qr-code.export-excel', array_merge(request()->query(), ['search' => $searchTerm ?? null, 'id_ruangan' => $ruanganId ?? null, 'id_kategori' => $kategoriId ?? null])) }}"
                         class="btn btn-outline-success btn-sm">
                         <i class="mdi mdi-file-excel me-1"></i>Export Excel (Unit)
                     </a>
-                    <a href="{{ route('admin.barang-qr-code.export-pdf', array_merge(request()->query(), ['search' => $searchTerm ?? null, 'id_ruangan' => $ruanganId ?? null, 'id_kategori' => $kategoriId ?? null, 'pisah_per_ruangan' => false])) }}"
+                    <a href="{{ route($rolePrefix . 'barang-qr-code.export-pdf', array_merge(request()->query(), ['search' => $searchTerm ?? null, 'id_ruangan' => $ruanganId ?? null, 'id_kategori' => $kategoriId ?? null, 'pisah_per_ruangan' => false])) }}"
                         class="btn btn-outline-danger btn-sm">
                         <i class="mdi mdi-file-pdf-box me-1"></i> Export PDF (Unit Semua)
                     </a>
-                    <a href="{{ route('admin.barang-qr-code.export-pdf', array_merge(request()->query(), ['search' => $searchTerm ?? null, 'id_ruangan' => $ruanganId ?? null, 'id_kategori' => $kategoriId ?? null, 'pisah_per_ruangan' => true])) }}"
+                    <a href="{{ route($rolePrefix . 'barang-qr-code.export-pdf', array_merge(request()->query(), ['search' => $searchTerm ?? null, 'id_ruangan' => $ruanganId ?? null, 'id_kategori' => $kategoriId ?? null, 'pisah_per_ruangan' => true])) }}"
                         class="btn btn-danger btn-sm">
                         <i class="mdi mdi-file-pdf-box me-1"></i> Export PDF (Unit Per Ruangan)
                     </a>
@@ -134,7 +134,7 @@
                         onclick="document.getElementById('fileInputImportBarang').click();">
                         <i class="mdi mdi-upload me-1"></i> Import Barang
                     </button>
-                    <form id="importFormBarang" action="{{ route('admin.barang.import.all') }}" method="POST"
+                    <form id="importFormBarang" action="{{ route($rolePrefix . 'barang.import.all') }}" method="POST"
                         enctype="multipart/form-data" class="d-none">
                         @csrf
                         <input type="file" name="file" id="fileInputImportBarang" accept=".csv,.xlsx"
@@ -142,7 +142,7 @@
                     </form>
                 @endcan
                 @can('create', App\Models\Barang::class)
-                    <a href="{{ route('admin.barang.create') }}" class="btn btn-success btn-sm">
+                    <a href="{{ route($rolePrefix . 'barang.create') }}" class="btn btn-success btn-sm">
                         <i class="mdi mdi-plus me-1"></i> Tambah Jenis Barang
                     </a>
                 @endcan
@@ -182,7 +182,7 @@
                                 <tr>
                                     <td>{{ $barangs->firstItem() + $index }}</td>
                                     <td>
-                                        <a href="{{ route('admin.barang.show', $item->id) }}"
+                                        <a href="{{ route($rolePrefix . 'barang.show', $item->id) }}"
                                             class="fw-medium">{{ $item->nama_barang }}</a>
                                         <small class="d-block text-muted">
                                             {{ $item->menggunakan_nomor_seri ? 'Perlu No. Seri Unit' : 'Tidak Perlu No. Seri Unit' }}
@@ -200,7 +200,7 @@
                                     <td>
                                         <div class="d-flex gap-1 justify-content-center">
                                             @can('view', $item)
-                                                <a href="{{ route('admin.barang.show', $item->id) }}"
+                                                <a href="{{ route($rolePrefix . 'barang.show', $item->id) }}"
                                                     class="btn btn-outline-info btn-sm" title="Lihat Detail & Unit">
                                                     <i class="fas fa-eye"></i>
                                                 </a>
