@@ -17,8 +17,7 @@ class DatabaseSeeder extends Seeder
             RuanganSeeder::class,
             BarangSeeder::class,
             BarangQrCodeSeeder::class,
-            PeminjamanSeeder::class,
-            PemeliharaanSeeder::class,
+            
             PengaturanSeeder::class
         ]);
     }

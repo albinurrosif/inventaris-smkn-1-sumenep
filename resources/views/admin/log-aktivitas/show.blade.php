@@ -5,7 +5,8 @@
 @push('styles')
     <style>
         .data-json-detail {
-            max-height: 350px; /* Sedikit lebih tinggi */
+            max-height: 350px;
+            /* Sedikit lebih tinggi */
             overflow-y: auto;
             background-color: #272822;
             color: #f8f8f2;
@@ -22,11 +23,16 @@
         }
 
         .table-detail th {
-            width: 25%; /* Atur lebar kolom header di tabel detail */
-            background-color: #f8f9fa; /* Beri sedikit perbedaan warna pada header */
+            width: 25%;
+            /* Atur lebar kolom header di tabel detail */
+            background-color: #f8f9fa;
+            /* Beri sedikit perbedaan warna pada header */
         }
-         .table-detail td, .table-detail th {
-            vertical-align: top; /* Agar konten panjang rata atas */
+
+        .table-detail td,
+        .table-detail th {
+            vertical-align: top;
+            /* Agar konten panjang rata atas */
         }
     </style>
 @endpush
@@ -54,7 +60,8 @@
                             </tr>
                             <tr>
                                 <th>Waktu</th>
-                                <td>{{ $logAktivitas->created_at->isoFormat('dddd, DD MMMM YYYY, HH:mm:ss Z') }} ({{ $logAktivitas->created_at->diffForHumans() }})</td>
+                                <td>{{ $logAktivitas->created_at->isoFormat('dddd, DD MMMM YYYY, HH:mm:ss Z') }}
+                                    ({{ $logAktivitas->created_at->diffForHumans() }})</td>
                             </tr>
                             <tr>
                                 <th>Pengguna</th>
@@ -76,17 +83,26 @@
                                 <td>
                                     @php
                                         $deskripsiLengkap = '';
-                                        if (property_exists($logAktivitas, 'deskripsi') && !empty($logAktivitas->deskripsi)) {
+                                        if (
+                                            property_exists($logAktivitas, 'deskripsi') &&
+                                            !empty($logAktivitas->deskripsi)
+                                        ) {
                                             $deskripsiLengkap = $logAktivitas->deskripsi; // Jika ada kolom 'deskripsi' di model
                                         } else {
                                             $namaEntitas = '';
                                             $dataUntukCek = $logAktivitas->data_baru ?? $logAktivitas->data_lama;
-                                             if (is_array($dataUntukCek)) {
-                                                if (isset($dataUntukCek['nama_barang'])) $namaEntitas = $dataUntukCek['nama_barang'];
-                                                elseif (isset($dataUntukCek['nama_kategori'])) $namaEntitas = $dataUntukCek['nama_kategori'];
-                                                elseif (isset($dataUntukCek['name'])) $namaEntitas = $dataUntukCek['name'];
-                                                elseif (isset($dataUntukCek['username'])) $namaEntitas = $dataUntukCek['username'];
-                                                elseif (isset($dataUntukCek['judul'])) $namaEntitas = $dataUntukCek['judul'];
+                                            if (is_array($dataUntukCek)) {
+                                                if (isset($dataUntukCek['nama_barang'])) {
+                                                    $namaEntitas = $dataUntukCek['nama_barang'];
+                                                } elseif (isset($dataUntukCek['nama_kategori'])) {
+                                                    $namaEntitas = $dataUntukCek['nama_kategori'];
+                                                } elseif (isset($dataUntukCek['name'])) {
+                                                    $namaEntitas = $dataUntukCek['name'];
+                                                } elseif (isset($dataUntukCek['username'])) {
+                                                    $namaEntitas = $dataUntukCek['username'];
+                                                } elseif (isset($dataUntukCek['judul'])) {
+                                                    $namaEntitas = $dataUntukCek['judul'];
+                                                }
                                                 // Tambahkan field umum lainnya
                                             }
 
@@ -94,7 +110,7 @@
                                             if ($logAktivitas->model_terkait) {
                                                 $deskripsiLengkap .= ' ' . class_basename($logAktivitas->model_terkait);
                                                 if ($logAktivitas->id_model_terkait) {
-                                                     $deskripsiLengkap .= ' #' . $logAktivitas->id_model_terkait;
+                                                    $deskripsiLengkap .= ' #' . $logAktivitas->id_model_terkait;
                                                 }
                                             }
                                             if (!empty($namaEntitas)) {
@@ -105,7 +121,7 @@
                                     {{ $deskripsiLengkap ?: '-' }}
                                 </td>
                             </tr>
-                             <tr>
+                            <tr>
                                 <th>Model Terkait</th>
                                 <td>{{ $logAktivitas->model_terkait ? class_basename($logAktivitas->model_terkait) : '-' }}
                                 </td>
@@ -117,7 +133,9 @@
                                     @if ($modelTerkaitInstance)
                                         @php
                                             $linkRouteName = '';
-                                            $linkRouteParams = is_array($logAktivitas->id_model_terkait) ? $logAktivitas->id_model_terkait : ['id' => $logAktivitas->id_model_terkait]; // Default parameter
+                                            $linkRouteParams = is_array($logAktivitas->id_model_terkait)
+                                                ? $logAktivitas->id_model_terkait
+                                                : ['id' => $logAktivitas->id_model_terkait]; // Default parameter
                                             $modelBaseName = class_basename($logAktivitas->model_terkait);
 
                                             // Penyesuaian nama rute berdasarkan model
@@ -135,20 +153,25 @@
                                                 'ArsipBarang' => 'admin.arsip-barang.show',
                                                 // Tambahkan model lain jika perlu
                                             ];
-                                            
+
                                             if (array_key_exists($modelBaseName, $routeMappings)) {
                                                 $linkRouteName = $routeMappings[$modelBaseName];
                                                 // Beberapa rute mungkin butuh parameter berbeda dari sekadar 'id'
                                                 // Contoh jika BarangQrCode menggunakan 'barangQrCode' sebagai nama parameter:
-                                                if ($modelBaseName === 'BarangQrCode') $linkRouteParams = ['barangQrCode' => $logAktivitas->id_model_terkait];
+                                                if ($modelBaseName === 'BarangQrCode') {
+                                                    $linkRouteParams = [
+                                                        'barangQrCode' => $logAktivitas->id_model_terkait,
+                                                    ];
+                                                }
                                                 // Sesuaikan parameter lain jika perlu
                                             }
                                         @endphp
                                         @if ($linkRouteName && Route::has($linkRouteName))
-                                            <a href="{{ route($linkRouteName, $linkRouteParams) }}"
-                                                target="_blank" class="ml-2 badge badge-info">(Lihat Data Terkait)</a>
+                                            <a href="{{ route($linkRouteName, $linkRouteParams) }}" target="_blank"
+                                                class="ml-2 badge badge-info">(Lihat Data Terkait)</a>
                                         @else
-                                            <span class="ml-2 badge badge-secondary">(Data Terkait Ada, Rute Tampilan Tidak Ditemukan)</span>
+                                            <span class="ml-2 badge badge-secondary">(Data Terkait Ada, Rute Tampilan Tidak
+                                                Ditemukan)</span>
                                         @endif
                                     @elseif($logAktivitas->model_terkait && $logAktivitas->id_model_terkait)
                                         <span class="ml-2 badge badge-warning">(Data Terkait Mungkin Telah Dihapus)</span>
@@ -161,30 +184,80 @@
                             </tr>
                             <tr>
                                 <th>User Agent</th>
-                                <td style="white-space: pre-wrap; word-break: break-all;"><small>{{ $logAktivitas->user_agent ?? '-' }}</small></td>
+                                <td style="white-space: pre-wrap; word-break: break-all;">
+                                    <small>{{ $logAktivitas->user_agent ?? '-' }}</small></td>
                             </tr>
                         </table>
                     </div>
                 </div>
 
+                {{-- GANTI BLOK LAMA DENGAN YANG INI --}}
                 <hr>
 
                 <div class="row mt-4">
-                    <div class="col-md-6">
-                        <h6>Data Lama:</h6>
-                        @if (!empty($logAktivitas->data_lama) && (is_array($logAktivitas->data_lama) ? count($logAktivitas->data_lama) > 0 : true) )
-                            <pre class="data-json-detail"><code>{{ json_encode($logAktivitas->data_lama, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}</code></pre>
+                    <div class="col-lg-12">
+
+                        {{-- Kasus 1: Ada perubahan data (log tipe 'updated') --}}
+                        @if (!empty($perubahan))
+                            <h6><i class="fas fa-exchange-alt mr-2"></i>Detail Perubahan Data</h6>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-striped" style="table-layout: fixed; width: 100%;">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th style="width: 25%;">Kolom</th>
+                                            <th style="width: 37.5%;">Data Lama</th>
+                                            <th style="width: 37.5%;">Data Baru</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($perubahan as $item)
+                                            <tr>
+                                                <td><strong>{{ $item['field'] }}</strong></td>
+                                                <td style="word-wrap: break-word; background-color: #ffeef0;">
+                                                    @if (empty($item['lama']))
+                                                        <em class="text-muted">(Tidak ada data)</em>
+                                                    @else
+                                                        <span class="text-danger">{{ $item['lama'] }}</span>
+                                                    @endif
+                                                </td>
+                                                <td style="word-wrap: break-word; background-color: #e6ffed;">
+                                                    @if (empty($item['baru']))
+                                                        <em class="text-muted">(Data dihapus/dikosongkan)</em>
+                                                    @else
+                                                        <span class="text-success">{{ $item['baru'] }}</span>
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {{-- Kasus 2: Tidak ada perubahan, tapi ada data baru (log tipe 'created') --}}
+                        @elseif (!empty($dataBaru))
+                            <h6><i class="fas fa-plus-circle mr-2"></i>Detail Data Baru yang Dibuat</h6>
+                            <div class="table-responsive">
+                                <table class="table table-bordered">
+                                    <tbody>
+                                        @foreach ($dataBaru as $key => $value)
+                                            @if (!in_array($key, ['password', 'remember_token']))
+                                                <tr>
+                                                    <td style="width: 25%;">
+                                                        <strong>{{ $fieldMappings[$key] ?? ucwords(str_replace('_', ' ', $key)) }}</strong>
+                                                    </td>
+                                                    <td>{{ $this->formatValue($value) }}</td>
+                                                </tr>
+                                            @endif
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {{-- Kasus 3: Tidak ada data yang perlu ditampilkan --}}
                         @else
-                            <p class="text-muted">Tidak ada data lama.</p>
+                            <p class="text-muted mt-3">Tidak ada detail data lama atau baru yang tercatat.</p>
                         @endif
-                    </div>
-                    <div class="col-md-6">
-                        <h6>Data Baru:</h6>
-                         @if (!empty($logAktivitas->data_baru) && (is_array($logAktivitas->data_baru) ? count($logAktivitas->data_baru) > 0 : true) )
-                            <pre class="data-json-detail"><code>{{ json_encode($logAktivitas->data_baru, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) }}</code></pre>
-                        @else
-                            <p class="text-muted">Tidak ada data baru.</p>
-                        @endif
+
                     </div>
                 </div>
             </div>
