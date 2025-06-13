@@ -114,7 +114,8 @@ class BarangController extends Controller
 
         $barangs = $query->latest('updated_at')->paginate(15)->withQueryString();
 
-        $viewPath = $this->getViewPathBasedOnRole('admin.barang.index', 'operator.barang.index');
+        $rolePrefix = $this->getRolePrefix();
+        $viewPath = $this->getViewPathBasedOnRole('pages.barang.index', 'pages.barang.index');
 
         return view($viewPath, compact(
             'barangs',
@@ -123,7 +124,8 @@ class BarangController extends Controller
             'kategoriList',
             'kategoriId',
             'searchTerm',
-            'operatorTidakAdaRuangan'
+            'operatorTidakAdaRuangan',
+            'rolePrefix' // Variabel ditambahkan di sini
         ));
     }
 
@@ -142,8 +144,15 @@ class BarangController extends Controller
         $pemegangListAll = User::whereIn('role', [User::ROLE_GURU, User::ROLE_OPERATOR, User::ROLE_ADMIN])->orderBy('username')->get();
 
         // View create.blade.php sekarang adalah view wizard
-        $viewPath = $this->getViewPathBasedOnRole('admin.barang.create', 'operator.barang.create');
-        return view($viewPath, compact('ruanganList', 'kategoriList', 'kondisiOptions', 'pemegangListAll'));
+        $rolePrefix = $this->getRolePrefix();
+        $viewPath = $this->getViewPathBasedOnRole('pages.barang.create', 'pages.barang.create');
+        return view($viewPath, compact(
+            'ruanganList',
+            'kategoriList',
+            'kondisiOptions',
+            'pemegangListAll',
+            'rolePrefix' // Variabel ditambahkan di sini
+        ));
     }
 
     public function store(Request $request): RedirectResponse
@@ -177,7 +186,7 @@ class BarangController extends Controller
                 }
             ],
             'kondisi_unit_awal' => ['required', Rule::in(BarangQrCode::getValidKondisi())],
-            'harga_perolehan_unit_awal' => 'required|numeric|min:0',
+            'harga_perolehan_unit_awal' => 'nullable|numeric|min:0',
             'tanggal_perolehan_unit_awal' => 'required|date|before_or_equal:today',
             'sumber_dana_unit_awal' => 'nullable|string|max:255',
             'no_dokumen_unit_awal' => 'nullable|string|max:255',
@@ -320,6 +329,7 @@ class BarangController extends Controller
         }
     }
 
+    // Method ini sudah benar, tidak perlu diubah.
     public function suggestSerialsForNew(Request $request): JsonResponse
     {
         $request->validate([
@@ -339,17 +349,6 @@ class BarangController extends Controller
         return response()->json($suggestions);
     }
 
-    // Method yang tidak dipakai lagi untuk alur wizard utama
-    // public function inputSerialForm(Barang $barang): View|RedirectResponse { /* ... */ }
-    // public function storeSerialNumbers(Request $request, Barang $barang): RedirectResponse { /* ... */ }
-    // public function cancelCreate(Request $request, Barang $barang): RedirectResponse { /* ... */ }
-    // public function suggestSerials(Request $request, Barang $barang): JsonResponse { /* ... */ }
-    // public function editStep1(Barang $barang) { /* ... */ }
-    // public function updateStep1(Request $request, Barang $barang) { /* ... */ }
-
-
-    // SISA METHOD (show, edit, update, destroy, helpers, downloadQrCode, printAllQrCodes, dll.)
-    // ... (Salin dari kode controller Anda sebelumnya, karena seharusnya tidak terpengaruh signifikan) ...
     public function show(Barang $barang): View
     {
         $this->authorize('view', $barang);
@@ -385,16 +384,19 @@ class BarangController extends Controller
         $statusOptionsAll = BarangQrCode::getValidStatus();
         $jenisPenghapusanOptions = ArsipBarang::getValidJenisPenghapusan();
 
-        $viewPath = $this->getViewPathBasedOnRole('admin.barang.show', 'operator.barang.show');
+        $rolePrefix = $this->getRolePrefix();
+        $viewPath = $this->getViewPathBasedOnRole('pages.barang.show', 'pages.barang.show');
+
         return view($viewPath, compact(
             'barang',
-            'qrCodes', // Ini sekarang adalah Paginator
+            'qrCodes',
             'kategoriList',
             'ruanganListAll',
             'userListAll',
             'kondisiOptionsAll',
             'statusOptionsAll',
-            'jenisPenghapusanOptions'
+            'jenisPenghapusanOptions',
+            'rolePrefix' // Variabel ditambahkan di sini
         ));
     }
 
@@ -404,8 +406,14 @@ class BarangController extends Controller
         $kategoriList = KategoriBarang::orderBy('nama_kategori')->get();
         $barang->loadCount(['qrCodes as qr_codes_count' => fn($q) => $q->whereNull('deleted_at')]);
 
-        $viewPath = $this->getViewPathBasedOnRole('admin.barang.edit', 'operator.barang.edit');
-        return view($viewPath, compact('barang', 'kategoriList'));
+        $rolePrefix = $this->getRolePrefix();
+        $viewPath = $this->getViewPathBasedOnRole('pages.barang.edit', 'pages.barang.edit');
+
+        return view($viewPath, compact(
+            'barang',
+            'kategoriList',
+            'rolePrefix' // Variabel ditambahkan di sini
+        ));
     }
 
     public function update(Request $request, Barang $barang): RedirectResponse
@@ -644,8 +652,14 @@ class BarangController extends Controller
         if ($qrCodesToPrint->isEmpty()) {
             return back()->with('error', 'Tidak ada unit aktif dari jenis barang ini yang dapat dicetak QR Code-nya (sesuai filter ruangan Anda jika operator).');
         }
-        $viewPath = $this->getViewPathBasedOnRole('admin.barang.print_qrcodes', 'operator.barang.print_qrcodes');
-        return view($viewPath, compact('barang', 'qrCodesToPrint'));
+        $rolePrefix = $this->getRolePrefix();
+        $viewPath = $this->getViewPathBasedOnRole('pages.barang.print_qrcodes', 'pages.barang.print_qrcodes');
+
+        return view($viewPath, compact(
+            'barang',
+            'qrCodesToPrint',
+            'rolePrefix' // Variabel ditambahkan di sini
+        ));
     }
 
     /**

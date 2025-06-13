@@ -43,10 +43,11 @@ class BarangQrCodeController extends Controller
         $user = Auth::user();
         /** @var \App\Models\User $user */
 
+        // Opsi filter (tidak berubah)
         $filterOptions = [
             'aktif' => 'Semua Unit Aktif',
             'tersedia' => 'Tersedia',
-            'dipesan' => 'Dipesan (Proses Peminjaman)', // <-- OPSI FILTER BARU
+            'dipesan' => 'Dipesan (Proses Peminjaman)',
             'dipinjam' => 'Dipinjam',
             'pemeliharaan' => 'Dalam Pemeliharaan',
             'rusak_berat_aktif' => 'Rusak Berat (Aktif)',
@@ -54,102 +55,94 @@ class BarangQrCodeController extends Controller
             'diarsipkan_lain' => 'Diarsipkan (Alasan Lain)',
             'semua' => 'Tampilkan Semua (Aktif & Diarsipkan)',
         ];
-
         $filterUtama = $request->input('filter_utama', 'aktif');
 
-        // --- PENYESUAIAN: Tambahkan Eager Loading untuk peminjaman aktif ---
+        // 1. Inisialisasi Query Builder dasar
         $qrCodesQuery = BarangQrCode::query()->with([
             'barang.kategori',
             'ruangan',
             'pemegangPersonal',
             'arsip',
-            // Eager load relasi detail peminjaman HANYA jika peminjamannya aktif
             'peminjamanDetails' => function ($q) {
                 $q->whereHas('peminjaman', function ($p) {
-                    $p->whereNotIn('status', [
-                        Peminjaman::STATUS_SELESAI,
-                        Peminjaman::STATUS_DITOLAK,
-                        Peminjaman::STATUS_DIBATALKAN,
-                    ]);
+                    $p->whereNotIn('status', [Peminjaman::STATUS_SELESAI, Peminjaman::STATUS_DITOLAK, Peminjaman::STATUS_DIBATALKAN]);
                 });
             }
         ]);
 
-        // Logika filter utama berdasarkan status
+        // ======================================================================
+        // AWAL LOGIKA BARU YANG SEPENUHNYA TERPISAH ANTAR PERAN
+        // ======================================================================
+
+        // 2. Terapkan filter berdasarkan peran terlebih dahulu
+        if ($user->hasRole(User::ROLE_OPERATOR)) {
+            // Jika Operator, terapkan batasan kewenangan
+            $ruanganOperatorIds = $user->ruanganYangDiKelola()->pluck('id');
+            $qrCodesQuery->where(function ($roleQuery) use ($ruanganOperatorIds, $user) {
+                $roleQuery->where('id_pemegang_personal', $user->id)
+                    ->orWhereIn('id_ruangan', $ruanganOperatorIds)
+                    ->orWhere(function ($qFloating) {
+                        $qFloating->whereNull('id_ruangan')->whereNull('id_pemegang_personal');
+                    });
+            });
+        }
+        // Untuk Admin, tidak ada batasan peran tambahan yang diterapkan. Query tetap luas.
+
+
+        // 3. Terapkan filter utama (filter paling atas di UI)
         switch ($filterUtama) {
             case 'tersedia':
-                $qrCodesQuery->where('status', BarangQrCode::STATUS_TERSEDIA)->whereNull('deleted_at');
+                $qrCodesQuery->whereNull('deleted_at')->where('status', BarangQrCode::STATUS_TERSEDIA);
                 break;
             case 'dipesan':
                 $qrCodesQuery->whereNull('deleted_at')
-                    ->where('status', BarangQrCode::STATUS_TERSEDIA) // Barang yang dipesan statusnya masih tersedia
+                    ->where('status', BarangQrCode::STATUS_TERSEDIA)
                     ->whereHas('peminjamanDetails', function ($q) {
-                        $q->whereHas('peminjaman', function ($p) {
-                            $p->whereIn('status', [
-                                Peminjaman::STATUS_MENUNGGU_PERSETUJUAN,
-                                Peminjaman::STATUS_DISETUJUI
-                            ]);
-                        });
+                        $q->whereHas('peminjaman', fn($p) => $p->whereIn('status', [Peminjaman::STATUS_MENUNGGU_PERSETUJUAN, Peminjaman::STATUS_DISETUJUI]));
                     });
                 break;
             case 'dipinjam':
-                $qrCodesQuery->where('status', BarangQrCode::STATUS_DIPINJAM)->whereNull('deleted_at'); // [cite: 1685]
+                $qrCodesQuery->whereNull('deleted_at')->where('status', BarangQrCode::STATUS_DIPINJAM);
                 break;
             case 'pemeliharaan':
-                $qrCodesQuery->where('status', BarangQrCode::STATUS_DALAM_PEMELIHARAAN)->whereNull('deleted_at'); // [cite: 1686]
+                $qrCodesQuery->whereNull('deleted_at')->where('status', BarangQrCode::STATUS_DALAM_PEMELIHARAAN);
                 break;
             case 'rusak_berat_aktif':
-                $qrCodesQuery->where('kondisi', BarangQrCode::KONDISI_RUSAK_BERAT)->whereNull('deleted_at'); // [cite: 1687]
+                $qrCodesQuery->whereNull('deleted_at')->where('kondisi', BarangQrCode::KONDISI_RUSAK_BERAT);
                 break;
             case 'hilang':
-                $qrCodesQuery->onlyTrashed()->where('kondisi', BarangQrCode::KONDISI_HILANG); // [cite: 1688]
+                $qrCodesQuery->onlyTrashed()->where('kondisi', BarangQrCode::KONDISI_HILANG);
                 break;
             case 'diarsipkan_lain':
-                $qrCodesQuery->onlyTrashed()->whereHas('arsip', function ($q) {
-                    $q->where('jenis_penghapusan', '!=', 'Hilang');
-                }); // [cite: 1689]
+                $qrCodesQuery->onlyTrashed()->whereHas('arsip', fn($q) => $q->where('jenis_penghapusan', '!=', 'Hilang'));
                 break;
             case 'semua':
-                $qrCodesQuery->withTrashed(); // [cite: 1690]
+                $qrCodesQuery->withTrashed();
                 break;
             default: // 'aktif'
-                $qrCodesQuery->whereNull('deleted_at'); // [cite: 1691]
+                $qrCodesQuery->whereNull('deleted_at');
                 break;
         }
 
-        // Terapkan filter sekunder (pencarian, ruangan, dll)
-        if (method_exists($qrCodesQuery, 'filter')) {
-            $qrCodesQuery->filter($request); // [cite: 1692]
-        }
+        // 4. Terapkan filter sekunder dari dropdown (ruangan, kategori, dll) dan pencarian
+        // Method filter() ini sekarang akan menambahkan kondisi AND pada query yang sudah ada
+        $qrCodesQuery->filter($request);
 
 
-        // PENYESUAIAN FINAL: Logika pembatasan data untuk Operator
-        if ($user->hasRole(User::ROLE_OPERATOR)) {
-            $ruanganOperatorIds = $user->ruanganYangDiKelola()->pluck('id'); // [cite: 1693]
+        // ======================================================================
+        // AKHIR LOGIKA BARU
+        // ======================================================================
 
-            $qrCodesQuery->where(function ($query) use ($ruanganOperatorIds, $user) {
-                // Kondisi 1: Barang ada di ruangan yang SAYA kelola
-                if ($ruanganOperatorIds->isNotEmpty()) {
-                    $query->whereIn('id_ruangan', $ruanganOperatorIds); // [cite: 1694]
-                }
-                // Kondisi 2: ATAU barang dipegang oleh SAYA SENDIRI
-                $query->orWhere('id_pemegang_personal', $user->id); // [cite: 1695]
-                // Kondisi 3: ATAU barang "mengambang" (tidak punya lokasi)
-                $query->orWhere(function ($qFloating) {
-                    $qFloating->whereNull('id_ruangan')->whereNull('id_pemegang_personal');
-                }); // [cite: 1696]
-            });
-        }
 
-        $qrCodes = $qrCodesQuery->latest('id')->paginate(15)->withQueryString(); // [cite: 1697]
+        // Paginasi dan pengambilan data
+        $qrCodes = $qrCodesQuery->latest('id')->paginate(15)->withQueryString();
 
         // Data untuk dropdown filter
-        $barangList = Barang::orderBy('nama_barang')->get(); // [cite: 1698]
+        $barangList = Barang::orderBy('nama_barang')->get();
         $ruanganList = $user->hasRole(User::ROLE_ADMIN)
             ? Ruangan::orderBy('nama_ruangan')->get()
-            : $user->ruanganYangDiKelola()->orderBy('nama_ruangan')->get(); // [cite: 1699, 1700]
-
-        $rolePrefix = $this->getRolePrefix(); // [cite: 1701]
+            : $user->ruanganYangDiKelola()->orderBy('nama_ruangan')->get();
+        $rolePrefix = $this->getRolePrefix();
 
         return view('pages.barang_qr_code.index', compact(
             'qrCodes',
@@ -159,8 +152,9 @@ class BarangQrCodeController extends Controller
             'rolePrefix',
             'filterOptions',
             'filterUtama'
-        )); // [cite: 1701, 1702]
+        ));
     }
+
 
     /**
      * Menampilkan form untuk menambahkan satu atau beberapa unit fisik baru.
@@ -1070,7 +1064,7 @@ class BarangQrCodeController extends Controller
         if ($qrCodes->isEmpty()) {
             return back()->with('error', 'Tidak ada unit barang yang valid untuk dicetak.');
         }
-        return view('admin.barang_qr_code.print_multiple', compact('qrCodes'));
+        return view('pages.barang_qr_code.print_multiple', compact('qrCodes'));
     }
 
     /**

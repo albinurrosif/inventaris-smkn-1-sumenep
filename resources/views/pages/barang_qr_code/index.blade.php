@@ -151,7 +151,7 @@
 
             {{-- Tombol kanan --}}
             <div class="d-flex align-items-center gap-2">
-                @can('export', App\Models\BarangQrCode::class)
+                {{-- @can('export', App\Models\BarangQrCode::class)
                     <a href="{{ route($rolePrefix . 'barang-qr-code.export-excel', request()->query()) }}"
                         class="btn btn-outline-success btn-sm" data-bs-toggle="tooltip" title="Export Excel">
                         <i class="mdi mdi-file-excel me-1"></i> Export Excel
@@ -164,7 +164,7 @@
                         class="btn btn-danger btn-sm" data-bs-toggle="tooltip" title="Export PDF per Ruangan">
                         <i class="mdi mdi-file-pdf-box me-1"></i> Export PDF (Per Ruangan)
                     </a>
-                @endcan
+                @endcan --}}
                 @can('create', App\Models\Barang::class)
                     <a href="{{ route($rolePrefix . 'barang.index') }}" class="btn btn-primary btn-sm" data-bs-toggle="tooltip"
                         title="Kelola Jenis Barang">

@@ -164,12 +164,13 @@ Route::middleware(['auth'])->group(function () {
 
         // --- MANAJEMEN BARANG (ADMIN - AKSES PENUH) -- {{ DIPINDAHKAN DARI GLOBAL }} ---
         Route::resource('barang', BarangController::class);
+        Route::get('barang/{barang}/print-all-qrcodes', [BarangController::class, 'printAllQrCodes'])->name('barang.print-all-qrcodes');
         Route::get('/barang/suggest-serials-for-new', [BarangController::class, 'suggestSerialsForNew'])->name('barang.suggest-serials-for-new');
         Route::post('/barang/import-all', [BarangController::class, 'importAll'])->name('barang.import.all');
         Route::resource('barang-qr-code', BarangQrCodeController::class)->parameters(['barang-qr-code' => 'barangQrCode'])->withTrashed();;
         // Custom routes untuk Barang & BarangQrCode
         Route::get('/barang-qr-code/search-for-maintenance', [App\Http\Controllers\BarangQrCodeController::class, 'searchForMaintenance'])->name('barang-qr-code.search-for-maintenance');
-   
+
         Route::post('barang-qr-code/{barangQrCode}/mutasi', [BarangQrCodeController::class, 'mutasi'])->name('barang-qr-code.mutasi');
         Route::post('barang-qr-code/{barangQrCode}/archive', [BarangQrCodeController::class, 'archive'])->name('barang-qr-code.archive');
         Route::post('barang-qr-code/{barangQrCode}/restore', [BarangQrCodeController::class, 'restore'])->name('barang-qr-code.restore');
@@ -266,8 +267,7 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('/pengaturan', [App\Http\Controllers\PengaturanController::class, 'index'])->name('pengaturan.index');
         Route::post('/pengaturan', [App\Http\Controllers\PengaturanController::class, 'update'])->name('pengaturan.update');
-
-         });
+    });
 
 
 

@@ -545,21 +545,30 @@ class BarangQrCode extends Model
      */
     public function scopeFilter($query, Request $request)
     {
-        return $query->when($request->id_barang, fn($q, $id) => $q->where('id_barang', $id)) // [cite: 246]
+        return $query->when($request->id_barang, fn($q, $id) => $q->where('id_barang', $id))
             ->when($request->id_ruangan, function ($q, $id_ruangan) {
                 if ($id_ruangan === 'tanpa-ruangan') {
-                    $q->whereNull('id_ruangan'); // [cite: 248]
+                    $q->whereNull('id_ruangan');
                 } else {
-                    $q->where('id_ruangan', $id_ruangan); // [cite: 248]
+                    $q->where('id_ruangan', $id_ruangan);
                 }
             })
-            ->when($request->status, fn($q, $s) => $q->where('status', $s)) // [cite: 249]
-            ->when($request->kondisi, fn($q, $k) => $q->where('kondisi', $k)) // [cite: 249]
+            ->when($request->status, fn($q, $s) => $q->where('status', $s))
+            ->when($request->kondisi, fn($q, $k) => $q->where('kondisi', $k))
+
+            // ===== AWAL PENAMBAHAN KONDISI BARU =====
+            ->when($request->arsip_selain_hilang, function ($q) {
+                $q->whereHas('arsip', function ($qArsip) {
+                    $qArsip->where('jenis_penghapusan', '!=', 'Hilang');
+                });
+            })
+            // ===== AKHIR PENAMBAHAN KONDISI BARU =====
+
             ->when($request->search, function ($query, $term) {
                 $query->where(function ($q) use ($term) {
-                    $q->where('no_seri_pabrik', 'like', "%{$term}%") // [cite: 249]
-                        ->orWhere('kode_inventaris_sekolah', 'like', "%{$term}%") // [cite: 250]
-                        ->orWhereHas('barang', fn($sub) => $sub->where('nama_barang', 'like', "%{$term}%")); // [cite: 250]
+                    $q->where('no_seri_pabrik', 'like', "%{$term}%")
+                        ->orWhere('kode_inventaris_sekolah', 'like', "%{$term}%")
+                        ->orWhereHas('barang', fn($sub) => $sub->where('nama_barang', 'like', "%{$term}%"));
                 });
             });
     }

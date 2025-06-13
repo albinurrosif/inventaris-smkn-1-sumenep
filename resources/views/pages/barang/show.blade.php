@@ -23,7 +23,8 @@
                     <div class="page-title-right">
                         <ol class="breadcrumb m-0">
                             <li class="breadcrumb-item"><a href="{{ route('redirect-dashboard') }}">Dashboard</a></li>
-                            <li class="breadcrumb-item"><a href="{{ route('admin.barang.index') }}">Daftar Jenis Barang</a>
+                            <li class="breadcrumb-item"><a href="{{ route($rolePrefix . 'barang.index') }}">Daftar Jenis
+                                    Barang</a>
                             </li>
                             <li class="breadcrumb-item active">Detail: {{ $barang->nama_barang }}</li>
                         </ol>
@@ -40,26 +41,27 @@
                 <div class="d-flex gap-2 mt-2 mt-sm-0">
                     {{-- Tombol hanya muncul jika ada unit aktif untuk dicetak --}}
                     @if ($barang->active_qr_codes_count > 0)
-                        <a href="{{ route('admin.barang.print-all-qrcodes', $barang->id) }}" class="btn btn-info btn-sm"
-                            target="_blank" title="Cetak semua QR Code untuk barang ini">
+                        <a href="{{ route($rolePrefix . 'barang.print-all-qrcodes', $barang->id) }}"
+                            class="btn btn-info btn-sm" target="_blank" title="Cetak semua QR Code untuk barang ini">
                             <i class="fas fa-print me-1"></i> Cetak Semua QR
                         </a>
                     @endif
                     @can('update', $barang)
                         <button type="button" class="btn btn-warning btn-sm btn-edit-jenis-barang" data-bs-toggle="modal"
                             data-bs-target="#modalEditJenisBarang" data-barang='@json($barang)'
-                            data-url="{{ route('admin.barang.update', $barang->id) }}">
+                            data-url="{{ route($rolePrefix . 'barang.update', $barang->id) }}">
                             <i class="fas fa-edit me-1"></i> Edit Info Jenis
                         </button>
                     @endcan
                     @can('delete', $barang)
                         <button type="button" class="btn btn-danger btn-sm btn-hapus-jenis-barang" data-bs-toggle="modal"
-                            data-bs-target="#modalHapusJenisBarang" data-url="{{ route('admin.barang.destroy', $barang->id) }}"
+                            data-bs-target="#modalHapusJenisBarang"
+                            data-url="{{ route($rolePrefix . 'barang.destroy', $barang->id) }}"
                             data-nama="{{ $barang->nama_barang }}" data-jumlah-unit="{{ $barang->active_qr_codes_count }}">
                             <i class="fas fa-trash-alt me-1"></i> Hapus Jenis & Semua Unit
                         </button>
                     @endcan
-                    <a href="{{ route('admin.barang.index') }}" class="btn btn-secondary btn-sm">
+                    <a href="{{ route($rolePrefix . 'barang.index') }}" class="btn btn-secondary btn-sm">
                         <i class="fas fa-arrow-left me-1"></i> Kembali
                     </a>
                 </div>
@@ -103,7 +105,7 @@
                 @if ($barang->menggunakan_nomor_seri)
                     @can('create', [App\Models\BarangQrCode::class, $barang])
                         <div class="d-flex align-items-center gap-2">
-                            <form action="{{ route('admin.barang-qr-code.create') }}" method="GET"
+                            <form action="{{ route($rolePrefix . 'barang-qr-code.create') }}" method="GET"
                                 class="d-inline-flex align-items-center">
                                 <input type="hidden" name="barang_id" value="{{ $barang->id }}">
                                 <label for="jumlah_unit_to_add" class="form-label me-2 mb-0">Tambah:</label>
@@ -124,7 +126,9 @@
                     <table id="unitTable" class="table table-bordered table-hover dt-responsive nowrap w-100">
                         <thead class="table-light">
                             <tr>
-                                <th>#</th>
+                            <tr>
+                                <th style="width: 1%;"><input class="form-check-input" type="checkbox" id="checkAll"></th>
+
                                 <th>Kode Inventaris</th>
                                 <th>No. Seri Pabrik</th>
                                 <th>Lokasi/Pemegang</th>
@@ -136,13 +140,17 @@
                                 <th class="text-center">QR</th>
                                 <th>Aksi</th>
                             </tr>
+                            </tr>
                         </thead>
                         <tbody>
-                            @forelse ($qrCodes as $unit)
+                            @forelse ($qrCodes as $index => $unit)
                                 <tr>
-                                    <td>{{ $loop->iteration + $qrCodes->firstItem() - 1 }}</td>
+                                    {{-- Kolom Checklist (BARU) --}}
+                                    <td><input class="form-check-input unit-checkbox" type="checkbox" name="qr_code_ids[]"
+                                            value="{{ $unit->id }}"></td>
+
                                     <td><a
-                                            href="{{ route('admin.barang-qr-code.show', $unit->id) }}">{{ $unit->kode_inventaris_sekolah }}</a>
+                                            href="{{ route($rolePrefix . 'barang-qr-code.show', $unit->id) }}">{{ $unit->kode_inventaris_sekolah }}</a>
                                     </td>
                                     <td>{{ $unit->no_seri_pabrik ?? '-' }}</td>
                                     <td>
@@ -201,14 +209,14 @@
                                     </td>
                                     <td class="text-center">
                                         @if ($unit->qr_path && Storage::disk('public')->exists($unit->qr_path))
-                                            <a href="{{ route('admin.barang-qr-code.download', $unit->id) }}"
+                                            <a href="{{ route($rolePrefix . 'barang-qr-code.download', $unit->id) }}"
                                                 title="Download QR Code {{ $unit->kode_inventaris_sekolah }}">
                                                 <img src="{{ asset('storage/' . $unit->qr_path) }}"
                                                     alt="QR Code {{ $unit->kode_inventaris_sekolah }}"
                                                     style="width: 40px; height: 40px; cursor:pointer;">
                                             </a>
                                         @else
-                                            <a href="{{ route('admin.barang-qr-code.download', $unit->id) }}"
+                                            <a href="{{ route($rolePrefix . 'barang-qr-code.download', $unit->id) }}"
                                                 class="btn btn-sm btn-outline-secondary"
                                                 title="Generate & Download QR {{ $unit->kode_inventaris_sekolah }}"><i
                                                     class="fas fa-qrcode"></i></a>
@@ -217,7 +225,7 @@
                                     <td>
                                         <div class="d-flex gap-1 flex-wrap">
                                             @can('view', $unit)
-                                                <a href="{{ route('admin.barang-qr-code.show', $unit->id) }}"
+                                                <a href="{{ route($rolePrefix . 'barang-qr-code.show', $unit->id) }}"
                                                     class="btn btn-info btn-sm" title="Lihat Detail Unit"><i
                                                         class="fas fa-eye"></i></a>
                                             @endcan
@@ -246,12 +254,12 @@
 
     {{-- Include Modal-modal --}}
     @if (isset($kategoriList))
-        @include('admin.barang.partials.modal_edit_jenis', [
+        @include($rolePrefix . 'barang.partials.modal_edit_jenis', [
             'kategoriList' => $kategoriList,
             'barang' => $barang,
         ])
     @endif
-    @include('admin.barang.partials.modal_hapus_jenis')
+    @include($rolePrefix . 'barang.partials.modal_hapus_jenis')
     {{-- Modal arsip unit tetap di-include jika ada tombol lain yang mungkin memicunya, atau jika JS-nya digunakan bersama --}}
     @include('pages.barang_qr_code.partials.modal_arsip_unit')
 
@@ -395,6 +403,57 @@
                     form.reset();
                 }
             });
+        });
+    </script>
+    {{-- ===== AWAL SCRIPT BARU UNTUK CHECKLIST ===== --}}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const checkAll = document.getElementById('checkAll');
+            const unitCheckboxes = document.querySelectorAll('.unit-checkbox');
+            const printButton = document.getElementById('btnPrintSelected');
+            const printForm = document.getElementById('formPrintSelected');
+
+            function togglePrintButtonState() {
+                const checkedCount = document.querySelectorAll('.unit-checkbox:checked').length;
+                printButton.disabled = checkedCount === 0;
+            }
+
+            if (checkAll) {
+                checkAll.addEventListener('click', function() {
+                    unitCheckboxes.forEach(checkbox => {
+                        checkbox.checked = this.checked;
+                    });
+                    togglePrintButtonState();
+                });
+            }
+
+            unitCheckboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    if (!this.checked) {
+                        checkAll.checked = false;
+                    } else {
+                        if (document.querySelectorAll('.unit-checkbox:checked').length ===
+                            unitCheckboxes.length) {
+                            checkAll.checked = true;
+                        }
+                    }
+                    togglePrintButtonState();
+                });
+            });
+
+            if (printButton) {
+                printButton.addEventListener('click', function() {
+                    if (document.querySelectorAll('.unit-checkbox:checked').length > 0) {
+                        printForm.submit();
+                    } else {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Tidak Ada Unit Dipilih',
+                            text: 'Pilih minimal satu unit barang untuk dicetak QR Code-nya.',
+                        });
+                    }
+                });
+            }
         });
     </script>
 @endpush
