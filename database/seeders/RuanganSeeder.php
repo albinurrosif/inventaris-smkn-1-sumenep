@@ -5,35 +5,93 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Ruangan;
 use App\Models\User;
+use Illuminate\Support\Str;
 
 class RuanganSeeder extends Seeder
 {
+    /**
+     * Run the database seeds.
+     *
+     * @return void
+     */
     public function run(): void
     {
-        $operator1 = User::where('role', User::ROLE_OPERATOR)->skip(0)->first();
-        $operator2 = User::where('role', User::ROLE_OPERATOR)->skip(1)->first();
+        $this->command->info('Membuat data Ruangan yang bervariasi...');
 
-        if (!$operator1) {
-            $this->command->warn('Tidak ada user dengan role Operator. Jalankan UserSeeder terlebih dahulu.');
+        // Cari operator untuk ditugaskan, jika tidak ada, gunakan admin pertama
+        $operators = User::where('role', 'Operator')->get();
+        if ($operators->isEmpty()) {
+            $this->command->warn('Tidak ditemukan user dengan role Operator. Menetapkan ke user Admin pertama.');
+            $operators = User::where('role', 'Admin')->limit(1)->get();
+        }
+
+        if ($operators->isEmpty()) {
+            $this->command->error('Tidak ada user Operator atau Admin. Ruangan tidak dapat dibuat.');
             return;
         }
 
-        $ruangan = [
-            ['nama' => 'Laboratorium RPL 1', 'kode' => 'LAB-RPL-1', 'operator' => $operator1->id],
-            ['nama' => 'Laboratorium TKJ 1', 'kode' => 'LAB-TKJ-1', 'operator' => $operator1->id],
-            ['nama' => 'Ruang Guru Umum', 'kode' => 'RG-UMUM', 'operator' => $operator2->id ?? $operator1->id],
-            ['nama' => 'Perpustakaan', 'kode' => 'PERPUS', 'operator' => $operator2->id ?? $operator1->id],
-            ['nama' => 'Ruang Kepala Sekolah', 'kode' => 'KS-01', 'operator' => $operator2->id ?? $operator1->id],
-        ]; // 
+        // Kumpulan data ruangan yang lebih realistis dan banyak
+        $daftarRuangan = [
+            // Daftar Ruang Teori
+            'Ruang Teori 01',
+            'Ruang Teori 02',
+            'Ruang Teori 03',
+            'Ruang Teori 04',
+            'Ruang Teori 05',
+            'Ruang Teori 06',
+            'Ruang Teori 07',
+            'Ruang Teori 08',
+            'Ruang Teori 09',
+            'Ruang Teori 10',
 
-        foreach ($ruangan as $data) {
+            // Daftar Laboratorium Praktek Kejuruan
+            'Lab. Rekayasa Perangkat Lunak',
+            'Lab. Jaringan Komputer',
+            'Lab. Multimedia',
+            'Lab. Administrasi Perkantoran',
+            'Lab. Akuntansi & Keuangan',
+            'Lab. Pemasaran Online',
+            'Lab. Perhotelan',
+            'Lab. Bahasa',
+
+            // Daftar Ruang Praktik & Bengkel
+            'Bengkel Otomotif',
+            'Dapur Praktik Tata Boga',
+            'Teaching Factory (TEFA)',
+            'Studio Fotografi & Broadcasting',
+            'Edotel (Educational Hotel)',
+
+            // Daftar Ruang Pimpinan & Staf
+            'Ruang Kepala Sekolah',
+            'Ruang Wakil Kepala Sekolah',
+            'Ruang Tata Usaha',
+            'Ruang Guru',
+            'Ruang Bimbingan Konseling (BP)',
+            'Ruang Hubungan Industri (Hubin)',
+
+            // Fasilitas Umum & Penunjang
+            'Perpustakaan',
+            'UKS (Unit Kesehatan Sekolah)',
+            'Ruang OSIS',
+            'Kantin Sekolah',
+            'Musholla',
+            'Pos Satpam',
+            'Gudang Inventaris',
+            'Bank Mini Sekolah',
+        ];
+
+        foreach ($daftarRuangan as $namaRuangan) {
             Ruangan::firstOrCreate(
-                ['kode_ruangan' => $data['kode']],
+                ['nama_ruangan' => $namaRuangan],
                 [
-                    'nama_ruangan' => $data['nama'],
-                    'id_operator' => $data['operator'],
+                    // Membuat kode ruangan unik dari nama ruangan
+                    'kode_ruangan' => Str::upper(Str::slug($namaRuangan, '_')),
+                    // Menugaskan operator secara acak
+                    'id_operator' => $operators->random()->id
                 ]
-            ); // 
+            );
         }
+
+        $this->command->info(count($daftarRuangan) . ' ruangan berhasil dibuat atau ditemukan.');
     }
 }

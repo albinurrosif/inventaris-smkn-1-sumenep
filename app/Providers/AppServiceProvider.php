@@ -47,7 +47,7 @@ class AppServiceProvider extends ServiceProvider
             'pages.katalog.index',      // Halaman Katalog Barang
             'pages.peminjaman.index',   // Halaman Daftar Peminjaman
             // Halaman Form Pengajuan
-            'pages.peminjaman.edit'     // Halaman Edit Pengajuan
+            //'pages.peminjaman.edit'     // Halaman Edit Pengajuan
         ], function ($view) {
             // Cek Auth untuk keamanan, meskipun rute sudah dilindungi middleware
             if (Auth::check()) {

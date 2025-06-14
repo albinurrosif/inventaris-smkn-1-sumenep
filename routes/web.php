@@ -389,6 +389,9 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/reset', [App\Http\Controllers\KeranjangPeminjamanController::class, 'resetKeranjang'])->name('reset');
         });
 
+        // routes/web.php
+        Route::delete('peminjaman/{peminjaman}/remove-item/{detailPeminjaman}', [PeminjamanController::class, 'removeItem'])->name('peminjaman.removeItem');
+
         // --- PEMINJAMAN ---
         // Resource ini sudah mencakup: index, create, store, show, edit, update
         Route::resource('peminjaman', App\Http\Controllers\PeminjamanController::class)->only([

@@ -160,7 +160,7 @@
                                     <th>Model Terkait</th>
                                     <th>ID Model</th>
                                     <th>IP Address</th>
-                                    <th>Aksi</th>
+                                    {{-- <th>Aksi</th> --}}
                                 </tr>
                             </thead>
                             <tbody>
@@ -217,12 +217,12 @@
                                         <td>{{ $log->model_terkait ? class_basename($log->model_terkait) : '-' }}</td>
                                         <td>{{ $log->id_model_terkait ?: '-' }}</td>
                                         <td>{{ $log->ip_address }}</td>
-                                        <td>
+                                        {{-- <td>
                                             <a href="{{ route('admin.log-aktivitas.show', $log->id) }}"
                                                 class="btn btn-sm btn-info" title="Lihat Detail">
                                                 <i class="fas fa-eye"></i>
                                             </a>
-                                        </td>
+                                        </td> --}}
                                     </tr>
                                 @endforeach
                             </tbody>

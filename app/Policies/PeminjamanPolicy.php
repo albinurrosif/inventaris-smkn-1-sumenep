@@ -16,6 +16,11 @@ class PeminjamanPolicy
      */
     public function before(User $user, string $ability): ?bool
     {
+        // Pengecualian: jangan berikan akses 'update' otomatis untuk Admin
+        if ($ability === 'update') {
+            return null; // Biarkan metode update() yang memutuskan
+        }
+
         if ($user->hasRole(User::ROLE_ADMIN)) {
             return true;
         }
@@ -93,11 +98,7 @@ class PeminjamanPolicy
     {
         // Admin sudah true via before().
         // Hanya peminjaman yang sudah final (Selesai, Ditolak, Dibatalkan) yang boleh diarsipkan.
-        return in_array($peminjaman->status, [
-            Peminjaman::STATUS_SELESAI,
-            Peminjaman::STATUS_DITOLAK,
-            Peminjaman::STATUS_DIBATALKAN
-        ]);
+        return false;
     }
 
     /**

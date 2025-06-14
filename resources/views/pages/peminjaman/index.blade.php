@@ -179,11 +179,21 @@
                                             @endcan
 
                                             @can('delete', $peminjaman)
-                                                <button type="button" class="btn btn-outline-danger btn-sm" title="Arsipkan"
-                                                    data-bs-toggle="modal" data-bs-target="#archiveModal{{ $peminjaman->id }}">
-                                                    <i class="fas fa-archive"></i>
-                                                </button>
-                                                {{-- @include('admin.peminjaman._modal_archive') --}}
+                                                {{-- Kita bungkus tombol dengan form yang akan di-submit oleh modal --}}
+                                                <form id="form-archive-{{ $peminjaman->id }}"
+                                                    action="{{ route($rolePrefix . 'peminjaman.destroy', $peminjaman->id) }}"
+                                                    method="POST">
+                                                    @csrf
+                                                    @method('DELETE')
+
+                                                    <button type="button" class="btn btn-outline-danger btn-sm"
+                                                        title="Arsipkan" data-bs-toggle="modal"
+                                                        data-bs-target="#universalConfirmModal"
+                                                        data-message="Anda yakin ingin mengarsipkan data peminjaman #{{ $peminjaman->id }}? Data yang sudah diarsipkan tidak bisa digunakan lagi namun riwayatnya tetap tersimpan."
+                                                        data-form-id="form-archive-{{ $peminjaman->id }}">
+                                                        <i class="fas fa-archive"></i>
+                                                    </button>
+                                                </form>
                                             @endcan
                                         </div>
                                     </td>

@@ -20,27 +20,37 @@
         </div>
 
         {{-- PESAN JIKA KERANJANG TERKUNCI PADA RUANGAN TERTENTU --}}
-        @if ($ruanganTerkunci)
-            <div class="alert alert-info d-flex justify-content-between align-items-center">
+        @if ($lockedRuangan)
+            <div class="alert alert-info d-flex justify-content-between align-items-center" role="alert">
                 <div>
                     <i class="fas fa-lock me-2"></i>
-                    Keranjang Anda saat ini terkunci untuk item dari ruangan:
-                    <strong>{{ $ruanganTerkunci->nama_ruangan }}</strong>.
-                    Anda hanya dapat menambahkan barang lain dari ruangan yang sama.
+                    @if ($peminjamanId)
+                        <strong>Mode Edit:</strong> Peminjaman ini terkunci untuk item dari ruangan:
+                        <strong>{{ $lockedRuangan->nama_ruangan }}</strong>.
+                    @else
+                        Keranjang Anda terkunci untuk item dari ruangan:
+                        <strong>{{ $lockedRuangan->nama_ruangan }}</strong>.
+                    @endif
                 </div>
-                {{-- Tombol untuk mengosongkan keranjang --}}
-                {{-- Ganti form lama dengan yang ini di halaman katalog --}}
-                <form id="form-reset-katalog" action="{{ route('guru.keranjang.reset') }}" method="POST">
-                    @csrf
-                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal"
-                        data-bs-target="#universalConfirmModal" data-message="Anda yakin ingin mengosongkan keranjang?"
-                        data-form-id="form-reset-katalog">
-                        Reset Keranjang
-                    </button>
-                </form>
+
+                @if ($peminjamanId)
+                    {{-- Jika dalam mode edit, tombolnya adalah link untuk kembali ke katalog bersih (keluar dari mode edit) --}}
+                    <a href="{{ route('guru.katalog.index') }}" class="btn btn-sm btn-outline-warning">
+                        <i class="fas fa-times me-1"></i> Keluar dari Mode Edit
+                    </a>
+                @else
+                    {{-- Jika dalam mode buat baru, tombolnya adalah reset keranjang session --}}
+                    <form id="form-reset-katalog" action="{{ route('guru.keranjang.reset') }}" method="POST">
+                        @csrf
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal"
+                            data-bs-target="#universalConfirmModal" data-message="Anda yakin ingin mengosongkan keranjang?"
+                            data-form-id="form-reset-katalog">
+                            Reset Keranjang
+                        </button>
+                    </form>
+                @endif
             </div>
         @endif
-
         {{-- Filter Pencarian & Dropdown --}}
         <div class="card mb-4">
             <div class="card-body">
@@ -121,13 +131,17 @@
                                 <form action="{{ route('guru.keranjang.tambah') }}" method="POST" class="d-grid">
                                     @csrf
                                     <input type="hidden" name="id_barang_qr_code" value="{{ $item->id }}">
+                                    @if (request('peminjaman_id'))
+                                        <input type="hidden" name="peminjaman_id" value="{{ request('peminjaman_id') }}">
+                                    @endif
                                     <button type="submit" class="btn btn-primary"
-                                        @if ($ruanganTerkunci && $item->id_ruangan !== $ruanganTerkunci->id) disabled 
+                                        @if ($lockedRuangan && $item->id_ruangan !== $lockedRuangan->id) disabled 
                                         title="Barang ini tidak dapat ditambahkan karena berbeda ruangan dengan keranjang Anda." @endif>
 
                                         <i class="fas fa-cart-plus"></i> Tambah ke Keranjang
                                     </button>
                                 </form>
+
                             </div>
                         </div>
                     </div>

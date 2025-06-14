@@ -48,12 +48,12 @@
             </div>
 
             <!-- Notifikasi -->
-            <div class="dropdown d-inline-block">
+            {{-- <div class="dropdown d-inline-block">
                 <button type="button" class="btn header-item noti-icon position-relative me-2"
                     id="page-header-notifications-dropdown" data-bs-toggle="dropdown" aria-haspopup="true"
                     aria-expanded="false">
                     <i data-feather="bell" class="icon-lg"></i>
-                    <span class="badge bg-danger rounded-pill">3</span> {{-- Optional: dinamis --}}
+                    <span class="badge bg-danger rounded-pill">3</span> 
                 </button>
                 <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end p-0">
                     <div class="p-3 border-bottom">
@@ -81,7 +81,7 @@
                         <a href="#" class="text-decoration-underline">Lihat Semua</a>
                     </div>
                 </div>
-            </div>
+            </div> --}}
 
             {{-- <div class="dropdown d-inline-block">
                 <button type="button" class="btn header-item right-bar-toggle me-2">

@@ -346,55 +346,20 @@ class PeminjamanController extends Controller
         return view('pages.peminjaman.show', compact('peminjaman', 'kondisiList'));
     }
 
-    public function edit(Peminjaman $peminjaman): View|RedirectResponse
+    public function edit(Peminjaman $peminjaman): View
     {
-        $this->authorize('update', $peminjaman); // [cite: 2274]
+        // Otorisasi, cek apakah user boleh mengupdate peminjaman ini
+        $this->authorize('update', $peminjaman);
 
-        $barangList = BarangQrCode::where('status', BarangQrCode::STATUS_TERSEDIA)
-            ->whereIn('kondisi', [BarangQrCode::KONDISI_BAIK, BarangQrCode::KONDISI_KURANG_BAIK])
-            ->whereNull('deleted_at')
-            ->with('barang', 'ruangan', 'pemegangPersonal')
-            ->orderBy('id_barang')
-            ->get()
-            ->map(function ($item) {
-                $namaRuangan = $item->ruangan ? $item->ruangan->nama_ruangan : ($item->id_pemegang_personal ? 'Pemegang: ' . optional($item->pemegangPersonal)->username : 'Tidak di Ruangan'); // [cite: 2276]
-                return [
-                    'id' => $item->id,
-                    'text' => $item->barang->nama_barang . ' (' . $item->kode_inventaris_sekolah . ($item->no_seri_pabrik ? ' / SN: ' . $item->no_seri_pabrik : '') . ') - Kondisi: ' . $item->kondisi . ' - Lokasi: ' . $namaRuangan
-                ]; // [cite: 2277]
-            });
+        // Ambil detail peminjaman beserta relasi barangnya
+        $peminjaman->load('detailPeminjaman.barangQrCode.barang', 'detailPeminjaman.barangQrCode.ruangan');
 
-        $currentPeminjamanItemIds = $peminjaman->detailPeminjaman->pluck('id_barang_qr_code'); // [cite: 2278]
-        $currentPeminjamanItems = BarangQrCode::whereIn('id', $currentPeminjamanItemIds)
-            ->with('barang', 'ruangan', 'pemegangPersonal')
-            ->get()
-            ->map(function ($item) {
-                $namaRuangan = $item->ruangan ? $item->ruangan->nama_ruangan : ($item->id_pemegang_personal ? 'Pemegang: ' . optional($item->pemegangPersonal)->username : 'Tidak di Ruangan');
-                return [
-                    'id' => $item->id,
-                    'text' => $item->barang->nama_barang . ' (' . $item->kode_inventaris_sekolah . ($item->no_seri_pabrik ? ' / SN: ' . $item->no_seri_pabrik : '') . ') - Kondisi: ' . $item->kondisi . ' - Lokasi: ' . $namaRuangan
-                ]; // [cite: 2279, 2280]
-            });
+        // Ambil data ruangan untuk dropdown "Ruangan Tujuan"
+        $ruanganTujuanList = Ruangan::orderBy('nama_ruangan')->get();
 
-        $barangList = $barangList->concat($currentPeminjamanItems)->unique('id')->sortBy('text'); // [cite: 2281]
-
-
-        $selectedBarangIds = $peminjaman->detailPeminjaman->pluck('id_barang_qr_code')->toArray(); // [cite: 2281]
-        $ruanganTujuanList = Ruangan::whereNull('deleted_at')->orderBy('nama_ruangan')->get(); // [cite: 2282]
-
-        // PERUBAHAN: Menentukan path view
-        $viewPath = $this->getViewPathBasedOnRole(
-            'pages.peminjaman.edit', // Path bersama
-            Auth::user()->hasRole(User::ROLE_OPERATOR) ? 'pages.peminjaman.edit-catatan' : null // Path spesifik jika ada
-        );
-
-        if (Auth::user()->hasRole(User::ROLE_OPERATOR) && !view()->exists($viewPath)) {
-            // Jika view spesifik Operator tidak ada, arahkan ke show dengan warning
-            $redirectUrl = $this->getRedirectUrl("peminjaman/{$peminjaman->id}");
-            return redirect($redirectUrl)->with('warning', 'anda tidak memiliki form khusus untuk edit');
-        }
-
-        return view('pages.peminjaman.edit', compact('peminjaman', 'barangList', 'selectedBarangIds', 'ruanganTujuanList'));
+        // Kirim data ke view. 
+        // Kita tidak lagi butuh $barangList atau $selectedBarangIds yang kompleks.
+        return view('pages.peminjaman.edit', compact('peminjaman', 'ruanganTujuanList'));
     }
 
     public function update(PeminjamanUpdateRequest $request, Peminjaman $peminjaman): RedirectResponse
@@ -483,6 +448,8 @@ class PeminjamanController extends Controller
 
 
             DB::commit(); // [cite: 2311]
+            $peminjaman->refresh()->updateStatusPeminjaman(); // Re-evaluasi status
+
             $redirectUrl = $this->getRedirectUrl("peminjaman/{$peminjaman->id}");
             return redirect($redirectUrl)->with('success', 'Pengajuan peminjaman berhasil diperbarui.');
         } catch (\Exception $e) {
@@ -490,6 +457,24 @@ class PeminjamanController extends Controller
             Log::error("Gagal memperbarui pengajuan peminjaman ID {$peminjaman->id}: " . $e->getMessage(), ['exception' => $e, 'trace' => $e->getTraceAsString()]); // [cite: 2313]
             return redirect()->back()->with('error', 'Gagal memperbarui pengajuan: ' . (config('app.debug') ? $e->getMessage() : 'Terjadi kesalahan sistem.'))->withInput(); // [cite: 2314]
         }
+    }
+
+    // app/Http/Controllers/PeminjamanController.php
+
+    public function removeItem(Peminjaman $peminjaman, DetailPeminjaman $detailPeminjaman): RedirectResponse
+    {
+        // Otorisasi: Pastikan user boleh mengupdate peminjaman ini
+        $this->authorize('update', $peminjaman);
+
+        // Keamanan: Pastikan detail item benar-benar milik peminjaman ini
+        if ($detailPeminjaman->id_peminjaman !== $peminjaman->id) {
+            abort(404);
+        }
+
+        $detailPeminjaman->delete(); // Soft delete detail peminjaman
+
+        return redirect()->route('guru.peminjaman.edit', $peminjaman->id)
+            ->with('success', 'Satu item berhasil dihapus dari pengajuan.');
     }
 
 

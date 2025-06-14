@@ -7,99 +7,111 @@ use App\Models\Barang;
 use App\Models\BarangQrCode;
 use App\Models\KategoriBarang;
 use App\Models\Ruangan;
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class BarangSeeder extends Seeder
 {
+    /**
+     * Run the database seeds.
+     *
+     * @return void
+     */
     public function run(): void
     {
-        $kategoriElektronik = KategoriBarang::where('nama_kategori', 'Elektronik')->first();
-        $kategoriMebel = KategoriBarang::where('nama_kategori', 'Mebel & Perabotan')->first();
+        $this->command->info('Memulai BarangSeeder yang telah disesuaikan...');
 
-        $labRpl1 = Ruangan::where('kode_ruangan', 'LAB-RPL-1')->first();
-        $ruangGuruUmum = Ruangan::where('kode_ruangan', 'RG-UMUM')->first();
-        $perpustakaan = Ruangan::where('kode_ruangan', 'PERPUS')->first();
+        // Ambil data master yang dibutuhkan
+        $kategoriList = KategoriBarang::all();
+        $ruanganList = Ruangan::all();
+        $adminUser = User::where('role', 'Admin')->first();
 
-        if (!$kategoriElektronik || !$kategoriMebel || !$labRpl1 || !$ruangGuruUmum) {
-            $this->command->warn('Pastikan Seeder KategoriBarang dan Ruangan sudah dijalankan dan berhasil.');
+        if ($kategoriList->isEmpty() || $ruanganList->isEmpty() || !$adminUser) {
+            $this->command->error('Kategori, Ruangan, atau User Admin tidak ditemukan. Pastikan seeder terkait sudah dijalankan.');
             return;
         }
 
-        $dataIndukBarang = [
-            [
-                'kode_barang' => 'LP-ASUS-001',
-                'nama_barang' => 'Laptop ASUS ROG',
-                'merk_model' => 'ROG Zephyrus G14',
-                'id_kategori' => $kategoriElektronik->id,
-                'menggunakan_nomor_seri' => true,
-                'jumlah_unit_akan_dibuat' => 10,
-                'ruangan_default_unit' => $labRpl1->id,
-                'detail_induk' => ['tahun_pembuatan' => 2023, 'harga_perolehan_induk' => 15000000, 'sumber_perolehan_induk' => 'Pembelian Kantor'],
-                'detail_unit' => ['sumber_dana_unit' => 'BOS 2023', 'no_dokumen_perolehan_unit' => 'INV/2023/LP001']
-            ],
-            [
-                'kode_barang' => 'PR-EPSON-002',
-                'nama_barang' => 'Proyektor Epson',
-                'merk_model' => 'EB-X500',
-                'id_kategori' => $kategoriElektronik->id,
-                'menggunakan_nomor_seri' => true,
-                'jumlah_unit_akan_dibuat' => 5,
-                'ruangan_default_unit' => $perpustakaan->id,
-                'detail_induk' => ['tahun_pembuatan' => 2022, 'harga_perolehan_induk' => 8000000, 'sumber_perolehan_induk' => 'Hibah APBN'],
-                'detail_unit' => ['sumber_dana_unit' => 'Hibah Pusat 2022', 'no_dokumen_perolehan_unit' => 'BAST/HIBAH/2022/PR01']
-            ],
-            [
-                'kode_barang' => 'MJ-ORB-003',
-                'nama_barang' => 'Meja Guru',
-                'merk_model' => 'Orbitrend Kayu Jati',
-                'id_kategori' => $kategoriMebel->id,
-                'menggunakan_nomor_seri' => false,
-                'jumlah_unit_akan_dibuat' => 7,
-                'ruangan_default_unit' => $ruangGuruUmum->id,
-                'detail_induk' => ['tahun_pembuatan' => 2023, 'harga_perolehan_induk' => 2000000, 'sumber_perolehan_induk' => 'Dana Komite'],
-                'detail_unit' => ['sumber_dana_unit' => 'Komite Sekolah 2023', 'no_dokumen_perolehan_unit' => 'KW/KOMITE/2023/MJ05']
-            ],
+        // Kumpulan data master barang yang lebih banyak dan bervariasi
+        $dataMasterBarang = [
+            // Kategori: Komputer & Jaringan
+            ['nama' => 'PC All-in-One', 'kode' => 'PC-AIO-01', 'kategori' => 'Komputer & Jaringan', 'merk' => 'HP', 'harga' => 7500000, 'seri' => true, 'jml_min' => 15, 'jml_max' => 25],
+            ['nama' => 'Laptop Siswa', 'kode' => 'LP-STD-02', 'kategori' => 'Laptop & Aksesoris', 'merk' => 'Acer', 'harga' => 5000000, 'seri' => true, 'jml_min' => 20, 'jml_max' => 30],
+            ['nama' => 'Router Jaringan', 'kode' => 'RTR-MKT-03', 'kategori' => 'Perangkat Keras Jaringan', 'merk' => 'MikroTik', 'harga' => 1200000, 'seri' => true, 'jml_min' => 3, 'jml_max' => 5],
+            ['nama' => 'Switch Hub 24 Port', 'kode' => 'SW-TPL-04', 'kategori' => 'Perangkat Keras Jaringan', 'merk' => 'TP-Link', 'harga' => 800000, 'seri' => false, 'jml_min' => 5, 'jml_max' => 10],
+
+            // Kategori: Perabotan Kantor & Kelas
+            ['nama' => 'Meja Kerja Guru', 'kode' => 'MJ-GR-05', 'kategori' => 'Perabotan Kantor & Kelas', 'merk' => 'Olympic', 'harga' => 700000, 'seri' => false, 'jml_min' => 10, 'jml_max' => 20],
+            ['nama' => 'Kursi Siswa', 'kode' => 'KR-SSW-06', 'kategori' => 'Perabotan Kantor & Kelas', 'merk' => 'Chitose', 'harga' => 250000, 'seri' => false, 'jml_min' => 50, 'jml_max' => 100],
+            ['nama' => 'Lemari Arsip Besi', 'kode' => 'LM-ARS-07', 'kategori' => 'Perabotan Kantor & Kelas', 'merk' => 'Lion', 'harga' => 2500000, 'seri' => false, 'jml_min' => 5, 'jml_max' => 10],
+            ['nama' => 'Papan Tulis Whiteboard', 'kode' => 'PT-WBD-08', 'kategori' => 'Perabotan Kantor & Kelas', 'merk' => 'Sakura', 'harga' => 450000, 'seri' => false, 'jml_min' => 10, 'jml_max' => 15],
+            ['nama' => 'Mesin Fotocopy', 'kode' => 'FC-KYC-16', 'kategori' => 'Peralatan Kantor Elektronik', 'merk' => 'Kyocera', 'harga' => 25000000, 'seri' => true, 'jml_min' => 1, 'jml_max' => 3],
+
+            // Kategori: Peralatan Elektronik & Audio Visual
+            ['nama' => 'Proyektor LCD', 'kode' => 'PRJ-EPS-09', 'kategori' => 'Peralatan Audio Visual', 'merk' => 'Epson', 'harga' => 6000000, 'seri' => true, 'jml_min' => 8, 'jml_max' => 12],
+            ['nama' => 'Printer All-in-One', 'kode' => 'PRN-CN-10', 'kategori' => 'Printer & Scanner', 'merk' => 'Canon', 'harga' => 3000000, 'seri' => true, 'jml_min' => 4, 'jml_max' => 6],
+            ['nama' => 'AC Split 1 PK', 'kode' => 'AC-PN-11', 'kategori' => 'Lain-lain', 'merk' => 'Panasonic', 'harga' => 4000000, 'seri' => true, 'jml_min' => 10, 'jml_max' => 15],
+            ['nama' => 'CCTV Indoor', 'kode' => 'CTV-HIK-12', 'kategori' => 'Lain-lain', 'merk' => 'Hikvision', 'harga' => 500000, 'seri' => true, 'jml_min' => 15, 'jml_max' => 20],
+
+            // Kategori: Peralatan Laboratorium
+            ['nama' => 'Mikroskop Binokuler', 'kode' => 'LAB-MKB-13', 'kategori' => 'Peralatan Praktik Kejuruan', 'merk' => 'Olympus', 'harga' => 3500000, 'seri' => true, 'jml_min' => 10, 'jml_max' => 20],
+            ['nama' => 'Osiloscop Digital', 'kode' => 'LAB-OSC-14', 'kategori' => 'Peralatan Praktik RPL & TKJ', 'merk' => 'Rigol', 'harga' => 5000000, 'seri' => true, 'jml_min' => 5, 'jml_max' => 8],
+
+            // Lain-lain
+            ['nama' => 'Genset 5000W', 'kode' => 'GEN-YMH-15', 'kategori' => 'Lain-lain', 'merk' => 'Yamaha', 'harga' => 15000000, 'seri' => true, 'jml_min' => 1, 'jml_max' => 2],
         ];
 
-        foreach ($dataIndukBarang as $data) {
-            $dataInduk = array_merge($data, $data['detail_induk']);
-            unset($dataInduk['jumlah_unit_akan_dibuat'], $dataInduk['ruangan_default_unit'], $dataInduk['detail_induk'], $dataInduk['detail_unit']);
+        DB::transaction(function () use ($dataMasterBarang, $kategoriList, $ruanganList, $adminUser) {
+            $kategoriLain = $kategoriList->where('nama_kategori', 'Lain-lain')->first();
 
-            $barangInduk = Barang::firstOrCreate(
-                ['kode_barang' => $data['kode_barang']],
-                $dataInduk
-            );
+            foreach ($dataMasterBarang as $data) {
+                // Mencari kategori yang sesuai
+                $kategoriDitemukan = $kategoriList->where('nama_kategori', $data['kategori'])->first();
 
-            for ($i = 1; $i <= $data['jumlah_unit_akan_dibuat']; $i++) {
-                $kodeInventaris = BarangQrCode::generateKodeInventarisSekolah($barangInduk->id);
-                if (BarangQrCode::where('kode_inventaris_sekolah', $kodeInventaris)->exists()) {
-                    continue;
-                }
+                // 1. Buat atau cari master barang
+                $barangInduk = Barang::firstOrCreate(
+                    ['kode_barang' => $data['kode']],
+                    [
+                        'nama_barang' => $data['nama'],
+                        // --- BAGIAN YANG DIPERBAIKI ---
+                        // Jika kategori ditemukan, gunakan id-nya. Jika tidak, gunakan id kategori "Lain-lain".
+                        'id_kategori' => $kategoriDitemukan ? $kategoriDitemukan->id : $kategoriLain->id,
+                        'merk_model' => $data['merk'],
+                        'tahun_pembuatan' => rand(2018, 2024),
+                        'harga_perolehan_induk' => $data['harga'],
+                        'sumber_perolehan_induk' => ['Dana BOS', 'Hibah Pemerintah', 'Dana Komite'][array_rand(['Dana BOS', 'Hibah Pemerintah', 'Dana Komite'])],
+                        'menggunakan_nomor_seri' => $data['seri'],
+                        'total_jumlah_unit' => 0,
+                    ]
+                );
 
-                $noSeri = null;
-                if ($barangInduk->menggunakan_nomor_seri) {
-                    $noSeri = substr(strtoupper($barangInduk->merk_model), 0, 5) . Carbon::now()->format('Ymd') . str_pad($barangInduk->id, 3, '0', STR_PAD_LEFT) . str_pad($i, 3, '0', STR_PAD_LEFT) . rand(100, 999);
-                }
+                // 2. Tentukan jumlah unit yang akan dibuat
+                $jumlahUnit = rand($data['jml_min'], $data['jml_max']);
+                $this->command->line("   Membuat {$jumlahUnit} unit untuk '{$data['nama']}'...");
 
-                try {
+                // 3. Buat unit-unit barangnya
+                for ($i = 1; $i <= $jumlahUnit; $i++) {
+                    $ruanganAcak = $ruanganList->random();
+                    $tahunPerolehan = rand((int)$barangInduk->tahun_pembuatan, 2024);
+                    $kondisi = (rand(1, 10) > 8) ? BarangQrCode::KONDISI_KURANG_BAIK : BarangQrCode::KONDISI_BAIK;
+
                     BarangQrCode::createWithQrCodeImage(
                         idBarang: $barangInduk->id,
-                        idRuangan: $data['ruangan_default_unit'],
-                        noSeriPabrik: $noSeri,
-                        kodeInventarisSekolah: $kodeInventaris,
-                        hargaPerolehanUnit: $data['detail_induk']['harga_perolehan_induk'],
-                        tanggalPerolehanUnit: Carbon::createFromFormat('Y', $data['detail_induk']['tahun_pembuatan'])->startOfYear()->addMonths(rand(0, 11))->addDays(rand(0, 28))->toDateString(),
-                        sumberDanaUnit: $data['detail_unit']['sumber_dana_unit'],
-                        noDokumenPerolehanUnit: $data['detail_unit']['no_dokumen_perolehan_unit'] . '/' . $i,
-                        kondisi: ($i % 7 == 0) ? BarangQrCode::KONDISI_KURANG_BAIK : BarangQrCode::KONDISI_BAIK,
+                        idRuangan: $ruanganAcak->id,
+                        noSeriPabrik: $barangInduk->menggunakan_nomor_seri ? strtoupper($data['merk']) . '-' . rand(100000, 999999) . $i : null,
+                        hargaPerolehanUnit: $data['harga'],
+                        tanggalPerolehanUnit: Carbon::createFromFormat('Y', $tahunPerolehan)->startOfYear()->addMonths(rand(0, 11))->toDateString(),
+                        sumberDanaUnit: $barangInduk->sumber_perolehan_induk,
+                        kondisi: $kondisi,
                         status: BarangQrCode::STATUS_TERSEDIA,
-                        deskripsiUnit: 'Unit ke-' . $i . ' dari ' . $barangInduk->nama_barang . ' (Seeder)'
+                        deskripsiUnit: 'Unit ke-' . $i . ' dari ' . $barangInduk->nama_barang . ' (Seeder Otomatis)',
+                        idPemegangPersonal: null,
+                        idPemegangPencatat: $adminUser->id
                     );
-                } catch (\Exception $e) {
-                    $this->command->error("Gagal membuat unit {$kodeInventaris} untuk {$barangInduk->nama_barang}: " . $e->getMessage());
                 }
             }
-        }
-        $this->command->info('BarangSeeder (Induk dan Unit Awal) selesai.');
+        });
+
+        $this->command->info('BarangSeeder yang disesuaikan telah selesai dijalankan.');
     }
 }

@@ -40,12 +40,12 @@
                     ({{ $barang->kode_barang ?? 'Belum Ada Kode' }})</h5>
                 <div class="d-flex gap-2 mt-2 mt-sm-0">
                     {{-- Tombol hanya muncul jika ada unit aktif untuk dicetak --}}
-                    @if ($barang->active_qr_codes_count > 0)
+                    {{-- @if ($barang->active_qr_codes_count > 0)
                         <a href="{{ route($rolePrefix . 'barang.print-all-qrcodes', $barang->id) }}"
                             class="btn btn-info btn-sm" target="_blank" title="Cetak semua QR Code untuk barang ini">
                             <i class="fas fa-print me-1"></i> Cetak Semua QR
                         </a>
-                    @endif
+                    @endif --}}
                     @can('update', $barang)
                         <button type="button" class="btn btn-warning btn-sm btn-edit-jenis-barang" data-bs-toggle="modal"
                             data-bs-target="#modalEditJenisBarang" data-barang='@json($barang)'
@@ -77,10 +77,10 @@
                         <p><strong>Bahan:</strong> {{ $barang->bahan ?? '-' }}</p>
                     </div>
                     <div class="col-md-6">
-                        <p><strong>Tahun Pembuatan:</strong> {{ $barang->tahun_pembuatan ?? '-' }}</p>
-                        <p><strong>Harga Perolehan Induk:</strong> Rp
-                            {{ number_format($barang->harga_perolehan_induk ?? 0, 0, ',', '.') }}</p>
-                        <p><strong>Sumber Perolehan Induk:</strong> {{ $barang->sumber_perolehan_induk ?? '-' }}</p>
+                        {{-- <p><strong>Tahun Pembuatan:</strong> {{ $barang->tahun_pembuatan ?? '-' }}</p> --}}
+                        {{-- <p><strong>Harga Perolehan Induk:</strong> Rp
+                            {{ number_format($barang->harga_perolehan_induk ?? 0, 0, ',', '.') }}</p> --}}
+                        {{-- <p><strong>Sumber Perolehan Induk:</strong> {{ $barang->sumber_perolehan_induk ?? '-' }}</p> --}}
                         <p><strong>Menggunakan Nomor Seri:</strong>
                             <span
                                 @class([
@@ -127,7 +127,7 @@
                         <thead class="table-light">
                             <tr>
                             <tr>
-                                <th style="width: 1%;"><input class="form-check-input" type="checkbox" id="checkAll"></th>
+                                <th style="width: 1%;"><input class="form-check-input" id="checkAll"></th>
 
                                 <th>Kode Inventaris</th>
                                 <th>No. Seri Pabrik</th>
@@ -146,7 +146,7 @@
                             @forelse ($qrCodes as $index => $unit)
                                 <tr>
                                     {{-- Kolom Checklist (BARU) --}}
-                                    <td><input class="form-check-input unit-checkbox" type="checkbox" name="qr_code_ids[]"
+                                    <td><input class="form-check-input unit-checkbox" name="qr_code_ids[]"
                                             value="{{ $unit->id }}"></td>
 
                                     <td><a
