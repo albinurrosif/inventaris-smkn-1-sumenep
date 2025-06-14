@@ -258,6 +258,23 @@
             @include('layouts.footer')
         </div>
         <!-- end main content-->
+        {{-- =============================================== --}}
+        {{--         KERANJANG PEMINJAMAN MENGAMBANG         --}}
+        {{-- =============================================== --}}
+        @auth
+            @if (Auth::user()->hasRole(\App\Models\User::ROLE_GURU) && isset($jumlahDiKeranjang))
+                <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;">
+                    <a href="{{ route('guru.peminjaman.create') }}" class="btn btn-primary btn-lg rounded-pill shadow-lg">
+                        <i class="fas fa-shopping-cart me-2"></i>
+                        Keranjang
+                        @if ($jumlahDiKeranjang > 0)
+                            <span class="badge bg-danger rounded-pill ms-1">{{ $jumlahDiKeranjang }}</span>
+                        @endif
+                    </a>
+                </div>
+            @endif
+        @endauth
+
     </div>
     <!-- END layout-wrapper -->
 
@@ -267,6 +284,26 @@
 
     <!-- Right bar overlay-->
     <div class="rightbar-overlay"></div>
+
+    <div class="modal fade" id="universalConfirmModal" tabindex="-1" aria-labelledby="universalConfirmModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="universalConfirmModalLabel">Konfirmasi Tindakan</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="confirmModalBody">
+                    Apakah Anda yakin ingin melanjutkan tindakan ini?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    {{-- Tombol ini akan memicu submit form dari JavaScript --}}
+                    <button type="button" class="btn btn-danger" id="confirmModalButton">Ya, Lanjutkan</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div id="pwa-install-container" class="pwa-install-container">
         <div class="pwa-install-header">
@@ -786,6 +823,59 @@
                     return;
                 }
             }
+        });
+    </script>
+    {{-- Ganti script lama Anda dengan yang ini --}}
+    <script>
+        $(document).ready(function() {
+            // Event listener saat modal akan ditampilkan
+            $('#universalConfirmModal').on('show.bs.modal', function(event) {
+                const button = $(event.relatedTarget);
+                const message = button.data('message');
+                const formId = button.data('form-id'); // Untuk submit form
+                const actionUrl = button.data('action-url'); // Untuk AJAX
+                const modal = $(this);
+
+                modal.find('#confirmModalBody').text(message);
+
+                // Simpan kedua kemungkinan aksi di tombol konfirmasi modal
+                const confirmButton = modal.find('#confirmModalButton');
+                confirmButton.data('form-to-submit', formId);
+                confirmButton.data('action-url', actionUrl);
+            });
+
+            // Event listener untuk tombol "Ya, Lanjutkan" di dalam modal
+            $('#confirmModalButton').on('click', function() {
+                const button = $(this);
+                const formIdToSubmit = button.data('form-to-submit');
+                const url = button.data('action-url');
+
+                // HIDE MODAL SETELAH DIKLIK
+                $('#universalConfirmModal').modal('hide');
+
+                // PRIORITAS 1: Jika ada form-id, submit form tersebut.
+                if (formIdToSubmit) {
+                    $('#' + formIdToSubmit).submit();
+                }
+                // PRIORITAS 2: Jika tidak ada form-id tapi ada action-url, jalankan AJAX.
+                else if (url) {
+                    $.ajax({
+                        url: url,
+                        type: 'POST',
+                        data: {
+                            _token: '{{ csrf_token() }}'
+                        },
+                        success: function(response) {
+                            // Reload halaman untuk sinkronisasi tampilan
+                            window.location.reload();
+                        },
+                        error: function() {
+                            alert('Terjadi kesalahan. Silakan coba lagi.');
+                            window.location.reload();
+                        }
+                    });
+                }
+            });
         });
     </script>
 

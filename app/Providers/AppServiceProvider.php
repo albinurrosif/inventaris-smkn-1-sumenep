@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Pagination\Paginator;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\View;
+use App\Models\BarangQrCode;
+use Illuminate\Support\Facades\Auth;
 
 
 class AppServiceProvider extends ServiceProvider
@@ -39,7 +42,19 @@ class AppServiceProvider extends ServiceProvider
             });
         }
 
-
+        View::composer([
+            'guru.dashboard',           // Halaman Dashboard Guru
+            'pages.katalog.index',      // Halaman Katalog Barang
+            'pages.peminjaman.index',   // Halaman Daftar Peminjaman
+            // Halaman Form Pengajuan
+            'pages.peminjaman.edit'     // Halaman Edit Pengajuan
+        ], function ($view) {
+            // Cek Auth untuk keamanan, meskipun rute sudah dilindungi middleware
+            if (Auth::check()) {
+                $keranjangIds = session()->get('keranjang_peminjaman', []);
+                $view->with('jumlahDiKeranjang', count($keranjangIds));
+            }
+        });
         Carbon::setLocale('id');
         Paginator::useBootstrapFive();
     }

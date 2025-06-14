@@ -18,6 +18,26 @@ class KatalogController extends Controller
     {
         $this->authorize('viewAny', BarangQrCode::class);
 
+        $keranjangIds = session()->get('keranjang_peminjaman', []);
+        $ruanganTerkunci = null;
+        if (!empty($keranjangIds)) {
+            $barangPertama = BarangQrCode::with('ruangan')->find($keranjangIds[0]);
+            if ($barangPertama) {
+                $ruanganTerkunci = $barangPertama->ruangan;
+            }
+        }
+
+        $keranjangIds = session()->get('keranjang_peminjaman', []);
+        $jumlahDiKeranjang = count($keranjangIds);
+        $ruanganTerkunci = null;
+
+        if ($jumlahDiKeranjang > 0) {
+            $barangPertama = BarangQrCode::with('ruangan')->find($keranjangIds[0]);
+            if ($barangPertama) {
+                $ruanganTerkunci = $barangPertama->ruangan;
+            }
+        }
+
         $query = BarangQrCode::with(['barang.kategori', 'ruangan'])
             ->where('status', BarangQrCode::STATUS_TERSEDIA)
             ->whereNull('deleted_at')
@@ -61,6 +81,12 @@ class KatalogController extends Controller
         $kategoriList = KategoriBarang::orderBy('nama_kategori')->get();
         $ruanganList = Ruangan::orderBy('nama_ruangan')->get();
 
-        return view('pages.katalog.index', compact('barangTersedia', 'request', 'kategoriList', 'ruanganList'));
+        return view('pages.katalog.index', compact(
+            'barangTersedia',
+            'request',
+            'kategoriList',
+            'ruanganList',
+            'ruanganTerkunci'
+        ));
     }
 }

@@ -381,7 +381,7 @@ Route::middleware(['auth'])->group(function () {
 
         Route::get('katalog-barang', [\App\Http\Controllers\KatalogController::class, 'index'])->name('katalog.index');
 
-        Route::get('peminjaman/search-items', [\App\Http\Controllers\PeminjamanController::class, 'searchAvailableItems'])->name('peminjaman.search-items');
+        Route::get('peminjaman/search-items', [\App\Http\Controllers\PeminjamanController::class, 'searchAvailableItems'])->name('peminjaman.searchAvailableItems');
 
         Route::prefix('keranjang-peminjaman')->name('keranjang.')->group(function () {
             Route::post('/tambah', [App\Http\Controllers\KeranjangPeminjamanController::class, 'tambahItem'])->name('tambah');

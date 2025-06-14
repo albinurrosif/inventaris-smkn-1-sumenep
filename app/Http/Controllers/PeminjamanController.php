@@ -158,27 +158,44 @@ class PeminjamanController extends Controller
         ));
     }
 
-    public function create(Request $request): View
+    public function create(Request $request): View|RedirectResponse
     {
         $this->authorize('create', Peminjaman::class);
 
-        $selectedBarang = null;
+        $keranjangIds = session()->get('keranjang_peminjaman', []);
 
-        // Cek apakah ada ID barang yang dikirim dari halaman katalog
-        if ($request->has('id_barang_qr_code')) {
-            // Ambil data lengkap dari barang yang dipilih untuk ditampilkan di awal
-            $selectedBarang = BarangQrCode::with(['barang', 'ruangan'])
-                ->where('status', BarangQrCode::STATUS_TERSEDIA)
-                ->whereNull('deleted_at')
-                ->whereNull('id_pemegang_personal')
-                ->find($request->input('id_barang_qr_code'));
+        if (empty($keranjangIds)) {
+            return redirect()->route('guru.katalog.index')->with('info', 'Keranjang peminjaman Anda kosong. Silakan pilih barang terlebih dahulu.');
         }
 
-        // Ambil data ruangan untuk dropdown "Ruangan Tujuan Penggunaan"
+        // INTI PERBAIKAN:
+        // Query ini HANYA mengambil berdasarkan ID di keranjang.
+        // Tidak ada filter status, kondisi, atau apapun. Tujuannya adalah menampilkan isi keranjang apa adanya.
+        $itemsDiKeranjang = BarangQrCode::with(['barang', 'ruangan'])
+            ->whereIn('id', $keranjangIds)
+            ->get();
+
+        // PENYEMPURNAAN: Cek ketersediaan setiap item untuk ditampilkan di view
+        foreach ($itemsDiKeranjang as $item) {
+            // Cek apakah item masih bisa dipinjam saat ini
+            $isAvailable = $item->status === \App\Models\BarangQrCode::STATUS_TERSEDIA &&
+                !$item->deleted_at &&
+                !in_array($item->kondisi, [\App\Models\BarangQrCode::KONDISI_RUSAK_BERAT, \App\Models\BarangQrCode::KONDISI_HILANG]);
+
+            $item->is_available_for_loan = $isAvailable;
+        }
+
+        $ruanganPertama = $itemsDiKeranjang->isNotEmpty() ? $itemsDiKeranjang->first()->ruangan : null;
+        $semuaSatuRuangan = $itemsDiKeranjang->every(fn($item) => $item->id_ruangan === optional($ruanganPertama)->id);
+
         $ruanganTujuanList = Ruangan::whereNull('deleted_at')->orderBy('nama_ruangan')->get();
 
-        // Hapus variabel 'barangList' karena tidak lagi dibutuhkan
-        return view('pages.peminjaman.create', compact('ruanganTujuanList', 'selectedBarang'));
+        return view('pages.peminjaman.create', compact(
+            'itemsDiKeranjang',
+            'ruanganTujuanList',
+            'ruanganPertama',
+            'semuaSatuRuangan'
+        ));
     }
 
     /**
@@ -295,6 +312,9 @@ class PeminjamanController extends Controller
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
             ]); // [cite: 2264, 2265]
+
+
+            $request->session()->forget('keranjang_peminjaman');
 
             DB::commit(); // [cite: 2266]
 
@@ -460,6 +480,7 @@ class PeminjamanController extends Controller
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
             ]); // [cite: 2309, 2310]
+
 
             DB::commit(); // [cite: 2311]
             $redirectUrl = $this->getRedirectUrl("peminjaman/{$peminjaman->id}");
