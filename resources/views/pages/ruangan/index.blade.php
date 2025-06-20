@@ -245,11 +245,11 @@
                     </table>
                 </div>
 
-                @if ($ruangans instanceof \Illuminate\Pagination\LengthAwarePaginator && $ruangans->hasPages())
+                {{-- @if ($ruangans instanceof \Illuminate\Pagination\LengthAwarePaginator && $ruangans->hasPages())
                     <div class="mt-3 d-flex justify-content-end">
                         {{ $ruangans->appends(request()->query())->links() }}
                     </div>
-                @endif
+                @endif --}}
             </div>
         </div>
     </div>

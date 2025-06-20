@@ -87,6 +87,7 @@
 
 @php
     $rolePrefix = Auth::user()->getRolePrefix();
+    use Carbon\Carbon; // TAMBAHKAN BARIS INI untuk Carbon
 @endphp
 
 @section('content')
@@ -196,6 +197,22 @@
                     </div>
                 </div>
             </div>
+            {{-- TAMBAHAN: Kartu Peminjaman Terlambat di Ruangan Operator --}}
+            <div class="col-xl-4 col-md-6">
+                <div class="card card-h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="font-size-15">Peminjaman Terlambat</h6>
+                                <h4 class="mt-2 text-danger">{{ $jumlahPeminjamanTerlambatDiRuangan ?? 0 }} <small
+                                        class="text-muted">Transaksi</small></h4>
+                            </div>
+                            <div class="avatar-sm"><span class="avatar-title bg-light text-danger rounded-3"><i
+                                        class="fas fa-exclamation-triangle font-size-24"></i></span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="col-xl-4 col-md-6">
                 <div class="card card-h-100">
                     <div class="card-body">
@@ -239,10 +256,11 @@
 
         {{-- Baris Daftar Tugas Operator --}}
         <div class="row mt-3">
+            {{-- Bagian Asli: Tugas Proses Peminjaman Baru --}}
             <div class="col-lg-6">
                 <div class="card card-h-100">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">Tugas: Proses Peminjaman Baru</h5>
+                        <h5 class="card-title mb-0">Tugas: Pengajuan Peminjaman Baru (Ruangan Anda)</h5>
                     </div>
                     <div class="card-body p-0">
                         <ul class="list-group list-group-flush">
@@ -262,17 +280,54 @@
                                 </a>
                             @empty
                                 <li class="list-group-item text-muted text-center py-3">Tidak ada pengajuan peminjaman
-                                    untuk
-                                    diproses.</li>
+                                    baru untuk diproses di ruangan Anda.</li>
                             @endforelse
                         </ul>
                     </div>
                 </div>
             </div>
+
+            {{-- TAMBAHAN: Daftar Peminjaman Aktif (Sedang Dipinjam & Terlambat) di Ruangan Operator --}}
             <div class="col-lg-6">
                 <div class="card card-h-100">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">Tugas: Laporan Pemeliharaan Baru</h5>
+                        <h5 class="card-title mb-0">Peminjaman Aktif (Ruangan Anda)</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <ul class="list-group list-group-flush">
+                            @forelse ($peminjamanAktifDiRuanganOperator as $p)
+                                <a href="{{ route('operator.peminjaman.show', $p->id) }}"
+                                    class="list-group-item list-group-item-action d-flex justify-content-between align-items-center
+                                    @if($p->status === \App\Models\Peminjaman::STATUS_TERLAMBAT) bg-danger text-white @endif">
+                                    <div>
+                                        <div class="fw-medium">Tujuan: {{ Str::limit($p->tujuan_peminjaman, 35) }}</div>
+                                        <small class="@if($p->status === \App\Models\Peminjaman::STATUS_TERLAMBAT) text-white @else text-muted @endif">
+                                            Status: {{ $p->status }} | Oleh: {{ $p->guru->username ?? 'N/A' }}
+                                            @if($p->status === \App\Models\Peminjaman::STATUS_TERLAMBAT)
+                                                ({{ $p->jumlah_hari_terlambat }} Hari Terlambat)
+                                            @else
+                                                (Kembali: {{ Carbon::parse($p->tanggal_harus_kembali)->isoFormat('D MMM') }})
+                                            @endif
+                                        </small>
+                                    </div>
+                                    <span class="badge {{ \App\Models\Peminjaman::statusColor($p->status) }}">
+                                        {{ $p->status }}
+                                    </span>
+                                </a>
+                            @empty
+                                <li class="list-group-item text-muted text-center py-3">Tidak ada peminjaman aktif di
+                                    ruangan Anda.</li>
+                            @endforelse
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Pindahkan daftar Pemeliharaan Baru ke bawah --}}
+            <div class="col-lg-6">
+                <div class="card card-h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Tugas: Laporan Pemeliharaan Baru (Lingkup Anda)</h5>
                     </div>
                     <div class="card-body p-0">
                         <ul class="list-group list-group-flush">
@@ -299,6 +354,35 @@
                     </div>
                 </div>
             </div>
+
+            {{-- TAMBAHAN: Daftar Tugas Stok Opname --}}
+            <div class="col-lg-6">
+                <div class="card card-h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Tugas: Stok Opname (Lingkup Anda)</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <ul class="list-group list-group-flush">
+                            @forelse ($stokOpnameTugas as $so)
+                                <a href="{{ route('operator.stok-opname.show', $so->id) }}"
+                                    class="list-group-item list-group-item-action">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="fw-medium">Ruangan: {{ Str::limit(optional($so->ruangan)->nama_ruangan, 35) }}</div>
+                                            <small class="text-muted">Tanggal: {{ Carbon::parse($so->tanggal_opname)->isoFormat('D MMM YYYY') }}</small>
+                                        </div>
+                                        <span class="badge {{ \App\Models\StokOpname::statusColor($so->status) }}">{{ $so->status }}</span>
+                                    </div>
+                                </a>
+                            @empty
+                                <li class="list-group-item text-muted text-center py-3">Tidak ada tugas stok opname di
+                                    lingkup Anda.</li>
+                            @endforelse
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 @endsection
@@ -368,7 +452,8 @@
                     series: Object.values(statusData),
                     chart: {
                         height: defaultChartHeight,
-                        type: 'donut'
+                        type: 'donut',
+                        animations: { enabled: false } // Disable animations to prevent console errors on some loads
                     },
                     labels: Object.keys(statusData),
                     colors: Object.keys(statusData).map(label => ({

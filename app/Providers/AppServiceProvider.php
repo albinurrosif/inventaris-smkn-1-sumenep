@@ -11,6 +11,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\View;
 use App\Models\BarangQrCode;
 use Illuminate\Support\Facades\Auth;
+use App\Console\Commands\CheckOverduePeminjaman;
 
 
 class AppServiceProvider extends ServiceProvider
@@ -57,5 +58,10 @@ class AppServiceProvider extends ServiceProvider
         });
         Carbon::setLocale('id');
         Paginator::useBootstrapFive();
+
+
+        $this->commands([
+            CheckOverduePeminjaman::class,
+        ]);
     }
 }

@@ -42,8 +42,7 @@
 
 @section('content')
     <div class="container-fluid">
-        {{-- Page Title             <!-- Add this inside <body> -->
-            <button id="pwa-install-btn"
+        {{-- Page Title          <button id="pwa-install-btn"
                 style="display:none; position: fixed; bottom: 20px; right: 20px; padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 8px; z-index: 1000;">
                 Install App
             </button>
@@ -151,6 +150,22 @@
                 </div>
             </div>
             <div class="col-xl-3 col-md-6">
+                {{-- TAMBAHAN: Kartu Peminjaman Terlambat --}}
+                <div class="card card-h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="font-size-15">Peminjaman Terlambat</h6>
+                                <h4 class="mt-2 text-danger">{{ $jumlahPeminjamanTerlambat ?? 0 }} <small
+                                        class="text-muted">Transaksi</small></h4>
+                            </div>
+                            <div class="avatar-sm"><span class="avatar-title bg-light text-danger rounded-3"><i
+                                        class="fas fa-exclamation-triangle font-size-24"></i></span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
                 <div class="card card-h-100">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center">
@@ -165,6 +180,7 @@
                     </div>
                 </div>
             </div>
+            {{-- Pindahkan Dlm. Pemeliharaan ke baris baru agar tetap 4 kolom --}}
             <div class="col-xl-3 col-md-6">
                 <div class="card card-h-100">
                     <div class="card-body">
@@ -249,6 +265,32 @@
                                 </a>
                             @empty
                                 <li class="list-group-item text-muted text-center py-3">Tidak ada pengajuan untuk diproses.
+                                </li>
+                            @endforelse
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {{-- TAMBAHAN: Daftar Peminjaman Terlambat --}}
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Tugas: Peminjaman Terlambat</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <ul class="list-group list-group-flush">
+                            @forelse ($peminjamanTerlambatTerbaru as $p)
+                                <a href="{{ route('admin.peminjaman.show', $p->id) }}"
+                                    class="list-group-item list-group-item-action d-flex justify-content-between align-items-center bg-danger text-white">
+                                    <div>
+                                        <div class="fw-medium">Tujuan: {{ Str::limit($p->tujuan_peminjaman, 35) }}</div>
+                                        <small class="text-white">Oleh: {{ $p->guru->username ?? 'N/A' }} |
+                                            {{ $p->jumlah_hari_terlambat }} Hari</small>
+                                    </div><span
+                                        class="text-white font-size-12">{{ $p->tanggal_harus_kembali->diffForHumans() }}</span>
+                                </a>
+                            @empty
+                                <li class="list-group-item text-muted text-center py-3">Tidak ada peminjaman terlambat.
                                 </li>
                             @endforelse
                         </ul>

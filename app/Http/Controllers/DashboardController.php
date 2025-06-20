@@ -135,6 +135,8 @@ class DashboardController extends Controller
         $jumlahUnitDipinjam = BarangQrCode::where('status', BarangQrCode::STATUS_DIPINJAM)->whereNull('deleted_at')->count();
         $pemeliharaanMenungguPersetujuan = Pemeliharaan::where('status_pengajuan', Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN)->whereNull('deleted_at')->count();
         $jumlahUnitDalamPemeliharaan = BarangQrCode::where('status', BarangQrCode::STATUS_DALAM_PEMELIHARAAN)->whereNull('deleted_at')->count();
+        $jumlahPeminjamanTerlambat = Peminjaman::where('status', Peminjaman::STATUS_TERLAMBAT)->count(); // 
+
 
         // --- DATA GRAFIK (4 Grafik) ---
         $barangPerKategori = KategoriBarang::withCount(['barangs as jumlah_jenis_barang' => fn($q) => $q->whereNull('deleted_at')])
@@ -159,6 +161,13 @@ class DashboardController extends Controller
 
         $logAktivitasTerbaru = LogAktivitas::with('user')->latest()->take(7)->get();
 
+        $peminjamanTerlambatTerbaru = Peminjaman::where('status', Peminjaman::STATUS_TERLAMBAT)
+            ->with(['guru', 'detailPeminjaman'])
+            ->latest('tanggal_harus_kembali') // Urutkan berdasarkan tanggal harus kembali yang paling lama
+            ->take(5)
+            ->get(); //[cite: 2558]
+
+
         return view('admin.dashboardbaru', compact(
             'jumlahJenisBarang',
             'jumlahUnitBarang',
@@ -168,13 +177,15 @@ class DashboardController extends Controller
             'jumlahUnitDipinjam',
             'pemeliharaanMenungguPersetujuan',
             'jumlahUnitDalamPemeliharaan',
+            'jumlahPeminjamanTerlambat',
             'barangPerKategori',
             'trenPeminjaman',
             'statusUnitBarang',
             'kondisiUnitBarang',
             'peminjamanTerbaruMenunggu',
             'pemeliharaanTerbaruDiajukan',
-            'logAktivitasTerbaru'
+            'logAktivitasTerbaru',
+            'peminjamanTerlambatTerbaru'
         ));
     }
 
@@ -186,7 +197,6 @@ class DashboardController extends Controller
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
-
         // Ambil ID ruangan yang dikelola oleh operator
         $ruanganIds = $user->ruanganYangDiKelola()->pluck('id');
 
@@ -199,23 +209,31 @@ class DashboardController extends Controller
                 $query->whereIn('id_ruangan', $ruanganIds);
             })
             ->count();
-
         $pemeliharaanBaru = Pemeliharaan::where('status_pengajuan', Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN)
             ->whereHas('barangQrCode', function ($query) use ($ruanganIds) {
                 $query->whereIn('id_ruangan', $ruanganIds);
             })
             ->whereNull('deleted_at')
             ->count();
-
         // --- TAMBAHAN: Statistik Aktivitas (Cards Baris 2) ---
         $jumlahUnitDipinjamDiRuangan = BarangQrCode::whereIn('id_ruangan', $ruanganIds)
             ->where('status', \App\Models\BarangQrCode::STATUS_DIPINJAM)->count();
-
         $jumlahUnitDalamPemeliharaanDiRuangan = BarangQrCode::whereIn('id_ruangan', $ruanganIds)
             ->where('status', \App\Models\BarangQrCode::STATUS_DALAM_PEMELIHARAAN)->count();
 
-        $tugasStokOpnameBerjalan = StokOpname::where('id_operator', $user->id)
-            ->where('status', StokOpname::STATUS_DRAFT)->count();
+        // UBAH INI: Ambil jumlah untuk kartu statistik
+        $jumlahTugasStokOpnameBerjalan = StokOpname::where('id_operator', $user->id)
+            ->where('status', StokOpname::STATUS_DRAFT)
+            ->count(); // Ini untuk jumlah di kartu
+
+        // TAMBAHAN: Jumlah Peminjaman Terlambat di Ruangan Operator
+        $jumlahPeminjamanTerlambatDiRuangan = Peminjaman::where('status', Peminjaman::STATUS_TERLAMBAT)
+            ->where(function ($query) use ($ruanganIds) {
+                $query->whereHas('detailPeminjaman.barangQrCode', function ($qDetail) use ($ruanganIds) {
+                    $qDetail->whereIn('id_ruangan', $ruanganIds);
+                })->orWhereIn('id_ruangan_tujuan_peminjaman', $ruanganIds);
+            })
+            ->count();
 
 
         // --- Data untuk Grafik ---
@@ -224,14 +242,11 @@ class DashboardController extends Controller
             ->select('kondisi', DB::raw('COUNT(*) as jumlah'))
             ->groupBy('kondisi')
             ->pluck('jumlah', 'kondisi');
-
         $statusUnitBarangOperator = BarangQrCode::whereIn('id_ruangan', $ruanganIds)
             ->whereNull('deleted_at')
             ->select('status', DB::raw('COUNT(*) as jumlah'))
             ->groupBy('status')
             ->pluck('jumlah', 'status');
-
-
         // --- Daftar Tugas Terbaru ---
         $peminjamanTerbaru = Peminjaman::where('status', Peminjaman::STATUS_MENUNGGU_PERSETUJUAN)
             ->whereHas('detailPeminjaman.barangQrCode', function ($query) use ($ruanganIds) {
@@ -239,13 +254,46 @@ class DashboardController extends Controller
             })
             ->with('guru', 'detailPeminjaman')
             ->latest('tanggal_pengajuan')->take(5)->get();
-
         $pemeliharaanTerbaru = Pemeliharaan::where('status_pengajuan', Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN)
             ->whereHas('barangQrCode', function ($query) use ($ruanganIds) {
                 $query->whereIn('id_ruangan', $ruanganIds);
             })
             ->with('barangQrCode.barang', 'pengaju')
             ->latest('tanggal_pengajuan')->take(5)->get();
+
+        // PENTING: Peminjaman Sedang Berjalan (Sedang Dipinjam & Terlambat) di Ruangan Operator
+        $peminjamanAktifDiRuanganOperator = Peminjaman::whereIn('status', [Peminjaman::STATUS_SEDANG_DIPINJAM, Peminjaman::STATUS_TERLAMBAT])
+            ->where(function ($query) use ($ruanganIds) {
+                $query->whereHas('detailPeminjaman.barangQrCode', function ($qDetail) use ($ruanganIds) {
+                    $qDetail->whereIn('id_ruangan', $ruanganIds);
+                })->orWhereIn('id_ruangan_tujuan_peminjaman', $ruanganIds);
+            })
+            ->with(['guru', 'detailPeminjaman'])
+            ->orderBy('tanggal_harus_kembali', 'asc')
+            ->take(5)
+            ->get();
+
+
+        // TAMBAHAN: Peminjaman Terlambat Terbaru di Ruangan Operator (ini sudah ada di atas)
+        $peminjamanTerlambatDiRuanganTerbaru = Peminjaman::where('status', Peminjaman::STATUS_TERLAMBAT)
+            ->where(function ($query) use ($ruanganIds) {
+                $query->whereHas('detailPeminjaman.barangQrCode', function ($qDetail) use ($ruanganIds) {
+                    $qDetail->whereIn('id_ruangan', $ruanganIds);
+                })->orWhereIn('id_ruangan_tujuan_peminjaman', $ruanganIds);
+            })
+            ->with(['guru', 'detailPeminjaman'])
+            ->latest('tanggal_harus_kembali')
+            ->take(5)
+            ->get();
+
+        // BARU: Ambil koleksi objek StokOpname untuk daftar di dashboard
+        $stokOpnameTugas = StokOpname::where('id_operator', $user->id)
+            ->where('status', StokOpname::STATUS_DRAFT)
+            ->with('ruangan') // Eager load relasi ruangan
+            ->latest('tanggal_opname')
+            ->take(5)
+            ->get();
+
 
         // PENYEMPURNAAN: Mengarahkan ke view yang benar dan mengirim semua data
         return view('operator.dashboardbaru', compact(
@@ -255,13 +303,18 @@ class DashboardController extends Controller
             'pemeliharaanBaru',
             'jumlahUnitDipinjamDiRuangan',
             'jumlahUnitDalamPemeliharaanDiRuangan',
-            'tugasStokOpnameBerjalan', // Variabel baru
+            'jumlahTugasStokOpnameBerjalan', // Kirim yang jumlah (integer) ke view
+            'jumlahPeminjamanTerlambatDiRuangan',
             'kondisiUnitBarangOperator',
             'statusUnitBarangOperator',
             'peminjamanTerbaru',
-            'pemeliharaanTerbaru'
+            'pemeliharaanTerbaru',
+            'peminjamanTerlambatDiRuanganTerbaru',
+            'peminjamanAktifDiRuanganOperator',
+            'stokOpnameTugas' // Kirim koleksi objek ke view
         ));
     }
+
 
     /**
      * Menampilkan dashboard untuk guru.
@@ -274,15 +327,27 @@ class DashboardController extends Controller
         $peminjamanAktif = Peminjaman::where('id_guru', $user->id)
             ->where('status', Peminjaman::STATUS_SEDANG_DIPINJAM)
             ->count();
-
         $pengajuanMenunggu = Peminjaman::where('id_guru', $user->id)
             ->where('status', Peminjaman::STATUS_MENUNGGU_PERSETUJUAN)
             ->count();
 
-        // Daftar 5 peminjaman terakhir
+        // TAMBAHAN: Jumlah Peminjaman Terlambat yang dilakukan Guru
+        $jumlahPeminjamanTerlambatGuru = Peminjaman::where('id_guru', $user->id)
+            ->where('status', Peminjaman::STATUS_TERLAMBAT)
+            ->count();
+
+        // Daftar 5 peminjaman terakhir (yang ia ajukan)
         $peminjamanTerbaru = Peminjaman::where('id_guru', $user->id)
             ->withCount('detailPeminjaman')
             ->latest('tanggal_pengajuan')
+            ->take(5)
+            ->get();
+
+        // TAMBAHAN: Daftar Peminjaman Terlambat yang dilakukan Guru
+        $peminjamanTerlambatGuru = Peminjaman::where('id_guru', $user->id)
+            ->where('status', Peminjaman::STATUS_TERLAMBAT)
+            ->with(['detailPeminjaman']) // Eager load detail jika perlu
+            ->latest('tanggal_harus_kembali') // Urutkan dari yang paling lama terlambat
             ->take(5)
             ->get();
 
@@ -295,24 +360,25 @@ class DashboardController extends Controller
 
         // Aset yang menjadi tanggung jawab personal guru
         $asetDipegangPersonal = BarangQrCode::where('id_pemegang_personal', $user->id)
-            ->with([
-                'barang',
-                // Eager load relasi pemeliharaan HANYA yang statusnya masih aktif
-                'pemeliharaanRecords' => function ($query) {
-                    $query->whereIn('status_pengajuan', ['Diajukan', 'Disetujui']);
-                }
-            ])
+            ->with(['barang', 'pemeliharaanRecords' => function ($query) { // Load pemeliharaan aktif
+                $query->whereIn('status_pengajuan', [Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN, Pemeliharaan::STATUS_PENGAJUAN_DISETUJUI])
+                    ->whereIn('status_pengerjaan', [Pemeliharaan::STATUS_PENGERJAAN_BELUM_DIKERJAKAN, Pemeliharaan::STATUS_PENGERJAAN_SEDANG_DILAKUKAN])
+                    ->whereNull('deleted_at');
+            }])
             ->whereNull('deleted_at')
             ->get();
 
         return view('guru.dashboard', compact(
             'peminjamanAktif',
             'pengajuanMenunggu',
+            'jumlahPeminjamanTerlambatGuru', // Tambahkan ini
             'peminjamanTerbaru',
+            'peminjamanTerlambatGuru', // Tambahkan ini
             'pemeliharaanTerbaru',
             'asetDipegangPersonal'
         ));
     }
+
 
     /**
      * Mengarahkan pengguna ke dashboard yang sesuai berdasarkan peran mereka.

@@ -86,6 +86,7 @@ class Peminjaman extends Model
         'id_ruangan_tujuan_peminjaman', // Ruangan tujuan penggunaan barang (jika relevan)
         'disetujui_oleh',               // Pengguna (admin/operator) yang menyetujui
         'ditolak_oleh',                 // Pengguna (admin/operator) yang menolak
+        'pernah_terlambat', // Tambahkan ini
     ];
 
     /**
@@ -105,6 +106,7 @@ class Peminjaman extends Model
         'tanggal_proses' => 'datetime',
         'dapat_diperpanjang' => 'boolean',
         'diperpanjang' => 'boolean',
+        'pernah_terlambat' => 'boolean', // Tambahkan ini
         'status' => 'string', // Enum
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
@@ -264,6 +266,10 @@ class Peminjaman extends Model
         $activeDetails = $details->whereNull('deleted_at');
         $totalActiveDetails = $activeDetails->count();
 
+        // Simpan status lama sebelum diupdate
+        $oldStatus = $this->status;
+
+
         if ($totalActiveDetails === 0) {
             if ($this->status !== self::STATUS_DIBATALKAN) {
                 $this->status = self::STATUS_DIBATALKAN;
@@ -316,8 +322,13 @@ class Peminjaman extends Model
         }
 
         // Hanya simpan jika ada perubahan pada model untuk mencegah loop event
-        if ($this->isDirty()) {
-            $this->save();
+        if ($this->isDirty() || $oldStatus !== $this->status) { // Tambahkan kondisi ini
+            // Jika status yang baru adalah TERLAMBAT, atau status sebelumnya TERLAMBAT,
+            // maka set pernah_terlambat menjadi true.
+            if ($this->status === self::STATUS_TERLAMBAT || $oldStatus === self::STATUS_TERLAMBAT) {
+                $this->pernah_terlambat = true;
+            }
+            $this->save(); // 
         }
     }
 

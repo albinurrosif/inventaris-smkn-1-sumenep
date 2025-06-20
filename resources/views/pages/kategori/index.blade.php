@@ -227,11 +227,11 @@
                         </tbody>
                     </table>
                 </div>
-                @if ($kategoriBarangList instanceof \Illuminate\Pagination\LengthAwarePaginator && $kategoriBarangList->hasPages())
+                {{-- @if ($kategoriBarangList instanceof \Illuminate\Pagination\LengthAwarePaginator && $kategoriBarangList->hasPages())
                     <div class="mt-3 d-flex justify-content-end">
                         {{ $kategoriBarangList->appends(request()->query())->links() }}
                     </div>
-                @endif
+                @endif --}}
             </div>
         </div>
     </div>

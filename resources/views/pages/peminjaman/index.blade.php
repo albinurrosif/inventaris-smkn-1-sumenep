@@ -145,7 +145,8 @@
                         </thead>
                         <tbody>
                             @forelse ($peminjamanList as $index => $peminjaman)
-                                <tr>
+                                <tr
+                                    class="{{ $peminjaman->status === \App\Models\Peminjaman::STATUS_TERLAMBAT ? 'table-danger' : '' }}@if ($peminjaman->status === \App\Models\Peminjaman::STATUS_SELESAI && $peminjaman->pernah_terlambat) table-warning @endif">
                                     {{-- PERBAIKAN 1: Penomoran yang Benar untuk Paginasi --}}
                                     <td>{{ $peminjamanList->firstItem() + $index }}</td>
 
@@ -160,9 +161,20 @@
                                     <td class="text-center">{{ $peminjaman->detail_peminjaman_count }}</td>
 
                                     <td class="text-center">
-                                        <span
-                                            class="badge {{ \App\Models\Peminjaman::statusColor($peminjaman->status) }}">{{ $peminjaman->status }}</span>
+                                        <span class="badge {{ \App\Models\Peminjaman::statusColor($peminjaman->status) }}">
+                                            {{ $peminjaman->status }}
+                                        </span>
+                                        {{-- Tampilkan indikator pernah terlambat --}}
+                                        @if ($peminjaman->status === \App\Models\Peminjaman::STATUS_SELESAI && $peminjaman->pernah_terlambat)
+                                            <i class="fas fa-exclamation-triangle text-danger ms-1"
+                                                title="Pernah Terlambat"></i>
+                                        @endif
+                                        {{-- Tampilkan hari terlambat jika statusnya masih Terlambat --}}
+                                        @if ($peminjaman->status === \App\Models\Peminjaman::STATUS_TERLAMBAT && $peminjaman->jumlah_hari_terlambat > 0)
+                                            ({{ $peminjaman->jumlah_hari_terlambat }} Hari Terlambat)
+                                        @endif
                                     </td>
+
                                     <td class="text-center">
                                         <div class="d-flex gap-2 justify-content-center">
                                             @can('view', $peminjaman)
