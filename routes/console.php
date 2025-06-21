@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
 // Jadwalkan command di sini
-Schedule::command('check:overdue-peminjaman')->dailyAt('00:00');
+Schedule::command('check:overdue-peminjaman')->twiceDaily(8, 20);
 // Atau untuk testing:
 //Schedule::command('check:overdue-peminjaman')->everyMinute();
 
