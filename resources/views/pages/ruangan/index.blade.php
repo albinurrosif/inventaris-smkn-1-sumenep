@@ -209,7 +209,8 @@
                                                 @endcan --}}
                                             @else
                                                 @can('update', $ruangan)
-                                                    <button type="button" class="btn btn-warning btn-sm btn-edit-ruangan"
+                                                    <button type="button"
+                                                        class="btn btn-outline-warning btn-sm btn-edit-ruangan"
                                                         data-ruangan='{!! json_encode($ruangan->only(['id', 'nama_ruangan', 'kode_ruangan', 'id_operator'])) !!}' data-id="{{ $ruangan->id }}"
                                                         {{-- Tambahkan data-id untuk JS --}} data-bs-toggle="modal"
                                                         data-bs-target="#modalEditRuangan"
@@ -218,7 +219,8 @@
                                                     </button>
                                                 @endcan
                                                 @can('delete', $ruangan)
-                                                    <button type="button" class="btn btn-danger btn-sm btn-delete-ruangan"
+                                                    <button type="button"
+                                                        class="btn btn-outline-danger btn-sm btn-delete-ruangan"
                                                         data-id="{{ $ruangan->id }}"
                                                         data-nama="{{ $ruangan->nama_ruangan }}"
                                                         data-item-count="{{ $ruangan->barang_qr_codes_count ?? 0 }}"
@@ -245,11 +247,11 @@
                     </table>
                 </div>
 
-                {{-- @if ($ruangans instanceof \Illuminate\Pagination\LengthAwarePaginator && $ruangans->hasPages())
+                @if ($ruangans instanceof \Illuminate\Pagination\LengthAwarePaginator && $ruangans->hasPages())
                     <div class="mt-3 d-flex justify-content-end">
                         {{ $ruangans->appends(request()->query())->links() }}
                     </div>
-                @endif --}}
+                @endif
             </div>
         </div>
     </div>
@@ -282,9 +284,9 @@
             if ($('#tabelRuangan tbody tr').length > 0 && !$('#tabelRuangan tbody tr td[colspan="7"]').length) {
                 $('#tabelRuangan').DataTable({
                     responsive: true,
-                    paging: true,
+                    paging: false,
                     searching: false,
-                    info: true,
+                    info: false,
                     ordering: true,
                     order: [
                         [2, 'asc']

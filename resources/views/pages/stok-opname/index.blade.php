@@ -203,7 +203,7 @@
                                             @else
                                                 @can('view', $so)
                                                     <a href="{{ route($rolePrefix . 'stok-opname.show', $so->id) }}"
-                                                        class="btn btn-info btn-sm" data-bs-toggle="tooltip"
+                                                        class="btn btn-outline-info btn-sm" data-bs-toggle="tooltip"
                                                         title="Lihat Detail & Proses">
                                                         <i class="fas fa-eye"></i>
                                                     </a>
@@ -211,7 +211,7 @@
                                                 @if ($so->status === App\Models\StokOpname::STATUS_DRAFT)
                                                     @can('update', $so)
                                                         <a href="{{ route($rolePrefix . 'stok-opname.edit', $so->id) }}"
-                                                            class="btn btn-warning btn-sm" data-bs-toggle="tooltip"
+                                                            class="btn btn-outline-warning btn-sm" data-bs-toggle="tooltip"
                                                             title="Edit Sesi">
                                                             <i class="fas fa-edit"></i>
                                                         </a>
@@ -219,7 +219,8 @@
                                                 @endif
                                                 @can('delete', $so)
                                                     @if (in_array($so->status, [App\Models\StokOpname::STATUS_DRAFT, App\Models\StokOpname::STATUS_DIBATALKAN]))
-                                                        <button type="button" class="btn btn-danger btn-sm btn-delete-so"
+                                                        <button type="button"
+                                                            class="btn btn-outline-danger btn-sm btn-delete-so"
                                                             data-id="{{ $so->id }}"
                                                             data-ruangan="{{ optional($so->ruangan)->nama_ruangan }}"
                                                             data-tanggal="{{ \Carbon\Carbon::parse($so->tanggal_opname)->isoFormat('DD MMM YYYY') }}"

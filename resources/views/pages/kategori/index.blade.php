@@ -191,7 +191,7 @@
                                                 @endcan
                                             @else
                                                 @can('update', $kategori)
-                                                    <button type="button" class="btn btn-warning btn-sm btn-edit-kategori"
+                                                    <button type="button" class="btn btn-outline-warning btn-sm btn-edit-kategori"
                                                         data-kategori='@json($kategori->only(['id', 'nama_kategori']))'
                                                         data-id="{{ $kategori->id }}" data-bs-toggle="modal"
                                                         data-bs-target="#modalEditKategori"
@@ -200,7 +200,7 @@
                                                     </button>
                                                 @endcan
                                                 @can('delete', $kategori)
-                                                    <button type="button" class="btn btn-danger btn-sm btn-delete-kategori"
+                                                    <button type="button" class="btn btn-outline-danger btn-sm btn-delete-kategori"
                                                         data-id="{{ $kategori->id }}"
                                                         data-nama="{{ $kategori->nama_kategori }}"
                                                         data-item-count="{{ $kategori->jumlah_item_induk ?? 0 }}"
@@ -227,11 +227,11 @@
                         </tbody>
                     </table>
                 </div>
-                {{-- @if ($kategoriBarangList instanceof \Illuminate\Pagination\LengthAwarePaginator && $kategoriBarangList->hasPages())
+                @if ($kategoriBarangList instanceof \Illuminate\Pagination\LengthAwarePaginator && $kategoriBarangList->hasPages())
                     <div class="mt-3 d-flex justify-content-end">
                         {{ $kategoriBarangList->appends(request()->query())->links() }}
                     </div>
-                @endif --}}
+                @endif
             </div>
         </div>
     </div>
@@ -262,9 +262,9 @@
                 .length) { // colspan disesuaikan
                 $('#tabelKategori').DataTable({
                     responsive: true,
-                    paging: true,
+                    paging: false,
                     searching: false,
-                    info: true,
+                    info: false,
                     ordering: true,
                     order: [
                         [1, 'asc']

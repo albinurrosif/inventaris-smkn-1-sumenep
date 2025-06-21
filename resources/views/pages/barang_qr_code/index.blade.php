@@ -272,12 +272,15 @@
                             </tbody>
                         </table>
                     </div>
+                    @if ($qrCodes->hasPages())
+                        <div class="mt-3 d-flex justify-content-center">
+                            {{ $qrCodes->links() }}
+                        </div>
+                    @endif
                 </form>
-
             </div>
         </div>
     </div>
-
 @endsection
 
 @push('scripts')
@@ -356,7 +359,10 @@
                 $('#dataTableUnitQr').DataTable({
                     responsive: true,
                     // dom: 'rt<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>', // Menyembunyikan LengthMenu
-                    dom: 'lrtip', // Lebih minimalis: table, info, pagination. Length menu dihilangkan.
+                    paging: false,
+                    searching: false,
+                    info: false,
+                    ordering: true, // Lebih minimalis: table, info, pagination. Length menu dihilangkan.
                     language: { // Opsi untuk melokalisasi DataTables ke Bahasa Indonesia
                         sEmptyTable: "Tidak ada data yang tersedia pada tabel ini",
                         sProcessing: "Sedang memproses...",

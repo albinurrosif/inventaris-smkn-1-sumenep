@@ -256,7 +256,7 @@
                 .length) { // colspan disesuaikan
                 $('#tabelKategori').DataTable({
                     responsive: true,
-                    paging: true,
+                    paging: false,
                     searching: false,
                     info: true,
                     ordering: true,

@@ -240,11 +240,11 @@
                         </tbody>
                     </table>
                 </div>
-                {{-- @if ($barangs->hasPages())
+                @if ($barangs->hasPages())
                     <div class="mt-3 d-flex justify-content-center">
                         {{ $barangs->links() }}
                     </div>
-                @endif --}}
+                @endif
             </div>
         </div>
     </div>
@@ -283,7 +283,10 @@
             if ($('#barangTable tbody tr').length > 0 && !$('#barangTable tbody tr td[colspan="10"]').length) {
                 $('#barangTable').DataTable({
                     responsive: true,
-                    dom: 'lrtip', // Menyembunyikan length dan search global
+                    paging: false,
+                    searching: false,
+                    info: false,
+                    ordering: true, // Menyembunyikan length dan search global
                     language: { // Opsi untuk melokalisasi DataTables ke Bahasa Indonesia
                         sEmptyTable: "Tidak ada data yang tersedia pada tabel ini",
                         sProcessing: "Sedang memproses...",
