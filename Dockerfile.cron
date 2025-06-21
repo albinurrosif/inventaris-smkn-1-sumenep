@@ -1,0 +1,35 @@
+FROM php:8.2-cli
+
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+# Install cron, procps (for ps command), and necessary PHP extensions
+RUN apt-get update && apt-get install -y \
+    cron \
+    procps \
+    # Dependensi yang mungkin dibutuhkan untuk ekstensi PHP
+    libzip-dev \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    # Anda bisa menambahkan dependensi lain di sini jika diperlukan oleh ekstensi tertentu
+    && rm -rf /var/lib/apt/lists/* \
+    # Instal ekstensi PHP yang dibutuhkan oleh Artisan commands Anda
+    # Sesuaikan daftar ekstensi ini dengan kebutuhan aplikasi Anda
+    && docker-php-ext-install \
+        pdo_mysql \
+        mbstring \
+        zip \
+        xml \
+        bcmath \
+        gd
+
+COPY crontab_scheduler /tmp/my_root_crontab
+RUN (cat /tmp/my_root_crontab && echo "") | crontab -u root - && \
+    rm /tmp/my_root_crontab
+
+# Pastikan direktori log ada dan bisa ditulis
+RUN mkdir -p /var/www/html/storage/logs && \
+    chown root:root /var/www/html/storage/logs && \
+    chmod 777 /var/www/html/storage/logs # Izin permisif untuk tes
+
+WORKDIR /var/www/html
+CMD ["cron", "-f"]

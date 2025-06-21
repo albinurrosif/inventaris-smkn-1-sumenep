@@ -21,7 +21,6 @@ services:
       chmod -R 775 storage bootstrap/cache &&
       chown -R www-data:www-data storage/logs &&
       chmod -R 775 storage/logs &&
-      php artisan migrate --force &&
       php artisan config:cache &&
       php artisan route:cache &&
       php artisan view:cache &&
@@ -30,6 +29,26 @@ services:
     restart: unless-stopped
     networks:
       - shared
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.cron
+    container_name: smk-inventory-scheduler
+    restart: unless-stopped
+    volumes:
+      - ./:/var/www/html:cached
+      - /var/www/html/vendor
+    command: >
+      bash -c "
+      composer install --no-interaction --prefer-dist --optimize-autoloader &&
+      cron -f
+      "
+    depends_on:
+      - app
+    networks:
+      - shared
+
 
 networks:
   shared:
