@@ -58,6 +58,15 @@ class Pemeliharaan extends Model
         'kondisi_barang_setelah_pemeliharaan' => 'string', // Bisa jadi enum juga jika nilainya terbatas
     ];
 
+    // Konstanta untuk Status Terpadu (User-Facing)
+    public const STATUS_DIAJUKAN = 'Diajukan';
+    public const STATUS_DISETUJUI = 'Disetujui';
+    public const STATUS_DITOLAK = 'Ditolak';
+    public const STATUS_DALAM_PERBAIKAN = 'Dalam Perbaikan';
+    public const STATUS_SELESAI = 'Selesai';
+    public const STATUS_TUNTAS = 'Tuntas'; // Bisa kita aktifkan nanti
+
+
     // Konstanta Status Pengajuan
     public const STATUS_PENGAJUAN_DIAJUKAN = 'Diajukan';
     public const STATUS_PENGAJUAN_DISETUJUI = 'Disetujui';
@@ -100,17 +109,34 @@ class Pemeliharaan extends Model
     }
 
     // --- ACCESSORS & MUTATORS ---
-    public function getStatusPemeliharaanAttribute(): string
+    /**
+     * Accessor untuk mendapatkan "STATUS VIRTUAL" yang terpadu.
+     * Ini adalah inti dari solusi kita.
+     */
+    public function getStatusAttribute(): string
     {
-        if ($this->trashed()) {
-            return 'Diarsipkan';
+        // Prioritas tertinggi: jika ditolak, statusnya selalu Ditolak.
+        if ($this->status_pengajuan === self::STATUS_PENGAJUAN_DITOLAK) {
+            return self::STATUS_DITOLAK;
         }
-        // Jika pengajuan disetujui dan ada status pengerjaan, tampilkan status pengerjaan
-        if ($this->status_pengajuan === self::STATUS_PENGAJUAN_DISETUJUI && $this->status_pengerjaan) {
-            return $this->status_pengerjaan;
+
+        // Jika pengerjaan sudah selesai, statusnya Selesai.
+        if ($this->status_pengerjaan === self::STATUS_PENGERJAAN_SELESAI || $this->tanggal_selesai_pengerjaan) {
+            return self::STATUS_SELESAI;
         }
-        // Jika tidak, tampilkan status pengajuan
-        return $this->status_pengajuan;
+
+        // Jika sedang dikerjakan, statusnya Dalam Perbaikan. Ini merepresentasikan tahap "diambil/diserahkan".
+        if ($this->status_pengerjaan === self::STATUS_PENGERJAAN_SEDANG_DILAKUKAN || $this->tanggal_mulai_pengerjaan) {
+            return self::STATUS_DALAM_PERBAIKAN;
+        }
+
+        // Jika pengajuan sudah disetujui tapi belum dikerjakan, statusnya Disetujui.
+        if ($this->status_pengajuan === self::STATUS_PENGAJUAN_DISETUJUI) {
+            return self::STATUS_DISETUJUI;
+        }
+
+        // Jika tidak memenuhi semua kondisi di atas, berarti statusnya masih Diajukan.
+        return self::STATUS_DIAJUKAN;
     }
 
     // --- STATIC METHODS FOR ENUM VALUES ---
@@ -191,6 +217,22 @@ class Pemeliharaan extends Model
             strtolower(self::STATUS_PENGERJAAN_TIDAK_DAPAT_DIPERBAIKI) => 'text-bg-dark',
             strtolower(self::STATUS_PENGERJAAN_DITUNDA) => 'text-bg-secondary',
             default => 'text-bg-light text-dark',
+        };
+    }
+
+    /**
+     * Accessor untuk mendapatkan warna badge Bootstrap berdasarkan status virtual.
+     */
+    public function getStatusColorAttribute(): string
+    {
+        // Method ini secara otomatis akan menggunakan hasil dari getStatusAttribute()
+        return match ($this->status) {
+            self::STATUS_DIAJUKAN => 'secondary',
+            self::STATUS_DISETUJUI => 'info',
+            self::STATUS_DALAM_PERBAIKAN => 'warning',
+            self::STATUS_SELESAI => 'success',
+            self::STATUS_DITOLAK => 'danger',
+            default => 'light',
         };
     }
 

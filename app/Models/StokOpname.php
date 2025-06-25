@@ -34,11 +34,16 @@ class StokOpname extends Model
         'tanggal_opname',   // Tanggal pelaksanaan stok opname //
         'catatan',          // Catatan umum terkait stok opname //
         'status',           // Status stok opname (Draft, Selesai, Dibatalkan) //
+        'catatan_pengerjaan',
+        'tanggal_mulai_pengerjaan', // Tambahkan ini
+        'tanggal_selesai_pengerjaan', // Tambahkan ini
     ];
 
     protected $casts = [
         'tanggal_opname' => 'date', //
         'status' => 'string', // Enum //
+        'tanggal_mulai_pengerjaan' => 'datetime', // Tambahkan ini
+        'tanggal_selesai_pengerjaan' => 'datetime', // Tambahkan ini
         'created_at' => 'datetime', //
         'updated_at' => 'datetime', //
         'deleted_at' => 'datetime', //
@@ -133,17 +138,24 @@ class StokOpname extends Model
                                 $perluSimpanBarangQrCode = false; // Event deleting akan handle decrement //
                                 $deskripsiKejadian .= ' Barang dinyatakan hilang dan di-soft-delete.'; //
 
-                                if (!ArsipBarang::where('id_barang_qr_code', $barangQrCode->id)->where('status_arsip', '!=', ArsipBarang::STATUS_ARSIP_DIPULIHKAN)->exists()) { //
-                                    ArsipBarang::create([ //
-                                        'id_barang_qr_code' => $barangQrCode->id, //
-                                        'id_user_pengaju' => $stokOpname->id_operator, //
-                                        'jenis_penghapusan' => 'Hilang', // Sesuai ArsipBarang //
-                                        'alasan_penghapusan' => $deskripsiKejadian, //
-                                        'tanggal_pengajuan_arsip' => now(), //
-                                        'status_arsip' => ArsipBarang::STATUS_ARSIP_DIAJUKAN, //
-                                        'data_unit_snapshot' => $barangQrCode->toArray(), //
-                                    ]);
-                                }
+                                // Ganti blok if di atas dengan kode ini
+                                ArsipBarang::updateOrCreate(
+                                    [
+                                        'id_barang_qr_code' => $barangQrCode->id, // Kunci unik untuk mencari
+                                    ],
+                                    [
+                                        'id_user_pengaju' => $stokOpname->id_operator,
+                                        'id_user_penyetuju' => $stokOpname->id_operator, // Langsung disetujui oleh sistem
+                                        'jenis_penghapusan' => 'Hilang',
+                                        'alasan_penghapusan' => $deskripsiKejadian,
+                                        'tanggal_pengajuan_arsip' => now(),
+                                        'tanggal_penghapusan_resmi' => now(),
+                                        'status_arsip' => ArsipBarang::STATUS_ARSIP_DISETUJUI_PERMANEN, // Langsung set permanen
+                                        'data_unit_snapshot' => $barangQrCode->toArray(),
+                                        'dipulihkan_oleh' => null,      // Reset data pemulihan jika ada
+                                        'tanggal_dipulihkan' => null,   // Reset data pemulihan jika ada
+                                    ]
+                                );
                             }
                         } elseif ($detail->kondisi_fisik === DetailStokOpname::KONDISI_RUSAK_BERAT) { //
                             if ($barangQrCode->status !== BarangQrCode::STATUS_DALAM_PEMELIHARAAN) { //

@@ -13,8 +13,12 @@
                             <li class="breadcrumb-item"><a href="{{ route('redirect-dashboard') }}">Dashboard</a></li>
                             @if ($qrCode->barang)
                                 <li class="breadcrumb-item">
-                                    <a
-                                        href="{{ route($rolePrefix . 'barang.show', $qrCode->barang->id) }}">{{ Str::limit($qrCode->barang->nama_barang, 20) }}</a>
+                                    @can('view', $qrCode->barang)
+                                        <a
+                                            href="{{ route($rolePrefix . 'barang.show', $qrCode->barang->id) }}">{{ Str::limit($qrCode->barang->nama_barang, 20) }}</a>
+                                    @else
+                                        {{ Str::limit($qrCode->barang->nama_barang, 20) }}
+                                    @endcan
                                 </li>
                             @endif
                             <li class="breadcrumb-item active">{{ $qrCode->kode_inventaris_sekolah ?? 'N/A' }}</li>
@@ -186,19 +190,20 @@
                         <h5 class="card-title mb-0"><i class="fas fa-cogs me-2"></i>Aksi Unit</h5>
                     </div>
                     <div class="card-body d-grid gap-2">
-                        {{-- @can('update', $qrCode)
-                            <button type="button" class="btn btn-warning btn-sm btn-edit-unit-trigger" data-bs-toggle="modal"
-                                data-bs-target="#modalEditUnitBarang" data-unit='@json($qrCode->load('barang'))'
-                                title="Edit Atribut Dasar Unit">
-                                <i class="fas fa-edit"></i> Edit Info Unit
+                        {{-- Tombol Edit Info Unit --}}
+                        @can('update', $qrCode)
+                            <button type="button" class="btn btn-warning text-dark w-100 btn-edit-unit-trigger"
+                                data-bs-toggle="modal" data-bs-target="#modalEditUnitBarang"
+                                data-unit='@json($qrCode->load('barang'))' title="Edit Atribut Dasar Unit">
+                                <i class="fas fa-edit me-1"></i> Edit Info Unit
                             </button>
-                        @endcan --}}
+                        @endcan
+
                         {{-- Jika barang diarsipkan, hanya tampilkan tombol Pulihkan --}}
                         @if ($qrCode->trashed())
-                            {{-- Pastikan ada data arsip terkait sebelum menampilkan tombol --}}
                             @if ($qrCode->arsip)
+                                {{-- Hanya Admin yang bisa me-restore dari arsip --}}
                                 @can('restore', $qrCode)
-                                    {{-- Ubah action form untuk menunjuk ke route arsip --}}
                                     <form action="{{ route('admin.arsip-barang.restore', $qrCode->arsip->id) }}" method="POST"
                                         class="form-restore-arsip">
                                         @csrf
@@ -211,19 +216,14 @@
                                 @endcan
                             @endif
                         @else
-                            @can('update', $qrCode)
-                                <button type="button" class="btn btn-warning text-dark w-100 btn-edit-unit-trigger"
-                                    data-bs-toggle="modal" data-bs-target="#modalEditUnitBarang"
-                                    data-unit='@json($qrCode->load('barang'))' title="Edit Atribut Dasar Unit">
-                                    <i class="fas fa-edit me-1"></i> Edit Info Unit
-                                </button>
-                            @endcan
+                            {{-- Tampilkan tombol aksi jika tidak diarsipkan --}}
 
                             {{-- Hanya tampilkan aksi perpindahan jika barang TIDAK SEDANG DIPINJAM --}}
                             @if ($qrCode->status !== \App\Models\BarangQrCode::STATUS_DIPINJAM)
 
                                 @if ($qrCode->id_pemegang_personal)
                                     {{-- Aksi jika dipegang personal --}}
+                                    {{-- Kembalikan ke Ruangan: Hanya untuk Operator yang bisa mengembalikannya --}}
                                     @can('returnPersonal', $qrCode)
                                         <button type="button" class="btn btn-success w-100 btn-return-personal-trigger"
                                             data-bs-toggle="modal" data-bs-target="#modalReturnPersonal"
@@ -233,6 +233,7 @@
                                             <i class="fas fa-undo me-1"></i> Kembalikan ke Ruangan
                                         </button>
                                     @endcan
+                                    {{-- Transfer Personal: Hanya untuk pemegang saat ini --}}
                                     @can('transferPersonal', $qrCode)
                                         <button type="button" class="btn btn-primary w-100 btn-transfer-personal-trigger"
                                             data-bs-toggle="modal" data-bs-target="#modalTransferPersonal"
@@ -244,6 +245,7 @@
                                     @endcan
                                 @else
                                     {{-- Aksi jika di ruangan atau mengambang --}}
+                                    {{-- Mutasi/Tempatkan: Hanya untuk Operator --}}
                                     @can('mutasi', $qrCode)
                                         <button type="button" class="btn btn-primary w-100 btn-mutasi-unit-trigger"
                                             data-bs-toggle="modal" data-bs-target="#modalMutasiUnit"
@@ -256,6 +258,7 @@
                                             {{ $qrCode->id_ruangan ? 'Pindahkan' : 'Tempatkan di Ruangan' }}
                                         </button>
                                     @endcan
+                                    {{-- Serahkan ke Personal: Hanya untuk Operator jika status Tersedia --}}
                                     @can('assignPersonal', $qrCode)
                                         @if ($qrCode->status === \App\Models\BarangQrCode::STATUS_TERSEDIA)
                                             <button type="button" class="btn btn-info w-100 btn-assign-personal-trigger"
@@ -269,7 +272,7 @@
                                     @endcan
                                 @endif
 
-                                {{-- Tampilkan tombol ini HANYA jika semua kondisi di controller terpenuhi --}}
+                                {{-- Tombol Ajukan Pemeliharaan --}}
                                 @if ($bisaLaporkanKerusakan)
                                     <a href="{{ route($rolePrefix . 'pemeliharaan.create', ['id_barang_qr_code' => $qrCode->id]) }}"
                                         class="btn btn-secondary">
@@ -277,6 +280,7 @@
                                     </a>
                                 @endif
 
+                                {{-- Arsipkan Unit --}}
                                 @can('archive', $qrCode)
                                     <button type="button" class="btn btn-danger w-100 btn-arsip-unit-trigger"
                                         data-bs-toggle="modal" data-bs-target="#modalArsipUnit"

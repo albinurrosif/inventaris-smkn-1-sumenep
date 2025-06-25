@@ -44,6 +44,7 @@ use App\Http\Controllers\BarangStatusController; // Tambahkan jika belum ada
 
 use App\Http\Controllers\LogAktivitasController;
 use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\NotificationController;
 
 
 
@@ -125,6 +126,14 @@ Route::middleware(['auth'])->group(function () {
     // --- Rute untuk Halaman Aktivitas Saya ---
     Route::get('/profil/aktivitas-saya', [ProfileController::class, 'myActivity'])->name('profile.activity');
 
+
+    // Rute Notifikasi
+    Route::prefix('notifications')->name('notifications.')->group(function () {
+        Route::get('/', [NotificationController::class, 'index'])->name('index');
+        Route::post('/{notification}/mark-as-read', [NotificationController::class, 'markAsRead'])
+            ->name('markAsRead');
+        Route::post('/mark-all-as-read', [NotificationController::class, 'markAllAsRead'])->name('mark-all-as-read');
+    });
 
 
 
@@ -209,6 +218,12 @@ Route::middleware(['auth'])->group(function () {
             'pemeliharaan' => 'pemeliharaan'
         ]);
         Route::post('pemeliharaan/{id}/restore', [PemeliharaanController::class, 'restore'])->name('pemeliharaan.restore');
+        Route::post('pemeliharaan/{pemeliharaan}/approve', [PemeliharaanController::class, 'approve'])->name('pemeliharaan.approve');
+        Route::post('pemeliharaan/{pemeliharaan}/reject', [PemeliharaanController::class, 'reject'])->name('pemeliharaan.reject');
+        Route::post('pemeliharaan/{pemeliharaan}/start-work', [PemeliharaanController::class, 'startWork'])->name('pemeliharaan.startWork');
+        Route::post('pemeliharaan/{pemeliharaan}/complete-work', [PemeliharaanController::class, 'completeWork'])->name('pemeliharaan.completeWork');
+
+
 
         // Grup untuk Stok Opname
         Route::prefix('stok-opname')->name('stok-opname.')->group(function () {
@@ -221,6 +236,7 @@ Route::middleware(['auth'])->group(function () {
 
             // ROUTE UMUM/DINAMIS TETAP DI BAWAH
             Route::post('/', [StokOpnameController::class, 'store'])->name('store');
+            Route::put('/update-detail/{detail}', [StokOpnameController::class, 'updateDetail'])->name('updateDetail');
             Route::get('/{stokOpname}', [StokOpnameController::class, 'show'])->name('show');
             Route::get('/{stokOpname}/edit', [StokOpnameController::class, 'edit'])->name('edit');
             Route::put('/{stokOpname}', [StokOpnameController::class, 'update'])->name('update');
@@ -228,7 +244,9 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/{stokOpname}/restore', [StokOpnameController::class, 'restore'])->name('restore'); // Diubah dari {id} ke {stokOpname} untuk konsistensi
             Route::post('/{stokOpname}/finalize', [StokOpnameController::class, 'finalize'])->name('finalize');
             Route::post('/{stokOpname}/cancel', [StokOpnameController::class, 'cancel'])->name('cancel');
-            Route::put('/{stokOpname}/detail/{detail}', [StokOpnameController::class, 'updateDetail'])->name('updateDetail');
+
+            Route::get('/{stokOpname}/hasil', [StokOpnameController::class, 'hasil'])->name('hasil');
+            Route::put('/{stokOpname}/update-catatan', [StokOpnameController::class, 'updateCatatanPengerjaan'])->name('updateCatatan'); // TAMBAHKAN ROUTE INI
         });
 
         // Grup untuk Rekap Stok
@@ -315,6 +333,9 @@ Route::middleware(['auth'])->group(function () {
         Route::resource('pemeliharaan', PemeliharaanController::class)->parameters([
             'pemeliharaan' => 'pemeliharaan'
         ]);
+        Route::post('pemeliharaan/{pemeliharaan}/start-work', [PemeliharaanController::class, 'startWork'])->name('pemeliharaan.startWork');
+        Route::post('pemeliharaan/{pemeliharaan}/complete-work', [PemeliharaanController::class, 'completeWork'])->name('pemeliharaan.completeWork');
+
 
         // PEMINJAMAN (OPERATOR)
         Route::get('peminjaman', [PeminjamanController::class, 'index'])->name('peminjaman.index');
@@ -340,6 +361,8 @@ Route::middleware(['auth'])->group(function () {
 
             // ROUTE UMUM/DINAMIS TETAP DI BAWAHNYA
             Route::post('/', [StokOpnameController::class, 'store'])->name('store');
+            Route::put('/update-detail/{detail}', [StokOpnameController::class, 'updateDetail'])->name('updateDetail');
+
             Route::get('/{stokOpname}', [StokOpnameController::class, 'show'])->name('show');
             Route::get('/{stokOpname}/edit', [StokOpnameController::class, 'edit'])->name('edit');
             Route::put('/{stokOpname}', [StokOpnameController::class, 'update'])->name('update');
@@ -347,7 +370,8 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/{stokOpname}/restore', [StokOpnameController::class, 'restore'])->name('restore'); // Diubah dari {id} ke {stokOpname} untuk konsistensi
             Route::post('/{stokOpname}/finalize', [StokOpnameController::class, 'finalize'])->name('finalize');
             Route::post('/{stokOpname}/cancel', [StokOpnameController::class, 'cancel'])->name('cancel');
-            Route::put('/{stokOpname}/detail/{detail}', [StokOpnameController::class, 'updateDetail'])->name('updateDetail');
+            Route::get('/{stokOpname}/hasil', [StokOpnameController::class, 'hasil'])->name('hasil');
+            Route::put('/{stokOpname}/update-catatan', [StokOpnameController::class, 'updateCatatanPengerjaan'])->name('updateCatatan'); // TAMBAHKAN ROUTE INI
         });
 
         Route::prefix('laporan')->name('laporan.')->group(function () {
@@ -378,6 +402,8 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('isGuru')->prefix('guru')->name('guru.')->group(function () {
 
         Route::get('dashboard', [App\Http\Controllers\DashboardController::class, 'guru'])->name('dashboard');
+
+        Route::get('profil/aktivitas-saya', [App\Http\Controllers\ProfileController::class, 'myActivity'])->name('profile.activity'); // <--- TAMBAHKAN INI
 
         Route::get('katalog-barang', [\App\Http\Controllers\KatalogController::class, 'index'])->name('katalog.index');
 
@@ -419,9 +445,24 @@ Route::middleware(['auth'])->group(function () {
             'update'
         ]);
 
+        // Tambahkan rute ini untuk Guru agar bisa mengunduh QR code
+        Route::get('barang-qr-code/{barangQrCode}/download', [App\Http\Controllers\BarangQrCodeController::class, 'download'])->name('barang-qr-code.download');
+
+
+        // Tambahkan rute ini untuk detail BarangQrCode yang bisa diakses guru
+        Route::get('barang-qr-code/{barangQrCode}', [App\Http\Controllers\BarangQrCodeController::class, 'show'])->name('barang-qr-code.show');
+        // Jika guru hanya butuh show, bukan resource lengkap:
+        // Route::resource('barang-qr-code', App\Http\Controllers\BarangQrCodeController::class)
+        //     ->only(['show']) // Guru hanya butuh melihat detail, tidak mengelola
+        //     ->parameters(['barang-qr-code' => 'barangQrCode'])->withTrashed();; // Anda sudah memiliki ini di bawah, jadi pastikan ini yang aktif.
+
         Route::resource('barang-qr-code', BarangQrCodeController::class)
             ->only(['show']) // Guru hanya butuh melihat detail, tidak mengelola
             ->parameters(['barang-qr-code' => 'barangQrCode'])->withTrashed();;
+
+        // Rute untuk melihat detail JENIS BARANG (induk)
+        // Guru hanya perlu akses 'show' untuk melihat detail barang induk.
+        Route::get('barang/{barang}', [App\Http\Controllers\BarangController::class, 'show'])->name('barang.show');
 
 
         // Rute AJAX jika diperlukan di masa depan (tidak perlu diubah)

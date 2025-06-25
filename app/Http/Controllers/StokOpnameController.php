@@ -23,6 +23,9 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException; // Ditambahkan
 use Carbon\Carbon;
+use App\Notifications\StokOpnameAssigned;
+use App\Notifications\StokOpnameFinished;
+use App\Notifications\StokOpnameCanceled;
 
 class StokOpnameController extends Controller
 {
@@ -152,6 +155,7 @@ class StokOpnameController extends Controller
     {
         $this->authorize('create', StokOpname::class);
         $loggedInUser = Auth::user();
+        /** @var \App\Models\User $loggedInUser */
 
         $validationRules = [
             'id_ruangan' => 'required|exists:ruangans,id',
@@ -235,6 +239,17 @@ class StokOpnameController extends Controller
             ]);
             DB::commit();
 
+            // --- TAMBAHKAN KODE INI UNTUK MENGIRIM NOTIFIKASI ---
+            // Muat relasi yang diperlukan untuk notifikasi
+            $stokOpname->load('ruangan', 'operator');
+
+            // Kirim notifikasi ke operator yang ditugaskan (jika ada dan dia operator)
+            if ($stokOpname->id_operator && $assignedOperator->hasRole(User::ROLE_OPERATOR)) {
+                $assignedOperator->notify(new StokOpnameAssigned($stokOpname));
+            }
+            // --- AKHIR KODE NOTIFIKASI ---
+
+
             $pesanSukses = "Sesi stok opname untuk ruangan {$stokOpname->ruangan->nama_ruangan} berhasil dibuat.";
             $redirectRoute = $this->getRedirectRouteName('stok-opname.show', 'admin.stok-opname.show');
 
@@ -270,6 +285,15 @@ class StokOpnameController extends Controller
 
         $this->authorize('view', $stokOpname);
 
+        // LOGIKA BARU: Catat waktu mulai pengerjaan
+        if ($stokOpname->status === StokOpname::STATUS_DRAFT && is_null($stokOpname->tanggal_mulai_pengerjaan)) {
+            $stokOpname->update(['tanggal_mulai_pengerjaan' => now()]);
+        }
+
+        $rolePrefix = $this->getRolePrefix();
+        $detailItems = $stokOpname->detailStokOpname()->with('barangQrCode.barang')->get();
+
+
         $kondisiFisikList = DetailStokOpname::getValidKondisiFisik();
 
 
@@ -278,8 +302,50 @@ class StokOpnameController extends Controller
         return view('pages.stok-opname.show', compact(
             'stokOpname',
             'kondisiFisikList',
-            'rolePrefix'
+            'rolePrefix',
+            'detailItems'
         ));
+    }
+
+    public function updateDetail(Request $request, DetailStokOpname $detail): JsonResponse
+    {
+        $this->authorize('processDetails', $detail->stokOpname);
+
+        $validated = $request->validate([
+            'kondisi_fisik' => ['required', 'string', Rule::in(array_keys(DetailStokOpname::getValidKondisiFisik()))],
+            'catatan_fisik' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        if (is_null($detail->waktu_pertama_diperiksa)) {
+            $validated['waktu_pertama_diperiksa'] = now();
+        }
+        $validated['waktu_terakhir_diperiksa'] = now();
+
+        $detail->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data unit berhasil diperbarui.',
+            'waktu_diperiksa' => \Carbon\Carbon::parse($validated['waktu_terakhir_diperiksa'])->isoFormat('HH:mm:ss')
+        ]);
+    }
+
+    /**
+     * Method BARU untuk menyimpan catatan pengerjaan dari Operator.
+     */
+    public function updateCatatanPengerjaan(Request $request, StokOpname $stokOpname): RedirectResponse
+    {
+        $this->authorize('processDetails', $stokOpname);
+
+        $request->validate([
+            'catatan_pengerjaan' => 'nullable|string|max:2000',
+        ]);
+
+        $stokOpname->update([
+            'catatan_pengerjaan' => $request->input('catatan_pengerjaan')
+        ]);
+
+        return redirect()->back()->with('success', 'Catatan pengerjaan berhasil disimpan.');
     }
 
     public function edit(StokOpname $stokOpname): View
@@ -306,6 +372,8 @@ class StokOpnameController extends Controller
         }
 
         $user = Auth::user();
+        /** @var \App\Models\User $user */
+
         $validationRules = [
             'tanggal_opname' => 'required|date|before_or_equal:today',
             'catatan' => 'nullable|string|max:1000',
@@ -316,8 +384,8 @@ class StokOpnameController extends Controller
         ];
 
         $dataToUpdate = $request->only(['tanggal_opname', 'catatan']);
-        $assignedOperator = $stokOpname->operator;
-        $assignedOperatorUsername = optional($assignedOperator)->username ?? 'N/A';
+        $oldAssignedOperatorId = $stokOpname->id_operator; // Simpan ID operator lama
+        $assignedOperatorUsername = optional($stokOpname->operator)->username ?? 'N/A'; // Ambil username lama
 
         if ($user->hasRole(User::ROLE_ADMIN)) {
             $validationRules['id_operator_pelaksana'] = [
@@ -354,8 +422,9 @@ class StokOpnameController extends Controller
             $dataBaru = $stokOpname->refresh()->toArray();
 
             $deskripsiLog = "Memperbarui sesi Stok Opname untuk ruangan {$stokOpname->ruangan->nama_ruangan} tanggal {$stokOpname->tanggal_opname->format('d-m-Y')}.";
-            if ($dataLama['id_operator'] != $stokOpname->id_operator) {
-                $deskripsiLog .= " Operator pelaksana diubah menjadi {$assignedOperatorUsername}.";
+            if ($oldAssignedOperatorId != $stokOpname->id_operator) { // Bandingkan ID lama dan baru
+                $newAssignedOperator = User::find($stokOpname->id_operator);
+                $deskripsiLog .= " Operator pelaksana diubah dari " . (optional(User::find($oldAssignedOperatorId))->username ?? 'Tidak ada') . " menjadi " . (optional($newAssignedOperator)->username ?? 'Tidak ada') . ".";
             }
 
             LogAktivitas::create([
@@ -370,6 +439,18 @@ class StokOpnameController extends Controller
                 'user_agent' => $request->userAgent(),
             ]);
             DB::commit();
+
+            // --- LOGIKA PENGIRIMAN NOTIFIKASI DI SINI ---
+            // Kirim notifikasi jika operator pelaksana berubah
+            if ($stokOpname->id_operator && $stokOpname->id_operator !== $oldAssignedOperatorId) {
+                $newOperatorPic = User::find($stokOpname->id_operator);
+                if ($newOperatorPic && $newOperatorPic->hasRole(User::ROLE_OPERATOR)) {
+                    $newOperatorPic->notify(new StokOpnameAssigned($stokOpname));
+                }
+            }
+            // --- AKHIR LOGIKA NOTIFIKASI ---
+
+
             return redirect()->route($this->getRedirectRouteName('stok-opname.show', 'admin.stok-opname.show'), $stokOpname->id)
                 ->with('success', 'Sesi stok opname berhasil diperbarui.');
         } catch (ValidationException $e) {
@@ -383,32 +464,37 @@ class StokOpnameController extends Controller
     }
 
 
-    public function updateDetail(Request $request, StokOpname $stokOpname, DetailStokOpname $detail): JsonResponse
-    {
-        $this->authorize('processDetails', $stokOpname);
-        if ($stokOpname->status !== StokOpname::STATUS_DRAFT) {
-            return response()->json(['success' => false, 'message' => 'Tidak dapat mengubah detail, stok opname sudah difinalisasi.'], 403);
-        }
-        if ($detail->id_stok_opname !== $stokOpname->id) {
-            return response()->json(['success' => false, 'message' => 'Detail item tidak sesuai dengan sesi stok opname.'], 400);
-        }
+    // public function updateDetail(Request $request, StokOpname $stokOpname, DetailStokOpname $detail): JsonResponse
+    // {
+    //     $this->authorize('processDetails', $stokOpname);
+    //     if ($stokOpname->status !== StokOpname::STATUS_DRAFT) {
+    //         return response()->json(['success' => false, 'message' => 'Tidak dapat mengubah detail, stok opname sudah difinalisasi.'], 403);
+    //     }
+    //     if ($detail->id_stok_opname !== $stokOpname->id) {
+    //         return response()->json(['success' => false, 'message' => 'Detail item tidak sesuai dengan sesi stok opname.'], 400);
+    //     }
 
-        $validated = $request->validate([
-            'kondisi_fisik' => ['required', Rule::in(array_keys(DetailStokOpname::getValidKondisiFisik()))],
-            'catatan_fisik' => 'nullable|string|max:500',
-        ]);
+    //     $validated = $request->validate([
+    //         'kondisi_fisik' => ['required', Rule::in(array_keys(DetailStokOpname::getValidKondisiFisik()))],
+    //         'catatan_fisik' => 'nullable|string|max:500',
+    //     ]);
 
-        try {
-            $detail->update($validated);
-            return response()->json(['success' => true, 'message' => 'Detail item berhasil diperbarui.']);
-        } catch (\Exception $e) {
-            Log::error("Gagal update detail stok opname {$detail->id}: " . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Gagal memperbarui detail item.'], 500);
-        }
-    }
+    //     try {
+    //         $detail->update($validated);
+    //         return response()->json(['success' => true, 'message' => 'Detail item berhasil diperbarui.']);
+    //     } catch (\Exception $e) {
+    //         Log::error("Gagal update detail stok opname {$detail->id}: " . $e->getMessage());
+    //         return response()->json(['success' => false, 'message' => 'Gagal memperbarui detail item.'], 500);
+    //     }
+    // }
 
     public function finalize(Request $request, StokOpname $stokOpname): RedirectResponse
     {
+        // Validasi tambahan untuk catatan pengerjaan
+        $request->validate([
+            'catatan_pengerjaan' => 'nullable|string|max:2000',
+        ]);
+
         $this->authorize('finalize', $stokOpname);
         if ($stokOpname->status !== StokOpname::STATUS_DRAFT) {
             return redirect()->route($this->getRedirectRouteName('stok-opname.show', 'admin.stok-opname.show'), $stokOpname->id)
@@ -425,7 +511,18 @@ class StokOpnameController extends Controller
             DB::beginTransaction();
             $dataLama = $stokOpname->toArray();
             $stokOpname->status = StokOpname::STATUS_SELESAI;
+
+            // HANYA update catatan jika ada input 'catatan_pengerjaan' yang dikirim dalam request.
+            // Jika tidak ada (seperti dari modal), maka catatan yang lama tidak akan diubah.
+            if ($request->filled('catatan_pengerjaan')) {
+                $stokOpname->catatan_pengerjaan = $request->input('catatan_pengerjaan');
+            }
+
+            // Catat juga kapan pengerjaan selesai
+            $stokOpname->tanggal_selesai_pengerjaan = now();
+
             $stokOpname->save();
+
             $dataBaru = $stokOpname->refresh()->toArray();
 
             LogAktivitas::create([
@@ -440,7 +537,17 @@ class StokOpnameController extends Controller
                 'user_agent' => $request->userAgent(),
             ]);
             DB::commit();
-            $redirectRoute = $this->getRedirectRouteName('stok-opname.show', 'admin.stok-opname.show');
+
+            // --- TAMBAHKAN KODE INI UNTUK MENGIRIM NOTIFIKASI ---
+            // Kirim notifikasi ke semua Admin
+            $admins = User::where('role', User::ROLE_ADMIN)->get();
+            foreach ($admins as $admin) {
+                $admin->notify(new StokOpnameFinished($stokOpname));
+            }
+            // --- AKHIR KODE NOTIFIKASI ---
+
+
+            $redirectRoute = $this->getRedirectRouteName('stok-opname.hasil', 'admin.stok-opname.hasil');
             return redirect()->route($redirectRoute, $stokOpname->id)->with('success', 'Stok opname berhasil difinalisasi. Data barang telah diperbarui.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -501,6 +608,16 @@ class StokOpnameController extends Controller
             ]);
 
             DB::commit();
+
+            // --- TAMBAHKAN KODE INI UNTUK MENGIRIM NOTIFIKASI ---
+            // Kirim notifikasi ke operator yang ditugaskan untuk SO ini
+            $stokOpname->load('operator'); // Muat relasi operator
+            if ($stokOpname->operator) {
+                $stokOpname->operator->notify(new StokOpnameCanceled($stokOpname, Auth::user()));
+            }
+            // --- AKHIR KODE NOTIFIKASI ---
+
+
             $redirectRoute = $this->getRedirectRouteName('stok-opname.index', 'admin.stok-opname.index');
             return redirect()->route($redirectRoute)->with('success', 'Sesi stok opname berhasil dibatalkan dan semua perubahan telah dikembalikan.');
         } catch (\Exception $e) {
@@ -805,6 +922,66 @@ class StokOpnameController extends Controller
             return response()->json(['success' => false, 'message' => 'Gagal menambahkan barang temuan. Terjadi kesalahan sistem: ' . (config('app.debug') ? $e->getMessage() : 'Silakan coba lagi.')], 500);
         }
     }
+
+    /**
+     * Menampilkan halaman hasil dari Stok Opname yang telah selesai.
+     *
+     * @param StokOpname $stokOpname
+     * @return View
+     */
+    public function hasil(StokOpname $stokOpname): View
+    {
+        // 1. Otorisasi: Pastikan user bisa melihat hasil ini
+        $this->authorize('view', $stokOpname);
+
+        // 2. Validasi: Pastikan hanya Stok Opname yang sudah 'Selesai' yang bisa dilihat hasilnya
+        if ($stokOpname->status !== StokOpname::STATUS_SELESAI) {
+            // Jika belum selesai, tampilkan view error khusus
+            $rolePrefix = $this->getRolePrefix();
+            return view('pages.stok-opname.hasil_error', [
+                'stokOpname' => $stokOpname,
+                'rolePrefix' => $rolePrefix,
+                'errorMessage' => 'Hasil belum dapat dilihat karena proses Stok Opname belum diselesaikan.'
+            ]);
+        }
+
+        // 3. Ambil data detail dengan informasi relasi yang dibutuhkan
+        $details = $stokOpname->detailStokOpname()->with('barangQrCode.barang')->get();
+
+        // 4. Hitung ringkasan data untuk ditampilkan di view (menggunakan metode Collection)
+        $summary = [
+            'total_diperiksa' => $details->count(),
+            'sesuai' => $details->filter(function ($item) {
+                // Abaikan item temuan baru & hilang saat membandingkan
+                if ($item->kondisi_tercatat === 'Baru' || $item->kondisi_fisik === 'Hilang') {
+                    return false;
+                }
+                return $item->kondisi_tercatat === $item->kondisi_fisik;
+            })->count(),
+            'kondisi_berubah' => $details->filter(function ($item) {
+                // Abaikan item temuan baru & hilang saat membandingkan
+                if ($item->kondisi_tercatat === 'Baru' || $item->kondisi_fisik === 'Hilang') {
+                    return false;
+                }
+                return $item->kondisi_tercatat !== $item->kondisi_fisik;
+            })->count(),
+            'hilang' => $details->where('kondisi_fisik', 'Hilang')->count(),
+            // PERBAIKAN DI SINI: Gunakan 'kondisi_tercatat' sebagai penanda
+            'temuan_baru' => $details->where('kondisi_tercatat', 'Baru')->count(),
+        ];
+
+        $rolePrefix = $this->getRolePrefix();
+
+        // 5. Kirim data ke view
+        return view('pages.stok-opname.hasil', [
+            'stokOpname' => $stokOpname,
+            'details' => $details,
+            'summary' => $summary,
+            'rolePrefix' => $rolePrefix,
+        ]);
+    }
+
+
     // Metode helper getViewPathBasedOnRole
     private function getViewPathBasedOnRole(string $adminView, string $operatorView, ?string $guruView = null): string
     {

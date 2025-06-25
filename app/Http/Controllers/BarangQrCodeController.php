@@ -28,6 +28,10 @@ use Illuminate\Support\Str;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use App\Http\Controllers\Traits\RedirectsUsers;
+use App\Notifications\BarangAssignedToPersonal;
+use App\Notifications\BarangMutated;
+use App\Notifications\BarangReturnedFromPersonal;
+use App\Notifications\BarangTransferredPersonal;
 
 class BarangQrCodeController extends Controller
 {
@@ -570,6 +574,7 @@ class BarangQrCodeController extends Controller
 
         $userPenerima = User::find($validated['id_pemegang_personal']);
         $catatanPenyerahan = $validated['catatan_penyerahan_personal'] ?? null;
+        $userActor = Auth::user(); // User yang melakukan penyerahan
 
         // Tanggal penyerahan akan dicatat sebagai now() di dalam model/BarangStatus
         if ($barangQrCode->assignToPersonal($validated['id_pemegang_personal'], Auth::id())) {
@@ -588,6 +593,13 @@ class BarangQrCodeController extends Controller
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
             ]);
+
+            // --- TAMBAHKAN KODE INI UNTUK MENGIRIM NOTIFIKASI ---
+            // Kirim notifikasi ke user penerima
+            if ($userPenerima) {
+                $userPenerima->notify(new BarangAssignedToPersonal($barangQrCode, $userActor));
+            }
+            // --- AKHIR KODE NOTIFIKASI ---
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
@@ -635,6 +647,7 @@ class BarangQrCodeController extends Controller
         $namaPemegangLama = $pemegangLama ? $pemegangLama->username : 'N/A';
 
 
+
         $userPencatat = Auth::user();
         /** @var \App\Models\User $userPencatat */
 
@@ -666,6 +679,19 @@ class BarangQrCodeController extends Controller
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
             ]);
+
+            // --- TAMBAHKAN KODE INI UNTUK MENGIRIM NOTIFIKASI ---
+            // Kirim notifikasi ke Operator yang mengelola ruangan tujuan
+            $operatorRuanganTujuan = $ruanganTujuan->operator; // Relasi 'operator' di model Ruangan
+            if ($operatorRuanganTujuan) {
+                // Cek jika operator ruangan tujuan berbeda dengan operator yang melakukan aksi
+                // dan kirim notifikasi
+                if ($operatorRuanganTujuan->id !== Auth::id()) {
+                    $operatorRuanganTujuan->notify(new BarangReturnedFromPersonal($barangQrCode, $ruanganTujuan, $pemegangLama));
+                }
+            }
+            // --- AKHIR KODE NOTIFIKASI ---
+
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
@@ -715,6 +741,7 @@ class BarangQrCodeController extends Controller
 
         $catatanTransfer = $validated['catatan_transfer_personal'] ?? null;
         // Tanggal transfer akan dicatat sebagai now() di dalam model/BarangStatus
+        $userActor = Auth::user(); // User yang melakukan transfer
 
         if ($barangQrCode->transferPersonalHolder($validated['new_id_pemegang_personal'], Auth::id())) {
             $deskripsiLog = "Transfer unit: {$barangQrCode->kode_inventaris_sekolah} dari {$namaPemegangLama} ke {$pemegangBaru->username}.";
@@ -733,6 +760,17 @@ class BarangQrCodeController extends Controller
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
             ]);
+
+            // Kirim notifikasi ke pemegang baru
+            if ($pemegangBaru) {
+                $pemegangBaru->notify(new BarangTransferredPersonal($barangQrCode, $pemegangLama, $userActor));
+            }
+            // Kirim notifikasi ke pemegang lama (opsional, tapi disarankan)
+            if ($pemegangLama && $pemegangLama->id !== $pemegangBaru->id) { // Pastikan pemegang lama ada dan berbeda dari yang baru
+                $pemegangLama->notify(new BarangTransferredPersonal($barangQrCode, $pemegangLama, $userActor));
+            }
+            // --- AKHIR KODE NOTIFIKASI ---
+
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json([
@@ -753,9 +791,7 @@ class BarangQrCodeController extends Controller
 
     public function archive(Request $request, BarangQrCode $barangQrCode): RedirectResponse
     {
-        $this->authorize('archive', $barangQrCode);
-        $userActor = Auth::user();
-        /** @var \App\Models\User $userActor **/
+        $this->authorize('archive', $barangQrCode); // Policy di sini akan memblokir non-Admin.
 
         // Penjaga untuk mencegah aksi pada barang yang tidak valid
         if ($barangQrCode->trashed()) {
@@ -772,7 +808,7 @@ class BarangQrCodeController extends Controller
         }
 
         $validated = $request->validate([
-            'jenis_penghapusan' => ['required', 'string', Rule::in(array_keys(ArsipBarang::getValidJenisPenghapusan()))],
+            'jenis_penghapusan' => ['required', 'string', Rule::in(array_keys(ArsipBarang::getValidJenisPenghapusan()))], // [cite: 36]
             'alasan_penghapusan' => 'required|string|max:1000',
             'berita_acara_path' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:2048',
             'foto_bukti_path' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
@@ -781,6 +817,9 @@ class BarangQrCodeController extends Controller
 
         DB::beginTransaction();
         try {
+            $userActor = Auth::user(); // Admin yang melakukan aksi
+            $barangQrCode->load('barang.kategori', 'ruangan', 'pemegangPersonal'); // Muat relasi sebelum snapshot
+
             $kondisiSebelum = $barangQrCode->kondisi;
             $statusKetersediaanSebelum = $barangQrCode->status;
             $ruanganSebelum = $barangQrCode->id_ruangan;
@@ -789,69 +828,50 @@ class BarangQrCodeController extends Controller
             $beritaAcaraPath = $request->hasFile('berita_acara_path') ? $request->file('berita_acara_path')->store('arsip/berita_acara_unit', 'public') : null;
             $fotoBuktiPath = $request->hasFile('foto_bukti_path') ? $request->file('foto_bukti_path')->store('arsip/foto_bukti_unit', 'public') : null;
 
-            $barangQrCode->load('barang.kategori', 'ruangan', 'pemegangPersonal');
-
-            $arsipData = [
-                'id_user_pengaju' => $userActor->id,
-                'jenis_penghapusan' => $validated['jenis_penghapusan'],
-                'alasan_penghapusan' => $validated['alasan_penghapusan'],
-                'data_unit_snapshot' => $barangQrCode->toArray(),
-                'tanggal_pengajuan_arsip' => now(),
-                'berita_acara_path' => $beritaAcaraPath,
-                'foto_bukti_path' => $fotoBuktiPath,
-            ];
-
-            $statusKetersediaanSesudah = $statusKetersediaanSebelum;
-
-            // PENYESUAIAN: Inisialisasi variabel log di sini
-            $logAktivitasJenis = '';
-            $logAktivitasDeskripsi = '';
-            $redirectMessage = '';
-
-            if ($userActor->hasRole(User::ROLE_ADMIN)) {
-                $arsipData['status_arsip'] = ArsipBarang::STATUS_ARSIP_DISETUJUI_PERMANEN;
-                $arsipData['id_user_penyetuju'] = $userActor->id;
-                $arsipData['tanggal_penghapusan_resmi'] = now();
-                if (!$barangQrCode->trashed()) {
-                    $barangQrCode->delete();
-                }
-                $statusKetersediaanSesudah = 'Diarsipkan/Dihapus';
-                $logAktivitasJenis = 'Arsip Langsung Unit';
-                $logAktivitasDeskripsi = "Admin {$userActor->username} langsung mengarsipkan unit: {$barangQrCode->kode_inventaris_sekolah}";
-                $redirectMessage = "Unit {$barangQrCode->kode_inventaris_sekolah} berhasil diarsipkan secara langsung.";
-            } else {
-                $arsipData['status_arsip'] = ArsipBarang::STATUS_ARSIP_DIAJUKAN;
-                $logAktivitasJenis = 'Pengajuan Arsip Unit';
-                $logAktivitasDeskripsi = "Pengajuan arsip untuk unit {$barangQrCode->kode_inventaris_sekolah} oleh {$userActor->username}";
-                $redirectMessage = "Pengajuan arsip unit {$barangQrCode->kode_inventaris_sekolah} berhasil.";
-            }
-
-
+            // --- LOGIKA SEDERHANA UNTUK ADMIN ---
             $arsip = ArsipBarang::updateOrCreate(
                 ['id_barang_qr_code' => $barangQrCode->id],
-                $arsipData
+                [
+                    'id_user_pengaju' => $userActor->id, // Pengaju adalah Admin itu sendiri
+                    'id_user_penyetuju' => $userActor->id, // Penyetuju juga Admin itu sendiri
+                    'jenis_penghapusan' => $validated['jenis_penghapusan'],
+                    'alasan_penghapusan' => $validated['alasan_penghapusan'],
+                    'berita_acara_path' => $beritaAcaraPath,
+                    'foto_bukti_path' => $fotoBuktiPath,
+                    'tanggal_pengajuan_arsip' => now(),
+                    'tanggal_penghapusan_resmi' => now(),
+                    'status_arsip' => ArsipBarang::STATUS_ARSIP_DISETUJUI_PERMANEN, // Langsung disetujui
+                    'data_unit_snapshot' => $barangQrCode->toArray(), // Ambil snapshot data
+                ]
             );
 
+            // Soft-delete BarangQrCode. Ini akan memicu event di model BarangQrCode.
+            if (!$barangQrCode->trashed()) {
+                $barangQrCode->delete(); // [cite: 1837]
+            }
+
+            // Catat perubahan status di BarangStatus
             BarangStatus::create([
                 'id_barang_qr_code' => $barangQrCode->id,
                 'id_user_pencatat' => $userActor->id,
                 'tanggal_pencatatan' => now(),
                 'kondisi_sebelumnya' => $kondisiSebelum,
-                'kondisi_sesudahnya' => $kondisiSebelum,
+                'kondisi_sesudahnya' => $kondisiSebelum, // Kondisi tidak berubah saat diarsipkan
                 'status_ketersediaan_sebelumnya' => $statusKetersediaanSebelum,
-                'status_ketersediaan_sesudahnya' => $statusKetersediaanSesudah,
+                'status_ketersediaan_sesudahnya' => 'Diarsipkan/Dihapus', // Sesuai enum
                 'id_ruangan_sebelumnya' => $ruanganSebelum,
-                'id_ruangan_sesudahnya' => ($userActor->hasRole(User::ROLE_ADMIN)) ? null : $ruanganSebelum,
+                'id_ruangan_sesudahnya' => null,
                 'id_pemegang_personal_sebelumnya' => $pemegangSebelum,
-                'id_pemegang_personal_sesudahnya' => ($userActor->hasRole(User::ROLE_ADMIN)) ? null : $pemegangSebelum,
-                'deskripsi_kejadian' => $userActor->hasRole(User::ROLE_ADMIN) ? "Unit diarsipkan permanen. Arsip ID: {$arsip->id}" : "Pengajuan arsip unit. Arsip ID: {$arsip->id}",
+                'id_pemegang_personal_sesudahnya' => null,
+                'deskripsi_kejadian' => "Unit diarsipkan permanen oleh Admin. Arsip ID: {$arsip->id}",
                 'id_arsip_barang_trigger' => $arsip->id,
-            ]);
+            ]); // [cite: 1442]
 
+            // Log Aktivitas
             LogAktivitas::create([
                 'id_user' => $userActor->id,
-                'aktivitas' => $logAktivitasJenis,
-                'deskripsi' => $logAktivitasDeskripsi,
+                'aktivitas' => 'Arsip Langsung Unit',
+                'deskripsi' => "Admin {$userActor->username} mengarsipkan unit: {$barangQrCode->kode_inventaris_sekolah} secara langsung.",
                 'model_terkait' => ArsipBarang::class,
                 'id_model_terkait' => $arsip->id,
                 'data_baru' => $arsip->toJson(),
@@ -860,8 +880,8 @@ class BarangQrCodeController extends Controller
             ]);
 
             DB::commit();
-            // Redirect ke halaman detail barang induknya
-            return redirect($this->getRedirectUrl("barang/{$barangQrCode->id_barang}"))->with('success', $redirectMessage);
+
+            return redirect($this->getRedirectUrl("barang/{$barangQrCode->id_barang}"))->with('success', "Unit {$barangQrCode->kode_inventaris_sekolah} berhasil diarsipkan secara langsung.");
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Error archiving BarangQrCode (ID: {$barangQrCode->id}): {$e->getMessage()}");
@@ -953,7 +973,7 @@ class BarangQrCodeController extends Controller
         }
 
         $validated = $request->validate([
-            'id_ruangan_tujuan' => ['required', 'exists:ruangans,id', Rule::notIn([$barangQrCode->id_ruangan])],
+            'id_ruangan_tujuan' => ['required', 'exists:ruangans,id', \Illuminate\Validation\Rule::notIn([$barangQrCode->id_ruangan])],
             'alasan_pemindahan' => 'required|string|max:1000',
             'surat_pemindahan_path' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:2048',
         ], ['id_ruangan_tujuan.not_in' => 'Ruangan tujuan tidak boleh sama dengan ruangan saat ini.']);
@@ -964,42 +984,82 @@ class BarangQrCodeController extends Controller
             $ruanganAsalIdSebelum = $barangQrCode->id_ruangan;
             $aktivitasLog = "";
             $deskripsiLog = "";
+            $userActor = Auth::user(); // User yang melakukan mutasi
+
+            $mutasiRecord = null; // Inisialisasi variabel untuk objek MutasiBarang yang sebenarnya
 
             // Logika untuk Penempatan (jika barang mengambang)
             if ($ruanganAsalIdSebelum === null) {
                 $barangQrCode->id_ruangan = $ruanganTujuan->id;
-                $barangQrCode->save();
+                $barangQrCode->save(); // Simpan perubahan lokasi
                 $aktivitasLog = 'Penempatan Unit Barang';
                 $deskripsiLog = "Menempatkan unit {$barangQrCode->kode_inventaris_sekolah} ke ruangan {$ruanganTujuan->nama_ruangan}.";
+
+                // Pada skenario penempatan awal, kita perlu membuat objek MutasiBarang "minimal"
+                // agar notifikasi BarangMutated bisa bekerja. Kita tidak menyimpannya ke DB.
+                $mutasiRecord = new MutasiBarang();
+                $mutasiRecord->id_barang_qr_code = $barangQrCode->id;
+                $mutasiRecord->id_ruangan_asal = null; // Asal null
+                $mutasiRecord->id_ruangan_tujuan = $ruanganTujuan->id;
+                $mutasiRecord->tanggal_mutasi = now();
+                $mutasiRecord->alasan_pemindahan = "Penempatan awal: {$validated['alasan_pemindahan']}";
+                $mutasiRecord->id_user_admin = $userActor->id;
+                // Tidak perlu $mutasiRecord->save() di sini, karena ini bukan record mutasi_barangs yang sebenarnya
+
+                // Kirim notifikasi ke operator ruangan tujuan
+                if (optional($ruanganTujuan->operator)->id) {
+                    $ruanganTujuan->operator->notify(new BarangMutated($mutasiRecord, $userActor));
+                }
             }
-            // Logika untuk Mutasi (jika barang sudah punya ruangan)
+            // Logika untuk Mutasi Sejati (dari ruangan A ke ruangan B)
             else {
-                $suratPath = $request->hasFile('surat_pemindahan_path') ? $request->file('surat_pemindahan_path')->store('mutasi/dokumen_unit', 'public') : null;
-                $mutasi = MutasiBarang::create([
+                $suratPath = $request->hasFile('surat_pemindahan_path') ?
+                    $request->file('surat_pemindahan_path')->store('mutasi/dokumen_unit', 'public') : null;
+
+                $mutasiRecord = MutasiBarang::create([ // Record MutasiBarang yang sebenarnya
                     'id_barang_qr_code' => $barangQrCode->id,
                     'id_ruangan_asal' => $ruanganAsalIdSebelum,
                     'id_ruangan_tujuan' => $ruanganTujuan->id,
                     'alasan_pemindahan' => $validated['alasan_pemindahan'],
                     'surat_pemindahan_path' => $suratPath,
-                    'id_user_admin' => $userPencatat->id,
+                    'id_user_admin' => $userActor->id,
                 ]);
                 // Event 'created' di model MutasiBarang akan mengupdate lokasi BarangQrCode
                 $aktivitasLog = 'Mutasi Unit Barang';
-                $deskripsiLog = "Memutasi unit {$barangQrCode->kode_inventaris_sekolah} dari '{$mutasi->ruanganAsal->nama_ruangan}' ke '{$ruanganTujuan->nama_ruangan}'.";
+                $deskripsiLog = "Memutasi unit {$barangQrCode->kode_inventaris_sekolah} dari '{$mutasiRecord->ruanganAsal->nama_ruangan}' ke '{$ruanganTujuan->nama_ruangan}'.";
+
+                // --- TAMBAHKAN KODE INI UNTUK MENGIRIM NOTIFIKASI ---
+                // Kirim notifikasi ke operator ruangan asal (jika ada)
+                $ruanganAsal = Ruangan::find($ruanganAsalIdSebelum);
+                if (optional($ruanganAsal->operator)->id) {
+                    $ruanganAsal->operator->notify(new BarangMutated($mutasiRecord, $userActor));
+                }
+                // Kirim notifikasi ke operator ruangan tujuan (jika ada dan berbeda dari asal)
+                if (optional($ruanganTujuan->operator)->id && $ruanganTujuan->operator->id !== optional($ruanganAsal->operator)->id) {
+                    $ruanganTujuan->operator->notify(new BarangMutated($mutasiRecord, $userActor));
+                }
+                // Kirim notifikasi ke Admin (selalu, kecuali Admin yang melakukan mutasi itu sendiri)
+                $admins = User::where('role', User::ROLE_ADMIN)->get();
+                foreach ($admins as $admin) {
+                    if ($admin->id !== $userActor->id) { // Jangan notifikasi diri sendiri
+                        $admin->notify(new BarangMutated($mutasiRecord, $userActor));
+                    }
+                }
+                // --- AKHIR KODE NOTIFIKASI ---
             }
 
+            // Log Aktivitas
             LogAktivitas::create([
-                'id_user' => $userPencatat->id,
+                'id_user' => $userActor->id,
                 'aktivitas' => $aktivitasLog,
                 'deskripsi' => $deskripsiLog,
-                'model_terkait' => BarangQrCode::class,
+                'model_terkait' => BarangQrCode::class, // Model terkait adalah BarangQrCode
                 'id_model_terkait' => $barangQrCode->id,
                 'data_lama' => json_encode(['id_ruangan' => $ruanganAsalIdSebelum]),
-                'data_baru' => json_encode(['id_ruangan' => $ruanganTujuan->id]),
+                'data_baru' => json_encode(['id_ruangan' => $barangQrCode->id_ruangan]), // Setelah disimpan oleh MutasiBarang event atau langsung
                 'ip_address' => $request->ip(),
                 'user_agent' => $request->userAgent(),
             ]);
-
             DB::commit();
             return redirect($this->getRedirectUrl("barang-qr-code/{$barangQrCode->id}"))
                 ->with('success', "Unit barang berhasil ditempatkan/dipindahkan ke: {$ruanganTujuan->nama_ruangan}");

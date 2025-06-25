@@ -5,9 +5,13 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
 // Jadwalkan command di sini
-Schedule::command('check:overdue-peminjaman')->twiceDaily(8, 20);
+//Schedule::command('check:overdue-peminjaman')->twiceDaily(8, 20);
 // Atau untuk testing:
 //Schedule::command('check:overdue-peminjaman')->everyMinute();
+
+
+Schedule::command('peminjaman:check-status')->dailyAt('04:00');
+
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());

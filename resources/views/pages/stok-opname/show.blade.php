@@ -130,31 +130,57 @@
                                 <th>No. Seri</th>
                                 <th class="text-center">Kondisi Tercatat</th>
                                 <th style="width: 18%;">Kondisi Fisik <span class="text-danger">*</span></th>
-                                <th style="width: 25%;">Catatan Fisik</th>
+                                <th style="width: 20%;">Catatan Fisik</th>
+                                {{-- KOLOM BARU --}}
+                                <th class="text-center" style="width: 10%;">Waktu Periksa</th>
                                 <th class="text-center" style="width: 8%;">Aksi</th>
                             </tr>
                         </thead>
                         <tbody id="detail-stok-opname-body">
-                            @forelse ($stokOpname->detailStokOpname as $index => $detail)
-                               
-                                {{-- Memanggil file partial untuk setiap baris --}}
+                            @forelse ($detailItems as $index => $detail)
+                                {{-- Memanggil file partial yang sudah diperbarui --}}
                                 @include('pages.stok-opname._item_detail_row', [
                                     'detail' => $detail,
                                     'index' => $index,
                                     'stokOpname' => $stokOpname,
                                     'kondisiFisikList' => $kondisiFisikList,
+                                    'rolePrefix' => $rolePrefix,
                                 ])
                             @empty
-
                                 <tr>
-                                    <td colspan="8" class="text-center">Belum ada unit barang dalam sesi stok opname
-                                        ini.
+                                    <td colspan="9" class="text-center">Belum ada unit barang dalam sesi stok opname ini.
                                     </td>
                                 </tr>
                             @endforelse
                         </tbody>
                     </table>
                 </div>
+
+                {{-- FORM BARU UNTUK CATATAN PENGERJAAN --}}
+                @can('processDetails', $stokOpname)
+                    @if ($stokOpname->status === StokOpname::STATUS_DRAFT && !$stokOpname->trashed())
+                        <hr>
+                        <form action="{{ route($rolePrefix . 'stok-opname.updateCatatan', $stokOpname->id) }}" method="POST">
+                            @csrf
+                            @method('PUT')
+                            <div class="row">
+                                <div class="col-12">
+                                    <div class="mb-3">
+                                        <label for="catatan_pengerjaan" class="form-label fw-bold">
+                                            Catatan Pengerjaan / Ringkasan Hasil
+                                        </label>
+                                        <textarea class="form-control" id="catatan_pengerjaan" name="catatan_pengerjaan" rows="3"
+                                            placeholder="Tuliskan ringkasan hasil pemeriksaan di sini... Contoh: Pemeriksaan selesai. Ditemukan 1 unit hilang dan 2 unit dalam kondisi kurang baik.">{{ old('catatan_pengerjaan', $stokOpname->catatan_pengerjaan) }}</textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-info btn-sm">
+                                        <i class="fas fa-save me-1"></i> Simpan Catatan
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    @endif
+                @endcan
+
             </div>
             <div class="card-footer text-end">
                 <a href="{{ route($rolePrefix . 'stok-opname.index') }}" class="btn btn-outline-secondary">Kembali ke
@@ -164,14 +190,14 @@
                     @can('cancel', $stokOpname)
                         <button type="button" class="btn btn-danger btn-cancel-so" data-id="{{ $stokOpname->id }}"
                             data-ruangan="{{ $stokOpname->ruangan->nama_ruangan }}"
-                            data-tanggal="{{ \Carbon\Carbon::parse($stokOpname->tanggal_opname)->isoFormat('DD MMM YYYY') }}">
+                            data-tanggal="{{ \Carbon\Carbon::parse($stokOpname->tanggal_opname)->isoFormat('DD MMM煨') }}">
                             <i class="fas fa-times-circle me-1"></i> Batalkan Sesi SO
                         </button>
                     @endcan
                     @can('finalize', $stokOpname)
-                        <button type="button" class="btn btn-primary btn-finalize-so" data-id="{{ $stokOpname->id }}"
-                            data-ruangan="{{ $stokOpname->ruangan->nama_ruangan }}"
-                            data-tanggal="{{ \Carbon\Carbon::parse($stokOpname->tanggal_opname)->isoFormat('DD MMM YYYY') }}">
+                        {{-- Tombol Finalisasi sekarang hanya memicu modal, tidak lagi punya form sendiri --}}
+                        <button type="button" class="btn btn-primary btn-finalize-so" data-bs-toggle="modal"
+                            data-bs-target="#modalFinalizeStokOpname">
                             <i class="fas fa-check-circle me-1"></i> Finalisasi & Proses Hasil SO
                         </button>
                     @endcan
@@ -180,11 +206,47 @@
         </div>
     </div>
 
+    {{-- MODAL DIALOGS --}}
+
+    @can('finalize', $stokOpname)
+        <div class="modal fade" id="modalFinalizeStokOpname" tabindex="-1" aria-labelledby="modalFinalizeLabel"
+            aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalFinalizeLabel">Finalisasi Sesi Stok Opname</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    {{-- Form finalisasi sekarang tidak perlu input catatan --}}
+                    <form id="formFinalizeStokOpname" method="POST"
+                        action="{{ route($rolePrefix . 'stok-opname.finalize', $stokOpname->id) }}">
+                        @csrf
+                        <div class="modal-body">
+                            <p>
+                                Anda akan menyelesaikan sesi stok opname untuk ruangan:
+                                <strong>{{ $stokOpname->ruangan->nama_ruangan }}</strong>.
+                            </p>
+                            <p class="text-danger">
+                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                Tindakan ini tidak dapat diurungkan. Sistem akan memproses semua hasil pemeriksaan fisik.
+                                Pastikan semua item telah diperiksa.
+                            </p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                            <button type="submit" class="btn btn-success">Ya, Finalisasi Sekarang</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    @endcan
+
     {{-- Modal Tambah Barang Temuan --}}
     @if ($stokOpname->status === StokOpname::STATUS_DRAFT && !$stokOpname->trashed())
         @can('processDetails', $stokOpname)
-            <div class="modal fade" id="modalTambahBarangTemuan" tabindex="-1" aria-labelledby="modalTambahBarangTemuanLabel"
-                aria-hidden="true">
+            <div class="modal fade" id="modalTambahBarangTemuan" tabindex="-1"
+                aria-labelledby="modalTambahBarangTemuanLabel" aria-hidden="true">
                 <div class="modal-dialog modal-lg">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -479,22 +541,17 @@
              * Memasang semua event listener yang diperlukan.
              */
             function attachAllEventHandlers() {
-                // Gunakan $(document).off().on() untuk event delegation yang aman dari duplikasi
                 $(document)
                     .off('click', '.btn-save-detail')
                     .on('click', '.btn-save-detail', function() {
                         saveDetailRow($(this));
                     });
 
-                $(document)
-                    .off('click', '.btn-finalize-so')
-                    .on('click', '.btn-finalize-so', handleFinalize);
 
                 $(document)
                     .off('click', '.btn-cancel-so')
                     .on('click', '.btn-cancel-so', handleCancel);
 
-                // Event handler ini sudah benar karena menargetkan elemen unik
                 $('#id_barang_induk_temuan').off('change').on('change', toggleNoSeriInput).trigger('change');
                 $('#search_kode_inventaris_temuan').off('select2:select select2:unselect select2:clear').on(
                     'select2:select', handleSelectExistingItem).on('select2:unselect select2:clear',
@@ -517,6 +574,8 @@
             /**
              * Logika untuk menyimpan perubahan pada satu baris detail.
              */
+            // Replace the saveDetailRow function in your JavaScript code with this fixed version:
+
             function saveDetailRow($button) {
                 const detailId = $button.data('detail-id');
                 const $row = $(`#row-detail-${detailId}`);
@@ -532,11 +591,12 @@
                 $button.html(`<span class="spinner-border spinner-border-sm"></span>`).prop('disabled', true);
 
                 $.ajax({
-                    url: "{{ route($rolePrefix . 'stok-opname.updateDetail', ['stokOpname' => $stokOpname->id, 'detail' => ':detailId']) }}"
+                    // The fix is applied here: 'detail' is changed to 'detailId'
+                    url: "{{ route($rolePrefix . 'stok-opname.updateDetail', ['detail' => ':detailId']) }}"
                         .replace(':detailId', detailId),
                     method: 'PUT',
                     headers: {
-                        'X-CSRF-TOKEN': csrfToken,
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
@@ -550,6 +610,11 @@
                                 icon: 'success',
                                 title: data.message || 'Data berhasil disimpan'
                             });
+
+                            if (data.waktu_diperiksa) {
+                                $(`#waktu-periksa-${detailId}`).text(data.waktu_diperiksa);
+                            }
+
                             $row.addClass('table-success');
                             setTimeout(() => $row.removeClass('table-success'), 2500);
                         } else {
@@ -775,31 +840,7 @@
                 });
             }
 
-            /**
-             * Handle finalisasi stok opname
-             */
-            function handleFinalize() {
-                const ruangan = $(this).data('ruangan');
-                const tanggal = $(this).data('tanggal');
 
-                Swal.fire({
-                    title: 'Finalisasi Stok Opname?',
-                    html: `Anda akan memfinalisasi stok opname untuk:<br><strong>${ruangan}</strong><br>Tanggal: ${tanggal}<br><br>Data tidak dapat diubah lagi setelah difinalisasi!`,
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#3085d6',
-                    cancelButtonColor: '#d33',
-                    confirmButtonText: 'Ya, Finalisasi!',
-                    cancelButtonText: 'Batal'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        const form = $('#formFinalizeStokOpname');
-                        form.attr('action',
-                            "{{ route($rolePrefix . 'stok-opname.finalize', $stokOpname->id) }}");
-                        form.submit();
-                    }
-                });
-            }
 
             /**
              * Handle pembatalan stok opname

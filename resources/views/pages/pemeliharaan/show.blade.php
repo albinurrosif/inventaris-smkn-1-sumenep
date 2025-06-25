@@ -4,14 +4,109 @@
 
 @push('styles')
     <style>
+        /* CSS untuk Progress Tracker */
+        .progress-tracker {
+            display: flex;
+            justify-content: space-between;
+            list-style: none;
+            padding: 0;
+            margin: 0 0 1.5rem 0;
+        }
+
+        .progress-step {
+            text-align: center;
+            position: relative;
+            width: 100%;
+            transition: all 0.3s ease;
+        }
+
+        .progress-step .progress-marker {
+            height: 2.5rem;
+            width: 2.5rem;
+            border-radius: 50%;
+            background-color: #e9ecef;
+            border: 3px solid #dee2e6;
+            margin: 0 auto 0.5rem auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            color: #495057;
+            transition: all 0.3s ease;
+        }
+
+        .progress-step .progress-label {
+            font-size: 0.8rem;
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .progress-step .progress-line {
+            position: absolute;
+            top: 1.25rem;
+            /* Setengah dari tinggi marker */
+            left: -50%;
+            right: 50%;
+            height: 3px;
+            background-color: #dee2e6;
+            z-index: -1;
+            transition: all 0.3s ease;
+        }
+
+        .progress-step:first-child .progress-line {
+            display: none;
+        }
+
+        /* Status Aktif dan Selesai */
+        .progress-step.is-complete .progress-marker {
+            background-color: #198754;
+            /* success */
+            border-color: #198754;
+            color: white;
+        }
+
+        .progress-step.is-complete .progress-label {
+            color: #212529;
+            font-weight: 600;
+        }
+
+        .progress-step.is-complete .progress-line {
+            background-color: #198754;
+        }
+
+        .progress-step.is-active .progress-marker {
+            background-color: #0dcaf0;
+            /* info */
+            border-color: #0dcaf0;
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .progress-step.is-active .progress-label {
+            color: #0dcaf0;
+            font-weight: 700;
+        }
+
+        /* Status Ditolak */
+        .progress-step.is-rejected .progress-marker {
+            background-color: #dc3545;
+            /* danger */
+            border-color: #dc3545;
+            color: white;
+        }
+
+        .progress-step.is-rejected .progress-label {
+            color: #dc3545;
+            font-weight: 700;
+        }
+
+        .progress-step.is-rejected~.progress-step .progress-line {
+            background-color: #dee2e6;
+        }
+
         .detail-label {
             font-weight: 600;
             color: #555;
-        }
-
-        .badge-status {
-            font-size: 0.9rem;
-            padding: 0.4em 0.7em;
         }
 
         .card-item-detail {
@@ -37,8 +132,7 @@
                         <ol class="breadcrumb m-0">
                             <li class="breadcrumb-item"><a href="{{ route('redirect-dashboard') }}">Dashboard</a></li>
                             <li class="breadcrumb-item"><a
-                                    href="{{ route($rolePrefix . 'pemeliharaan.index', request()->query()) }}">Pemeliharaan</a>
-                            </li>
+                                    href="{{ route($rolePrefix . 'pemeliharaan.index') }}">Pemeliharaan</a></li>
                             <li class="breadcrumb-item active">Detail Laporan</li>
                         </ol>
                     </div>
@@ -47,416 +141,408 @@
         </div>
 
         <div class="row">
-            {{-- Kolom Kiri: Detail Unit Barang & Aksi Cepat --}}
+            {{-- Kolom Kiri: Detail Unit & Aksi Cepat --}}
             <div class="col-xl-4 col-lg-5">
-                {{-- Tampilkan form persetujuan HANYA jika user adalah Admin & status masih Diajukan --}}
-                {{-- Gunakan 'process' ability yang lebih spesifik untuk Admin --}}
-                @can('process', $pemeliharaan)
-                    @if ($pemeliharaan->status_pengajuan === 'Diajukan')
-                        <!-- Card Persetujuan Admin -->
-                        <div class="card border-primary mb-4"> <!-- Tambah margin-bottom -->
-                            <div class="card-header bg-primary text-white">
-                                <h5 class="card-title mb-0 text-white"><i class="fas fa-check-double me-2"></i>Form Persetujuan
-                                    (Admin)</h5>
-                            </div>
-                            <div class="card-body">
-                                {{-- Display Success Message --}}
-                                @if (session('success'))
-                                    <div class="alert alert-success alert-dismissible fade show" role="alert">
-                                        {{ session('success') }}
-                                        <button type="button" class="btn-close" data-bs-dismiss="alert"
-                                            aria-label="Close"></button>
-                                    </div>
-                                @endif
 
-                                {{-- Display Error Message --}}
-                                @if (session('error'))
-                                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                                        {{ session('error') }}
-                                        <button type="button" class="btn-close" data-bs-dismiss="alert"
-                                            aria-label="Close"></button>
-                                    </div>
-                                @endif
-
-                                {{-- Display Validation Errors --}}
-                                @if ($errors->any())
-                                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                                        <strong>Terjadi Kesalahan Validasi:</strong>
-                                        <ul class="mb-0">
-                                            @foreach ($errors->all() as $error)
-                                                <li>{{ $error }}</li>
-                                            @endforeach
-                                        </ul>
-                                        <button type="button" class="btn-close" data-bs-dismiss="alert"
-                                            aria-label="Close"></button>
-                                    </div>
-                                @endif
-
-                                <form id="form-approval" action="{{ route('admin.pemeliharaan.update', $pemeliharaan->id) }}"
-                                    method="POST">
-                                    @csrf
-                                    @method('PUT')
-
-                                    <div class="mb-3">
-                                        <label for="id_operator_pengerjaan" class="form-label">Tugaskan PIC (Penanggung
-                                            Jawab)</label>
-                                        <select name="id_operator_pengerjaan" id="id_operator_pengerjaan"
-                                            class="form-select select2-pic @error('id_operator_pengerjaan') is-invalid @enderror">
-                                            <option value="">-- Pilih Operator --</option>
-                                            @foreach ($picList as $pic)
-                                                <option value="{{ $pic->id }}"
-                                                    {{ old('id_operator_pengerjaan') == $pic->id ? 'selected' : '' }}>
-                                                    {{ $pic->username }} ({{ $pic->role }})
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                        @error('id_operator_pengerjaan')
-                                            <div class="invalid-feedback">{{ $message }}</div>
-                                        @enderror
-                                        <small class="form-text text-muted">PIC wajib diisi jika laporan disetujui.</small>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label for="catatan_persetujuan" class="form-label">Catatan Persetujuan/Penolakan
-                                            (Opsional)</label>
-                                        <textarea name="catatan_persetujuan" id="catatan_persetujuan"
-                                            class="form-control @error('catatan_persetujuan') is-invalid @enderror" rows="3"
-                                            placeholder="Contoh: Setuju, segera proses.">{{ old('catatan_persetujuan') }}</textarea>
-                                        @error('catatan_persetujuan')
-                                            <div class="invalid-feedback">{{ $message }}</div>
-                                        @enderror
-                                    </div>
-
-                                    <div class="d-flex justify-content-end gap-2">
-                                        <button type="button" id="btn-tolak" class="btn btn-danger">
-                                            <i class="fas fa-times me-1"></i> Tolak Laporan
-                                        </button>
-                                        <button type="button" id="btn-setujui" class="btn btn-success">
-                                            <i class="fas fa-check me-1"></i> Setujui & Tugaskan
-                                        </button>
-                                    </div>
-
-                                    {{-- Hidden input for status --}}
-                                    <input type="hidden" name="status_pengajuan" id="status_pengajuan_input">
-                                    <input type="hidden" name="tanggal_persetujuan" value="{{ now()->format('Y-m-d') }}">
-                                </form>
-                            </div>
-                        </div>
-                    @endif
-                @endcan
-
-                <!-- Grid System untuk mengatur layout -->
-                <div class="row">
-
-                    <!-- Card Detail Unit Barang -->
-                    <div class="card mb-4"> <!-- Tambah margin-bottom -->
-                        <div class="card-header">
-                            <h5 class="card-title mb-0"><i class="fas fa-box me-2"></i>Detail Unit Barang</h5>
-                        </div>
-                        <div class="card-body">
-                            @if ($pemeliharaan->barangQrCode)
-                                @php $barangQr = $pemeliharaan->barangQrCode; @endphp
-                                <p class="mb-2"><span class="detail-label">Kode Inventaris Unit:</span>
-                                    <a href="{{ route($rolePrefix . 'barang-qr-code.show', $barangQr->id) }}"
-                                        target="_blank">
-                                        <code>{{ $barangQr->kode_inventaris_sekolah }}</code>
-                                    </a>
-                                </p>
-                                <p class="mb-2"><span class="detail-label">Nama Barang:</span>
-                                    {{ optional($barangQr->barang)->nama_barang ?? 'N/A' }}</p>
-                                <p class="mb-2"><span class="detail-label">No. Seri:</span>
-                                    {{ $barangQr->no_seri_pabrik ?: '-' }}</p>
-                                <p class="mb-2"><span class="detail-label">Lokasi/Pemegang:</span>
-                                    {{ optional($barangQr->ruangan)->nama_ruangan ?? (optional($barangQr->pemegangPersonal)->username ? 'Dipegang: ' . $barangQr->pemegangPersonal->username : 'Tidak Diketahui') }}
-                                </p>
-                                <p class="mb-2"><span class="detail-label">Kondisi:</span>
-                                    <span
-                                        class="badge {{ \App\Models\BarangQrCode::getKondisiColor($barangQr->kondisi) }}">{{ $barangQr->kondisi }}</span>
-                                </p>
-                                <p class="mb-0"><span class="detail-label">Status:</span>
-                                    <span
-                                        class="badge {{ \App\Models\BarangQrCode::getStatusColor($barangQr->status) }}">{{ $barangQr->status }}</span>
-                                </p>
-                            @else
-                                <p class="text-danger">Data unit barang tidak ditemukan (mungkin terhapus permanen).</p>
-                            @endif
-                        </div>
+                {{-- CARD DETAIL UNIT BARANG (TIDAK BERUBAH) --}}
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><i class="fas fa-box me-2"></i>Detail Unit Barang</h5>
+                    </div>
+                    <div class="card-body">
+                        @if ($pemeliharaan->barangQrCode)
+                            @php $barangQr = $pemeliharaan->barangQrCode; @endphp
+                            <p class="mb-2"><span class="detail-label">Kode Inventaris:</span>
+                                <a href="{{ route($rolePrefix . 'barang-qr-code.show', $barangQr->id) }}" target="_blank">
+                                    <code>{{ $barangQr->kode_inventaris_sekolah }}</code>
+                                </a>
+                            </p>
+                            <p class="mb-2"><span class="detail-label">Nama Barang:</span>
+                                {{ optional($barangQr->barang)->nama_barang ?? 'N/A' }}</p>
+                            <p class="mb-2"><span class="detail-label">No. Seri:</span>
+                                {{ $barangQr->no_seri_pabrik ?: '-' }}</p>
+                            <p class="mb-2"><span class="detail-label">Kondisi Saat Lapor:</span>
+                                <span
+                                    class="badge bg-{{ \App\Models\BarangQrCode::getKondisiColor($barangQr->getOriginal('kondisi')) }}">{{ $barangQr->getOriginal('kondisi') }}</span>
+                            </p>
+                            <p class="mb-0"><span class="detail-label">Status Saat Lapor:</span>
+                                <span
+                                    class="badge bg-{{ \App\Models\BarangQrCode::getStatusColor($barangQr->getOriginal('status')) }}">{{ $barangQr->getOriginal('status') }}</span>
+                            </p>
+                        @else
+                            <p class="text-danger">Data unit barang tidak ditemukan.</p>
+                        @endif
                     </div>
                 </div>
 
-                {{-- Aksi hanya untuk yang punya hak akses dan jika laporan belum diarsipkan --}}
+                {{-- CARD AKSI DINAMIS --}}
                 @if (!$pemeliharaan->trashed())
-                    <div class="card mb-4"> <!-- Tambah margin-bottom -->
+                    <div class="card mb-4">
                         <div class="card-header">
-                            <h5 class="card-title mb-0"><i class="fas fa-bolt me-2"></i>Aksi</h5>
+                            <h5 class="card-title mb-0"><i class="fas fa-bolt me-2"></i>Tindakan & Aksi</h5>
                         </div>
                         <div class="card-body">
-                            @can('update', $pemeliharaan)
-                                <a href="{{ route($rolePrefix . 'pemeliharaan.edit', $pemeliharaan->id) }}"
-                                    class="btn btn-warning w-100 mb-2">
-                                    <i class="fas fa-edit me-2"></i>Edit / Proses Laporan
-                                </a>
-                            @endcan
-                            @can('delete', $pemeliharaan)
-                                <button type="button" class="btn btn-danger w-100 btn-delete-pemeliharaan-show"
-                                    data-id="{{ $pemeliharaan->id }}"
-                                    data-deskripsi="{{ Str::limit($pemeliharaan->catatan_pengajuan, 30) }}">
-                                    <i class="fas fa-archive me-2"></i>Arsipkan Laporan Ini
-                                </button>
-                            @endcan
+
+                            {{-- FORM PERSETUJUAN --}}
+                            @if ($pemeliharaan->status === 'Diajukan')
+                                @can('approveOrReject', $pemeliharaan)
+                                    <form id="form-approval" method="POST">
+                                        @csrf
+                                        <div class="mb-3">
+                                            <label for="id_operator_pengerjaan" class="form-label fw-bold">Tugaskan PIC <span
+                                                    class="text-danger">*</span></label>
+                                            <select name="id_operator_pengerjaan" id="id_operator_pengerjaan"
+                                                class="form-select @error('id_operator_pengerjaan') is-invalid @enderror">
+                                                <option value="">-- Pilih Operator --</option>
+                                                @foreach ($picList as $pic)
+                                                    <option value="{{ $pic->id }}">{{ $pic->username }}</option>
+                                                @endforeach
+                                            </select>
+                                            @error('id_operator_pengerjaan')
+                                                <div class="invalid-feedback d-block">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="catatan-approval" class="form-label fw-bold">Catatan
+                                                Persetujuan/Penolakan</label>
+                                            <textarea id="catatan-approval" class="form-control" rows="3" placeholder="Isi catatan jika perlu..."></textarea>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button type="button" id="btn-tolak" class="btn btn-danger w-100">Tolak</button>
+                                            <button type="button" id="btn-setujui"
+                                                class="btn btn-success w-100">Setujui</button>
+                                        </div>
+                                    </form>
+                                @else
+                                    <p class="text-muted fst-italic">Menunggu persetujuan dari Admin.</p>
+                                @endcan
+
+                                {{-- FORM MULAI PERBAIKAN --}}
+                            @elseif($pemeliharaan->status === 'Disetujui')
+                                @can('startWork', $pemeliharaan)
+                                    <p class="text-muted mb-2">Laporan telah disetujui. Klik tombol di bawah jika Anda sudah
+                                        menerima unit fisik dan siap memulai perbaikan.</p>
+                                    <form action="{{ route($rolePrefix . 'pemeliharaan.startWork', $pemeliharaan->id) }}"
+                                        method="POST" id="form-start-work">
+                                        @csrf
+                                        <button class="btn btn-primary w-100" type="submit"><i class="fas fa-play me-1"></i>
+                                            Terima Barang & Mulai Perbaikan</button>
+                                    </form>
+                                @else
+                                    <p class="text-muted fst-italic">Laporan disetujui. Menunggu PIC memulai perbaikan.</p>
+                                @endcan
+
+                                {{-- FORM SELESAIKAN PEKERJAAN --}}
+                            @elseif($pemeliharaan->status === 'Dalam Perbaikan')
+                                @can('completeWork', $pemeliharaan)
+                                    <form action="{{ route($rolePrefix . 'pemeliharaan.completeWork', $pemeliharaan->id) }}"
+                                        method="POST">
+                                        @csrf
+                                        <div class="mb-3">
+                                            <label for="tindakan_yang_dilakukan" class="form-label fw-bold">Tindakan Yang
+                                                Dilakukan <span class="text-danger">*</span></label>
+                                            <textarea name="tindakan_yang_dilakukan" class="form-control" rows="3" required></textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="hasil_pemeliharaan" class="form-label fw-bold">Hasil Akhir <span
+                                                    class="text-danger">*</span></label>
+                                            <input type="text" name="hasil_pemeliharaan" class="form-control" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="kondisi_barang_setelah_pemeliharaan" class="form-label fw-bold">Kondisi
+                                                Barang Setelah Perbaikan <span class="text-danger">*</span></label>
+                                            <select name="kondisi_barang_setelah_pemeliharaan" class="form-select" required>
+                                                @foreach (\App\Models\BarangQrCode::getValidKondisi() as $kondisi)
+                                                    <option value="{{ $kondisi }}">{{ $kondisi }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="biaya" class="form-label fw-bold">Biaya Perbaikan (Rp)</label>
+                                            <input type="number" name="biaya" class="form-control" value="0"
+                                                min="0">
+                                        </div>
+                                        <button type="submit" class="btn btn-success w-100"><i
+                                                class="fas fa-check-double me-1"></i> Selesaikan Pekerjaan</button>
+                                    </form>
+                                @else
+                                    <p class="text-muted fst-italic">Barang sedang dalam proses perbaikan oleh PIC.</p>
+                                @endcan
+                            @else
+                                <p class="text-muted">Tidak ada aksi yang tersedia untuk status
+                                    '{{ $pemeliharaan->status }}'.</p>
+                            @endif
+
                         </div>
                     </div>
                 @endif
-
-                {{-- Info jika laporan sudah diarsipkan --}}
-                <!-- Kolom Kanan - Arsip/Notifikasi -->
-                <div class="col-md-6">
-                    @if ($pemeliharaan->trashed())
-                        <div class="card bg-light mb-4"> <!-- Tambah margin-bottom -->
-                            <div class="card-body">
-                                <h5 class="card-title text-dark"><i class="fas fa-archive me-2 text-warning"></i>Laporan
-                                    Diarsipkan</h5>
-                                <p>Laporan ini telah diarsipkan pada
-                                    {{ $pemeliharaan->deleted_at->isoFormat('DD MMMM YYYY') }}.</p>
-                                @can('restore', $pemeliharaan)
-                                    <form action="{{ route('admin.pemeliharaan.restore', $pemeliharaan->id) }}"
-                                        method="POST" class="d-inline form-restore-pemeliharaan-show">
-                                        @csrf
-                                        <button type="submit" class="btn btn-success w-100 btn-restore"><i
-                                                class="fas fa-undo me-2"></i>Pulihkan Laporan</button>
-                                    </form>
-                                @endcan
-                            </div>
-                        </div>
-                    @endif
-                </div>
             </div>
 
-            {{-- Kolom Kanan: Detail Laporan Pemeliharaan --}}
+            {{-- Kolom Kanan: Detail Laporan & Progres --}}
             <div class="col-xl-8 col-lg-7">
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="card-title mb-0">Rincian Laporan & Progres</h5>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0">Rincian Laporan & Progres</h5>
+                            <span
+                                class="badge fs-6 bg-{{ $pemeliharaan->status_color }}">{{ $pemeliharaan->status }}</span>
+                        </div>
                     </div>
                     <div class="card-body">
-                        {{-- Bagian Pengajuan --}}
-                        <div class="d-flex">
-                            <div class="flex-shrink-0 me-3"><i class="fas fa-flag text-primary fs-4"></i></div>
-                            <div class="flex-grow-1">
-                                <h6 class="mb-1">Pengajuan Laporan</h6>
-                                <p class="text-muted mb-2">Diajukan oleh
-                                    <strong>{{ optional($pemeliharaan->pengaju)->username ?? 'N/A' }}</strong> pada
-                                    {{ $pemeliharaan->tanggal_pengajuan->isoFormat('dddd, DD MMMM YYYY') }}
-                                </p>
-                                <div class="p-3 card-item-detail">
-                                    <p class="detail-label mb-1">Deskripsi Kerusakan/Keluhan:</p>
-                                    <p class="mb-0">{{ $pemeliharaan->catatan_pengajuan ?: '-' }}</p>
-                                </div>
-                                @if ($pemeliharaan->foto_kerusakan_path)
-                                    <div class="p-3 card-item-detail mt-2">
-                                        <p class="detail-label mb-1">Foto Bukti Kerusakan:</p>
-                                        <a href="{{ asset('storage/' . $pemeliharaan->foto_kerusakan_path) }}"
-                                            target="_blank">
-                                            <img src="{{ asset('storage/' . $pemeliharaan->foto_kerusakan_path) }}"
-                                                alt="Foto Kerusakan" class="img-fluid rounded"
-                                                style="max-height: 200px;">
-                                        </a>
-                                    </div>
-                                @endif
-                            </div>
-                        </div>
-                        <hr>
-                        {{-- Bagian Persetujuan --}}
-                        <div class="d-flex">
-                            <div class="flex-shrink-0 me-3"><i class="fas fa-user-check text-success fs-4"></i>
-                            </div>
-                            <div class="flex-grow-1">
-                                <h6 class="mb-1">Tahap Persetujuan</h6>
-                                <p class="text-muted mb-2">Status: <span
-                                        class="badge badge-status bg-{{ \App\Models\Pemeliharaan::statusColor($pemeliharaan->status_pengajuan) }}">{{ $pemeliharaan->status_pengajuan }}
-                                    </span>
-                                </p>
-                                @if ($pemeliharaan->id_user_penyetuju)
-                                    <p class="text-muted mb-2">Diproses oleh
-                                        <strong>{{ optional($pemeliharaan->penyetuju)->username ?? 'N/A' }}</strong>
-                                        pada
-                                        {{ optional($pemeliharaan->tanggal_persetujuan)->isoFormat('DD MMM YYYY') }}
-                                    </p>
-                                @endif
-                                @if ($pemeliharaan->catatan_persetujuan)
-                                    <div class="p-3 card-item-detail">
-                                        <p class="detail-label mb-1">Catatan Persetujuan/Penolakan:</p>
-                                        <p class="mb-0">{{ $pemeliharaan->catatan_persetujuan }}</p>
-                                    </div>
-                                @endif
-                            </div>
-                        </div>
-                        <hr>
-                        {{-- Bagian Pengerjaan --}}
-                        <div class="d-flex">
-                            <div class="flex-shrink-0 me-3"><i class="fas fa-cogs text-warning fs-4"></i></div>
-                            <div class="flex-grow-1">
-                                <h6 class="mb-1">Tahap Pengerjaan</h6>
-                                <p class="text-muted mb-2">Status: <span
-                                        class="badge badge-status bg-{{ \App\Models\Pemeliharaan::statusColor($pemeliharaan->status_pengerjaan) }}">{{ $pemeliharaan->status_pengerjaan }}</span>
-                                </p>
-                                <p class="text-muted mb-2">Penanggung Jawab (PIC):
-                                    <strong>{{ optional($pemeliharaan->operatorPengerjaan)->username ?? 'Belum Ditentukan' }}</strong>
-                                </p>
-                                @if ($pemeliharaan->deskripsi_pekerjaan)
-                                    <div class="p-3 card-item-detail mt-2">
-                                        <p class="detail-label mb-1">Pekerjaan yang Dilakukan:</p>
-                                        <p class="mb-0">{{ $pemeliharaan->deskripsi_pekerjaan }}</p>
-                                    </div>
-                                @endif
-                                @if ($pemeliharaan->hasil_pemeliharaan)
-                                    <div class="p-3 card-item-detail mt-2">
-                                        <p class="detail-label mb-1">Hasil Akhir:</p>
-                                        <p class="mb-0">{{ $pemeliharaan->hasil_pemeliharaan }}</p>
-                                        @if ($pemeliharaan->kondisi_barang_setelah_pemeliharaan)
-                                            <p class="mb-0 mt-2">Kondisi barang setelah perbaikan: <span
-                                                    class="badge {{ \App\Models\BarangQrCode::getKondisiColor($pemeliharaan->kondisi_barang_setelah_pemeliharaan) }}">{{ $pemeliharaan->kondisi_barang_setelah_pemeliharaan }}</span>
-                                            </p>
+
+                        {{-- PROGRESS TRACKER VISUAL --}}
+                        @php
+                            $statuses = [
+                                \App\Models\Pemeliharaan::STATUS_DIAJUKAN,
+                                \App\Models\Pemeliharaan::STATUS_DISETUJUI,
+                                \App\Models\Pemeliharaan::STATUS_DALAM_PERBAIKAN,
+                                \App\Models\Pemeliharaan::STATUS_SELESAI,
+                            ];
+                            $currentStatus = $pemeliharaan->status;
+                            $isRejected = $currentStatus === \App\Models\Pemeliharaan::STATUS_DITOLAK;
+
+                            $currentStatusIndex = array_search($currentStatus, $statuses);
+                            // Jika ditolak, anggap progresnya berhenti setelah tahap 'Diajukan'
+                            if ($isRejected) {
+                                $currentStatusIndex = 0;
+                            }
+                        @endphp
+                        <ol class="progress-tracker">
+                            @foreach ($statuses as $index => $status)
+                                @php
+                                    $stepClass = '';
+                                    if ($index <= $currentStatusIndex) {
+                                        $stepClass = 'is-complete';
+                                    }
+                                    if ($index == $currentStatusIndex && !$isRejected) {
+                                        $stepClass = 'is-active';
+                                    }
+                                    if ($isRejected && $status === \App\Models\Pemeliharaan::STATUS_DISETUJUI) {
+                                        $stepClass = 'is-rejected';
+                                    }
+                                @endphp
+                                <li class="progress-step {{ $stepClass }}">
+                                    <div class="progress-marker">
+                                        @if ($isRejected && $status === \App\Models\Pemeliharaan::STATUS_DISETUJUI)
+                                            <i class="fas fa-times"></i>
+                                        @elseif($index < $currentStatusIndex || $currentStatus === \App\Models\Pemeliharaan::STATUS_SELESAI)
+                                            <i class="fas fa-check"></i>
+                                        @else
+                                            <i class="fas fa-flag"></i>
                                         @endif
                                     </div>
-                                @endif
-                                @if ($pemeliharaan->biaya > 0)
-                                    <p class="mt-2 mb-0"><span class="detail-label">Biaya Perbaikan:</span> Rp
-                                        {{ number_format($pemeliharaan->biaya, 0, ',', '.') }}</p>
-                                @endif
-                                @if ($pemeliharaan->foto_perbaikan_path)
-                                    <div class="p-3 card-item-detail mt-2">
-                                        <p class="detail-label mb-1 mt-3">Foto Bukti Perbaikan:</p>
-                                        <a href="{{ asset('storage/' . $pemeliharaan->foto_perbaikan_path) }}"
-                                            target="_blank">
-                                            <img src="{{ asset('storage/' . $pemeliharaan->foto_perbaikan_path) }}"
-                                                alt="Foto Perbaikan" class="img-fluid rounded"
-                                                style="max-height: 200px;">
-                                        </a>
+                                    <div class="progress-label">
+                                        {{ $isRejected && $status === \App\Models\Pemeliharaan::STATUS_DISETUJUI ? 'Ditolak' : $status }}
                                     </div>
-                                @endif
+                                    <div class="progress-line"></div>
+                                </li>
+                            @endforeach
+                        </ol>
+                        <hr>
+
+                        {{-- RINCIAN PROGRES --}}
+                        <div class="mt-4">
+                            {{-- Bagian Pengajuan --}}
+                            <div class="d-flex mb-4">
+                                <div class="flex-shrink-0 text-center me-3" style="width: 2.5rem;">
+                                    <i class="fas fa-flag text-primary fs-3"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">Pengajuan Laporan</h6>
+                                    <p class="text-muted mb-2">Diajukan oleh
+                                        <strong>{{ optional($pemeliharaan->pengaju)->username ?? 'N/A' }}</strong> pada
+                                        {{ $pemeliharaan->tanggal_pengajuan->isoFormat('dddd, DD MMMM YYYY - HH:mm') }}
+                                    </p>
+                                    <div class="p-3 card-item-detail">
+                                        <p class="detail-label mb-1">Deskripsi Kerusakan/Keluhan:</p>
+                                        <p class="mb-0">{{ $pemeliharaan->catatan_pengajuan ?: '-' }}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {{-- Bagian Persetujuan --}}
+                            <div class="d-flex mb-4">
+                                <div class="flex-shrink-0 text-center me-3" style="width: 2.5rem;">
+                                    <i
+                                        class="fas fa-user-check fs-3 {{ $currentStatusIndex >= 1 || $isRejected ? 'text-success' : 'text-muted' }}"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">Tahap Persetujuan</h6>
+                                    @if ($currentStatusIndex >= 1 || $isRejected)
+                                        <p class="text-muted mb-2">Diproses oleh
+                                            <strong>{{ optional($pemeliharaan->penyetuju)->username ?? 'N/A' }}</strong>
+                                            pada
+                                            {{ optional($pemeliharaan->tanggal_persetujuan)->isoFormat('DD MMM YYYY, HH:mm') ?? '...' }}
+                                        </p>
+                                        @if ($isRejected && $pemeliharaan->catatan_penolakan)
+                                            <div class="p-3 card-item-detail border-danger">
+                                                <p class="detail-label text-danger mb-1">Alasan Penolakan:</p>
+                                                <p class="mb-0">{{ $pemeliharaan->catatan_penolakan }}</p>
+                                            </div>
+                                        @elseif($pemeliharaan->catatan_persetujuan)
+                                            <div class="p-3 card-item-detail">
+                                                <p class="detail-label mb-1">Catatan:</p>
+                                                <p class="mb-0">{{ $pemeliharaan->catatan_persetujuan }}</p>
+                                            </div>
+                                        @endif
+                                    @else
+                                        <p class="text-muted mb-0 fst-italic">Menunggu persetujuan.</p>
+                                    @endif
+                                </div>
+                            </div>
+
+                            {{-- Bagian Pengerjaan --}}
+                            <div class="d-flex">
+                                <div class="flex-shrink-0 text-center me-3" style="width: 2.5rem;">
+                                    <i
+                                        class="fas fa-cogs fs-3 {{ $currentStatusIndex >= 2 ? 'text-warning' : 'text-muted' }}"></i>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">Tahap Pengerjaan</h6>
+                                    @if ($currentStatusIndex >= 2 && !$isRejected)
+                                        <p class="text-muted mb-2">Dikerjakan oleh
+                                            <strong>{{ optional($pemeliharaan->operatorPengerjaan)->username ?? 'N/A' }}</strong>
+                                        </p>
+                                        @if ($pemeliharaan->deskripsi_pekerjaan)
+                                            <div class="p-3 card-item-detail">
+                                                <p class="detail-label mb-1">Laporan Pekerjaan:</p>
+                                                <p class="mb-0">{{ $pemeliharaan->deskripsi_pekerjaan }}</p>
+                                                <hr class="my-2">
+                                                <p class="mb-2"><span class="detail-label">Hasil:</span>
+                                                    {{ $pemeliharaan->hasil_pemeliharaan ?? '-' }}</p>
+                                                <p class="mb-2"><span class="detail-label">Kondisi Setelah
+                                                        Perbaikan:</span> <span
+                                                        class="badge bg-{{ \App\Models\BarangQrCode::getKondisiColor($pemeliharaan->kondisi_barang_setelah_pemeliharaan) }}">{{ $pemeliharaan->kondisi_barang_setelah_pemeliharaan }}</span>
+                                                </p>
+                                                <p class="mb-0"><span class="detail-label">Biaya:</span> Rp
+                                                    {{ number_format($pemeliharaan->biaya, 0, ',', '.') }}</p>
+                                            </div>
+                                        @endif
+                                    @else
+                                        <p class="text-muted mb-0 fst-italic">Menunggu laporan disetujui & perbaikan
+                                            dimulai.</p>
+                                    @endif
+                                </div>
                             </div>
                         </div>
+
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
-    <form id="formDeletePemeliharaanShow" method="POST" style="display: none;">@csrf @method('DELETE')</form>
 @endsection
 
 @push('scripts')
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    {{-- Kita hanya perlu Select2 jika form persetujuan tampil --}}
+    @if ($pemeliharaan->status === 'Diajukan' && Auth::user()->hasRole(\App\Models\User::ROLE_ADMIN))
+        <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    @endif
+
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const rolePrefix = "{{ $rolePrefix }}";
-            const deleteForm = $('#formDeletePemeliharaanShow');
 
-            // Initialize Select2
-            $('.select2-pic').select2({
-                theme: "bootstrap-5",
-                placeholder: 'Pilih Operator sebagai PIC',
-            });
+            // Cek jika form persetujuan ada di halaman
+            if ($('#form-approval').length) {
 
-            // Handler untuk tombol SETUJUI
-            $('#btn-setujui').on('click', function(e) {
-                e.preventDefault();
+                // Inisialisasi Select2 untuk PIC
+                $('#id_operator_pengerjaan').select2({
+                    theme: "bootstrap-5",
+                    placeholder: 'Pilih Operator sebagai PIC',
+                });
 
-                // Cek apakah PIC sudah dipilih
-                if (!$('#id_operator_pengerjaan').val()) {
+                // Handler untuk tombol SETUJUI
+                $('#btn-setujui').on('click', function(e) {
+                    e.preventDefault();
+                    const form = $('#form-approval');
+
+                    if (!$('#id_operator_pengerjaan').val()) {
+                        Swal.fire('Peringatan',
+                            'Harap pilih seorang Operator sebagai PIC sebelum menyetujui.', 'warning');
+                        return;
+                    }
+
                     Swal.fire({
-                        title: 'Peringatan!',
-                        text: 'Harap pilih seorang Operator sebagai PIC sebelum menyetujui.',
-                        icon: 'warning',
-                        confirmButtonText: 'OK'
+                        title: 'Setujui Laporan?',
+                        text: "Pastikan PIC yang ditugaskan sudah benar.",
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, Setujui!',
+                        cancelButtonText: 'Batal',
+                        confirmButtonColor: '#28a745',
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            $('#catatan-approval').attr('name', 'catatan_persetujuan');
+
+                            // ==========================================================
+                            // KODE INI HANYA AKAN ADA JIKA USER ADALAH ADMIN
+                            // ==========================================================
+                            @if (Auth::user()->hasRole(\App\Models\User::ROLE_ADMIN))
+                                var approveUrl =
+                                    "{{ route('admin.pemeliharaan.approve', $pemeliharaan->id) }}";
+                                form.attr('action', approveUrl).submit();
+                            @endif
+                        }
                     });
-                    return;
-                }
-
-                Swal.fire({
-                    title: 'Setujui Laporan?',
-                    text: "Anda akan menyetujui laporan ini dan menugaskannya. Aksi ini akan mengubah status barang.",
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'Ya, Setujui!',
-                    cancelButtonText: 'Batal',
-                    confirmButtonColor: '#28a745',
-                    cancelButtonColor: '#6c757d'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        $('#status_pengajuan_input').val('Disetujui');
-                        $('#form-approval').submit();
-                    }
                 });
-            });
 
-            // Handler untuk tombol TOLAK
-            $('#btn-tolak').on('click', function(e) {
-                e.preventDefault();
+                // Handler untuk tombol TOLAK
+                $('#btn-tolak').on('click', function(e) {
+                    e.preventDefault();
+                    const form = $('#form-approval');
+                    const catatan = $('#catatan-approval').val();
 
-                Swal.fire({
-                    title: 'Tolak Laporan Ini?',
-                    text: "Anda yakin ingin menolak laporan pemeliharaan ini?",
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonText: 'Ya, Tolak!',
-                    cancelButtonText: 'Batal',
-                    confirmButtonColor: '#d33',
-                    cancelButtonColor: '#6c757d'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        $('#status_pengajuan_input').val('Ditolak');
-                        $('#form-approval').submit();
+                    if (!catatan) {
+                        Swal.fire('Peringatan', 'Harap isi kolom catatan sebagai alasan penolakan.',
+                            'warning');
+                        return;
                     }
+
+                    Swal.fire({
+                        title: 'Tolak Laporan Ini?',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Ya, Tolak!',
+                        cancelButtonText: 'Batal',
+                        confirmButtonColor: '#d33',
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            $('#catatan-approval').attr('name', 'catatan_penolakan');
+
+                            // ==========================================================
+                            // KODE INI HANYA AKAN ADA JIKA USER ADALAH ADMIN
+                            // ==========================================================
+                            @if (Auth::user()->hasRole(\App\Models\User::ROLE_ADMIN))
+                                var rejectUrl =
+                                    "{{ route('admin.pemeliharaan.reject', $pemeliharaan->id) }}";
+                                form.attr('action', rejectUrl).submit();
+                            @endif
+                        }
+                    });
                 });
-            });
+            }
 
-            // Konfirmasi Arsipkan
-            $(document).on('click', '.btn-delete-pemeliharaan-show', function() {
-                const pemeliharaanId = $(this).data('id');
-                const deskripsi = $(this).data('deskripsi');
-
-                let actionUrl = `{{ route('admin.pemeliharaan.destroy', ['pemeliharaan' => ':id']) }}`;
-                actionUrl = actionUrl.replace(':id', pemeliharaanId);
-
-                Swal.fire({
-                    title: 'Konfirmasi Arsipkan Laporan',
-                    html: `Anda yakin ingin mengarsipkan laporan untuk: <strong>"${deskripsi}"</strong>?`,
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonText: 'Ya, Arsipkan!',
-                    cancelButtonText: 'Batal',
-                    confirmButtonColor: '#d33',
-                    cancelButtonColor: '#6c757d',
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        deleteForm.attr('action', actionUrl).submit();
-                    }
-                });
-            });
-
-            // Konfirmasi Pulihkan
-            $('.form-restore-pemeliharaan-show').on('submit', function(e) {
+            // Konfirmasi untuk form lainnya
+            $('#form-start-work').on('submit', function(e) {
                 e.preventDefault();
                 const form = this;
                 Swal.fire({
-                    title: 'Konfirmasi Pulihkan Laporan',
-                    text: 'Anda yakin ingin memulihkan laporan pemeliharaan ini?',
-                    icon: 'question',
+                    title: 'Mulai Perbaikan?',
+                    text: "Status barang akan diubah menjadi 'Dalam Pemeliharaan'.",
+                    icon: 'info',
                     showCancelButton: true,
-                    confirmButtonText: 'Ya, Pulihkan!',
-                    cancelButtonText: 'Batal',
-                    confirmButtonColor: '#28a745',
-                    cancelButtonColor: '#6c757d'
+                    confirmButtonText: 'Ya, Mulai!',
+                    cancelButtonText: 'Batal'
                 }).then((result) => {
                     if (result.isConfirmed) {
                         form.submit();
                     }
                 });
             });
+
         });
     </script>
 @endpush

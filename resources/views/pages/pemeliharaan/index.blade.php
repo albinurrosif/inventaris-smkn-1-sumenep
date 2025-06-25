@@ -266,9 +266,11 @@
                                         <span
                                             class="badge bg-{{ $prioritasClass }}">{{ Str::ucfirst($item->prioritas) }}</span>
                                     </td>
+                                    {{-- KODE BARU YANG LEBIH BAIK --}}
                                     <td class="text-center">
-                                        <span
-                                            class="badge {{ App\Models\Pemeliharaan::statusColor($item->status_pemeliharaan) }}">{{ $item->status_pemeliharaan }}</span>
+                                        <span class="badge bg-{{ $item->status_color }}">
+                                            {{ $item->status }}
+                                        </span>
                                     </td>
                                     {{-- ===== AWAL PENAMBAHAN KOLOM KETERKAITAN ===== --}}
                                     <td>

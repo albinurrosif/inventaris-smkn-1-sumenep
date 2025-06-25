@@ -24,11 +24,15 @@ class DetailStokOpname extends Model
         'kondisi_tercatat', // Kondisi barang menurut sistem sebelum opname // [cite: 401]
         'kondisi_fisik',    // Kondisi barang menurut hasil pemeriksaan fisik // [cite: 401]
         'catatan_fisik',    // Catatan dari petugas opname // [cite: 401]
+        'waktu_pertama_diperiksa',  // Tambahkan ini
+        'waktu_terakhir_diperiksa', // Tambahkan ini
     ];
 
     protected $casts = [
         'kondisi_tercatat' => 'string', // [cite: 402]
         'kondisi_fisik' => 'string', // [cite: 402]
+        'waktu_pertama_diperiksa' => 'datetime',  // Tambahkan ini
+        'waktu_terakhir_diperiksa' => 'datetime', // Tambahkan ini
         'created_at' => 'datetime', // [cite: 402]
         'updated_at' => 'datetime', // [cite: 402]
         'deleted_at' => 'datetime', // [cite: 402]

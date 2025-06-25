@@ -19,6 +19,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use App\Http\Requests\PeminjamanStoreRequest;
 use App\Http\Requests\PeminjamanUpdateRequest;
+use App\Notifications\NewPeminjamanRequest; // Pastikan ini ada di bagian atas file
+use App\Notifications\PeminjamanStatusUpdated;
 use Carbon\Carbon;
 
 class PeminjamanController extends Controller
@@ -313,11 +315,51 @@ class PeminjamanController extends Controller
                 'user_agent' => $request->userAgent(),
             ]); // [cite: 2264, 2265]
 
-
             $request->session()->forget('keranjang_peminjaman');
 
             DB::commit(); // [cite: 2266]
 
+            // --- TAMBAHKAN KODE INI UNTUK MENGIRIM NOTIFIKASI ---
+            // Muat relasi yang dibutuhkan untuk notifikasi
+            $peminjaman->load('guru', 'detailPeminjaman.barangQrCode.ruangan', 'ruanganTujuanPeminjaman');
+
+            // 1. Kirim notifikasi ke semua Admin
+            $admins = User::where('role', User::ROLE_ADMIN)->get();
+            foreach ($admins as $admin) {
+                $admin->notify(new NewPeminjamanRequest($peminjaman));
+            }
+
+
+            // 2. Kirim notifikasi ke Operator yang terkait dengan ruangan barang atau ruangan tujuan
+            $relevantRuanganIds = collect();
+
+            // Kumpulkan ID ruangan dari semua barang yang diajukan
+            foreach ($peminjaman->detailPeminjaman as $detail) {
+                if ($detail->barangQrCode && $detail->barangQrCode->id_ruangan) {
+                    $relevantRuanganIds->push($detail->barangQrCode->id_ruangan);
+                }
+            }
+
+            // Tambahkan juga ID ruangan tujuan peminjaman jika ada
+            if ($peminjaman->id_ruangan_tujuan_peminjaman) {
+                $relevantRuanganIds->push($peminjaman->id_ruangan_tujuan_peminjaman);
+            }
+
+            // Pastikan ID unik dan tidak kosong
+            $relevantRuanganIds = $relevantRuanganIds->unique()->filter()->toArray();
+
+            if (!empty($relevantRuanganIds)) {
+                $relevantOperators = User::where('role', User::ROLE_OPERATOR)
+                    ->whereHas('ruanganYangDiKelola', function ($query) use ($relevantRuanganIds) {
+                        $query->whereIn('id', $relevantRuanganIds);
+                    })
+                    ->get();
+
+                foreach ($relevantOperators as $operator) {
+                    $operator->notify(new NewPeminjamanRequest($peminjaman));
+                }
+            }
+            // --- AKHIR KODE NOTIFIKASI ---
 
             $redirectUrl = $this->getRedirectUrl('peminjaman');
             return redirect($redirectUrl)->with('success', 'Pengajuan peminjaman berhasil dikirim.');
@@ -581,12 +623,15 @@ class PeminjamanController extends Controller
 
         DB::beginTransaction();
         try {
+            $oldStatus = $peminjaman->status; // Simpan status lama sebelum diupdate
+
             // Panggil method di model untuk mengupdate status induk berdasarkan detailnya
             $peminjaman->updateStatusPeminjaman();
 
             // Ambil status terbaru setelah diupdate oleh model
             $statusAkhir = $peminjaman->fresh()->status;
 
+            $reason = null; // Inisialisasi alasan
             // Setujui atau Tolak berdasarkan hasil akhir
             if ($statusAkhir === Peminjaman::STATUS_DISETUJUI) {
                 $peminjaman->disetujui_oleh = Auth::id();
@@ -596,6 +641,7 @@ class PeminjamanController extends Controller
                 $peminjaman->ditolak_oleh = Auth::id();
                 $peminjaman->tanggal_ditolak = now();
                 $peminjaman->catatan_operator = $request->input('catatan_final', 'Semua item ditolak.');
+                $reason = $peminjaman->catatan_operator; // Alasan penolakan
             }
             $peminjaman->save();
 
@@ -611,6 +657,15 @@ class PeminjamanController extends Controller
             ]);
 
             DB::commit();
+
+            // Kirim notifikasi ke guru yang mengajukan
+            if ($peminjaman->id_guru) {
+                $guruPengaju = User::find($peminjaman->id_guru);
+                if ($guruPengaju) {
+                    $guruPengaju->notify(new PeminjamanStatusUpdated($peminjaman, $oldStatus, $reason));
+                }
+            }
+
             return redirect($this->getRedirectUrl("peminjaman/{$peminjaman->id}"))
                 ->with('success', 'Proses persetujuan telah difinalisasi.');
         } catch (\Exception $e) {
@@ -724,14 +779,15 @@ class PeminjamanController extends Controller
 
         DB::beginTransaction(); // [cite: 2364]
         try {
-            $catatanPembatalan = "Dibatalkan oleh pengguna: " . $user->username; // [cite: 2365]
+            $oldStatus = $peminjaman->status; // Simpan status lama
+            $catatanPembatalan = "Dibatalkan oleh pengguna: " . $user->username; //
             if ($request->filled('alasan_pembatalan')) {
-                $catatanPembatalan .= ". Alasan: " . $request->input('alasan_pembatalan'); // [cite: 2366]
+                $catatanPembatalan .= ". Alasan: " . $request->input('alasan_pembatalan'); //
             }
-            $dataLama = $peminjaman->toArray(); // [cite: 2367]
-            $peminjaman->status = Peminjaman::STATUS_DIBATALKAN; // [cite: 2367]
-            $peminjaman->catatan_operator = $peminjaman->catatan_operator ? $peminjaman->catatan_operator . " | " . $catatanPembatalan : $catatanPembatalan; // [cite: 2368]
-            $peminjaman->save(); // [cite: 2368]
+            $dataLama = $peminjaman->toArray(); //
+            $peminjaman->status = Peminjaman::STATUS_DIBATALKAN; //
+            $peminjaman->catatan_operator = $peminjaman->catatan_operator ? $peminjaman->catatan_operator . " | " . $catatanPembatalan : $catatanPembatalan; //
+            $peminjaman->save(); //
 
             LogAktivitas::create([
                 'id_user' => $user->id,
@@ -745,6 +801,16 @@ class PeminjamanController extends Controller
                 'user_agent' => $request->userAgent(),
             ]); // [cite: 2369, 2370]
             DB::commit(); // [cite: 2371]
+
+            // Kirim notifikasi ke guru yang mengajukan peminjaman
+            if ($peminjaman->id_guru) {
+                $guruPengaju = User::find($peminjaman->id_guru);
+                if ($guruPengaju) {
+                    $reason = $request->filled('alasan_pembatalan') ? $request->input('alasan_pembatalan') : null;
+                    $guruPengaju->notify(new PeminjamanStatusUpdated($peminjaman, $oldStatus, $reason));
+                }
+            }
+
             $redirectUrl = $this->getRedirectUrl("peminjaman/{$peminjaman->id}");
             return redirect($redirectUrl)->with('success', 'Peminjaman berhasil dibatalkan.');
         } catch (\Exception $e) {

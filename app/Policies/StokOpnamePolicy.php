@@ -64,10 +64,13 @@ class StokOpnamePolicy
      */
     public function processDetails(User $user, StokOpname $stokOpname): bool
     {
+        
+
         if ($stokOpname->status !== StokOpname::STATUS_DRAFT) {
             return false; // Tidak bisa proses jika sudah Selesai atau Dibatalkan
         }
         if ($user->hasRole(User::ROLE_ADMIN)) {
+
             return true;
         }
         if ($user->hasRole(User::ROLE_OPERATOR)) {

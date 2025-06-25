@@ -16,6 +16,9 @@
 |
 --}}
 
+@php
+    $disabled = $stokOpname->trashed() || $stokOpname->status !== \App\Models\StokOpname::STATUS_DRAFT;
+@endphp
 <tr id="row-detail-{{ $detail->id }}" data-detail-id="{{ $detail->id }}">
     <td class="text-center">{{ $index + 1 }}</td>
     <td>
@@ -55,7 +58,11 @@
                 @endforeach
             </select>
         @else
-            {{ $kondisiFisikList[$detail->kondisi_fisik] ?? ($detail->kondisi_fisik ?? '-') }}
+            @php
+                 $kondisiFisik = $detail->kondisi_fisik;
+                 $badgeColorFisik = $kondisiFisik === 'Baru' ? 'text-bg-info' : \App\Models\BarangQrCode::getKondisiColor($kondisiFisik);
+            @endphp
+            <span class="badge {{ $badgeColorFisik }}">{{ $kondisiFisikList[$detail->kondisi_fisik] ?? ($detail->kondisi_fisik ?? '-') }}</span>
         @endif
     </td>
     <td>
@@ -65,16 +72,24 @@
             {{ $detail->catatan_fisik ?? '-' }}
         @endif
     </td>
+    {{-- KOLOM BARU UNTUK WAKTU --}}
+    <td class="text-center" id="waktu-periksa-{{ $detail->id }}">
+        @if ($detail->waktu_terakhir_diperiksa)
+            {{ \Carbon\Carbon::parse($detail->waktu_terakhir_diperiksa)->isoFormat('HH:mm:ss') }}
+        @else
+            -
+        @endif
+    </td>
     <td class="text-center">
         @if ($stokOpname->status === 'Draft' && !$stokOpname->trashed())
             @can('processDetails', $stokOpname)
                 <button type="button" class="btn btn-success btn-sm btn-save-detail" data-detail-id="{{ $detail->id }}"
-                    title="Simpan Baris Ini">
+                    data-bs-toggle="tooltip" title="Simpan Baris Ini">
                     <i class="fas fa-save"></i>
                 </button>
             @endcan
         @else
-            -
+            <i class="fas fa-check-circle text-success" data-bs-toggle="tooltip" title="Selesai"></i>
         @endif
     </td>
 </tr>

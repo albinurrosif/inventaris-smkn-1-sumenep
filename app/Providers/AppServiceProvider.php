@@ -10,8 +10,11 @@ use Illuminate\Pagination\Paginator;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\View;
 use App\Models\BarangQrCode;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Auth\Access\AuthorizationException; // Pastikan ini di-import
+use Illuminate\Support\Facades\Auth; // Pastikan ini di-import
+use App\Models\User; // Pastikan ini di-import untuk cek peran
 use App\Console\Commands\CheckOverduePeminjaman;
+use App\Console\Commands\CheckPeminjamanStatus;
 
 
 class AppServiceProvider extends ServiceProvider
@@ -62,6 +65,41 @@ class AppServiceProvider extends ServiceProvider
 
         $this->commands([
             CheckOverduePeminjaman::class,
+            CheckPeminjamanStatus::class
         ]);
+
+
+
+
+
+        // Daftarkan callback untuk merender exception.
+        $this->app->make(\Illuminate\Contracts\Debug\ExceptionHandler::class)
+            ->renderable(function (AuthorizationException $e, $request) {
+                //
+                // Cek jika pengguna terautentikasi dan memiliki peran Operator.
+                //
+                if (Auth::check() && Auth::user()->hasRole(User::ROLE_OPERATOR)) {
+                    // Cek jika rute yang diakses adalah halaman detail unit barang.
+                    // Pola '*' menangkap prefix rute 'admin.' atau 'operator.'.
+                    //
+                    if ($request->routeIs('*.barang-qr-code.show')) {
+                        // Log peristiwa penolakan akses
+                        Log::warning('Operator attempt to access unauthorized unit detail page.', [
+                            'user_id' => Auth::id(),
+                            'route_name' => $request->route()->getName(),
+                            'url' => $request->fullUrl(),
+                            'exception_message' => $e->getMessage()
+                        ]);
+
+                        // Redirect pengguna kembali ke dashboard operator dengan pesan error yang jelas.
+                        //
+                        return redirect()->route('operator.dashboard')
+                            ->with('error', 'Anda tidak memiliki izin untuk melihat detail unit barang ini karena tidak berada di ruangan yang Anda kelola.');
+                    }
+                }
+
+                // Fallback ke rendering exception default Laravel jika kondisi di atas tidak terpenuhi.
+                // return parent::render($request, $e); // Ini tidak diperlukan di sini karena callback renderable tidak menimpa render()
+            });
     }
 }

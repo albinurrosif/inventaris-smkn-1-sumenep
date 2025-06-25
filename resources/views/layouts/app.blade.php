@@ -9,6 +9,7 @@
     <meta content="SMKN 1 Sumenep" name="author" />
     <!-- PWA  -->
     <meta name="theme-color" content="#6777ef" />
+
     <link rel="apple-touch-icon" href="{{ asset('logo.png') }}">
     <link rel="manifest" href="{{ asset('/manifest.json') }}">
     <script>
@@ -438,77 +439,6 @@
         </script>
     @endif
 
-    <!-- Tambahkan ke layout -->
-    {{-- @if (session()->has('incomplete_barang_id') && !in_array(\Request::route()->getName(), ['barang.input-serial', 'barang.store-serial', 'barang.edit-step1', 'barang.update-step1']))
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                // Konfirmasi jika user mencoba meninggalkan halaman
-                window.addEventListener('beforeunload', function(e) {
-                    // Kecualikan untuk submit form, link tertentu, dan navigasi wizard
-                    if (!window.isFormSubmitting && !window.isWizardNavigation) {
-                        e.preventDefault();
-                        e.returnValue =
-                            'Anda memiliki proses pembuatan barang yang belum selesai. Yakin ingin meninggalkan halaman?';
-                    }
-                });
-
-                // Flag untuk form submission
-                const forms = document.querySelectorAll('form');
-                forms.forEach(form => {
-                    form.addEventListener('submit', () => {
-                        window.isFormSubmitting = true;
-                    });
-                });
-
-                // Untuk link yang diizinkan (cancel, save, dll)
-                const safeLinks = document.querySelectorAll('.safe-navigation, .wizard-navigation');
-                safeLinks.forEach(link => {
-                    link.addEventListener('click', () => {
-                        window.isFormSubmitting = true;
-                        window.isWizardNavigation = true;
-                    });
-                });
-            });
-        </script>
-    @endif
-
-    @if (session()->has('incomplete_barang_id') && !in_array(\Request::route()->getName(), ['barang.input-serial', 'barang.store-serial', 'barang.edit-step1', 'barang.update-step1']))
-        <div class="modal fade" id="modalWarnIncomplete" tabindex="-1" data-bs-backdrop="static">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Peringatan</h5>
-                    </div>
-                    <div class="modal-body">
-                        <p>Anda memiliki proses pembuatan barang yang belum selesai.</p>
-                        <p>Silahkan pilih:</p>
-                    </div>
-                    <div class="modal-footer">
-                        <a href="{{ route('barang.input-serial', session('incomplete_barang_id')) }}"
-                            class="btn btn-primary safe-navigation">Lanjutkan Pengisian</a>
-
-                        <form action="{{ route('barang.cancel-create', session('incomplete_barang_id')) }}"
-                            method="POST" style="display: inline;">
-                            @csrf
-                            @method('DELETE')
-                            <button type="submit" class="btn btn-danger safe-navigation">Batalkan Pengisian</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                // Tampilkan modal secara otomatis
-                const modal = new bootstrap.Modal(document.getElementById('modalWarnIncomplete'));
-                modal.show();
-            });
-        </script>
-
-        <!-- Dark Mode Manager (must be after app.js) -->
-        <script src="{{ asset('assets/js/dark-mode-fix.js') }}"></script>
-    @endif --}}
     <!-- Add this script right before your dark mode initialization -->
     <script>
         // Override problematic app.js code
@@ -789,7 +719,7 @@
                     // Show the custom install prompt
                     setTimeout(() => {
                         pwaInstallContainer.classList.add('show');
-                    }, 10000); // Show after 10 seconds
+                    }, 30000); // Show after 10 seconds
                 });
 
                 pwaInstallAccept.addEventListener('click', () => {

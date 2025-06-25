@@ -34,6 +34,15 @@ class BarangPolicy
             $ruanganOperatorIds = $user->ruanganYangDiKelola()->pluck('id'); //
             return $barang->qrCodes()->whereIn('id_ruangan', $ruanganOperatorIds)->exists(); //
         }
+
+        // --- TAMBAHKAN LOGIKA INI UNTUK GURU ---
+        if ($user->hasRole(User::ROLE_GURU)) {
+            // Izinkan Guru melihat detail barang induk jika salah satu unitnya
+            // dipegang personal oleh Guru tersebut
+            return $barang->qrCodes()->where('id_pemegang_personal', $user->id)->exists();
+        }
+        // --- AKHIR TAMBAHAN ---
+
         return false; //
     }
 

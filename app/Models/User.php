@@ -7,8 +7,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Notifications\Notifiable;
+
 
 /**
  * Model User merepresentasikan pengguna dalam sistem.
@@ -344,6 +345,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(LogAktivitas::class, 'id_user');
     }
+
+
+
 
     /**
      * Scope query untuk memfilter pengguna dengan peran Admin.

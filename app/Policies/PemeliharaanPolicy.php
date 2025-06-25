@@ -62,17 +62,41 @@ class PemeliharaanPolicy
         return false;
     }
 
-    /**
-     * PERUBAHAN: Izinkan Guru untuk bisa membuat laporan kerusakan.
-     */
     public function create(User $user): bool
     {
-        // Izinkan jika perannya Admin, Operator, ATAU Guru.
-        return $user->hasAnyRole([
-            User::ROLE_ADMIN,
-            User::ROLE_OPERATOR,
-            User::ROLE_GURU
-        ]);
+        // Sesuai aturan: Admin, Operator, dan Guru bisa membuat laporan.
+        return $user->hasAnyRole([User::ROLE_ADMIN, User::ROLE_OPERATOR, User::ROLE_GURU]);
+    }
+
+    // Ubah nama method ini dari processApproval agar lebih jelas
+    public function approveOrReject(User $user, Pemeliharaan $pemeliharaan): bool
+    {
+        // Syarat: Status harus 'Diajukan'
+        if ($pemeliharaan->status !== Pemeliharaan::STATUS_DIAJUKAN) {
+            return false;
+        }
+        // Syarat: HANYA Admin yang bisa
+        return $user->hasRole(User::ROLE_ADMIN);
+    }
+
+    public function startWork(User $user, Pemeliharaan $pemeliharaan): bool
+    {
+        // Syarat: Status harus 'Disetujui'
+        if ($pemeliharaan->status !== Pemeliharaan::STATUS_DISETUJUI) {
+            return false;
+        }
+        // Syarat: User adalah Admin atau Operator yang ditugaskan (PIC)
+        return $user->hasRole(User::ROLE_ADMIN) || $user->id === $pemeliharaan->id_operator_pengerjaan;
+    }
+
+    public function completeWork(User $user, Pemeliharaan $pemeliharaan): bool
+    {
+        // Syarat: Status harus 'Dalam Perbaikan'
+        if ($pemeliharaan->status !== Pemeliharaan::STATUS_DALAM_PERBAIKAN) {
+            return false;
+        }
+        // Syarat: User adalah Admin atau Operator yang ditugaskan (PIC)
+        return $user->hasRole(User::ROLE_ADMIN) || $user->id === $pemeliharaan->id_operator_pengerjaan;
     }
 
     /**
@@ -150,4 +174,6 @@ class PemeliharaanPolicy
         // Hanya Admin
         return false;
     }
+
+
 }

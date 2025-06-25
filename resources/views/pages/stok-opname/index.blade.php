@@ -201,22 +201,40 @@
                                                     </form>
                                                 @endcan
                                             @else
-                                                @can('view', $so)
-                                                    <a href="{{ route($rolePrefix . 'stok-opname.show', $so->id) }}"
-                                                        class="btn btn-outline-info btn-sm" data-bs-toggle="tooltip"
-                                                        title="Lihat Detail & Proses">
-                                                        <i class="fas fa-eye"></i>
-                                                    </a>
-                                                @endcan
-                                                @if ($so->status === App\Models\StokOpname::STATUS_DRAFT)
-                                                    @can('update', $so)
-                                                        <a href="{{ route($rolePrefix . 'stok-opname.edit', $so->id) }}"
-                                                            class="btn btn-outline-warning btn-sm" data-bs-toggle="tooltip"
-                                                            title="Edit Sesi">
-                                                            <i class="fas fa-edit"></i>
+                                                {{-- Jika status SO tidak diarsipkan --}}
+
+                                                {{-- LOGIKA BARU: Cek apakah status sudah Selesai --}}
+                                                @if ($so->status === App\Models\StokOpname::STATUS_SELESAI)
+                                                    {{-- Jika SUDAH Selesai, tampilkan tombol "Lihat Hasil" --}}
+                                                    @can('view', $so)
+                                                        <a href="{{ route($rolePrefix . 'stok-opname.hasil', $so->id) }}"
+                                                            {{-- Arahkan ke route hasil --}} class="btn btn-success btn-sm"
+                                                            data-bs-toggle="tooltip" title="Lihat Hasil Stok Opname">
+                                                            <i class="fas fa-poll-h"></i> {{-- Icon yang berbeda untuk hasil --}}
                                                         </a>
                                                     @endcan
+                                                @else
+                                                    {{-- Jika BELUM Selesai (misal: Draft, Dibatalkan), tampilkan tombol seperti biasa --}}
+                                                    @can('view', $so)
+                                                        <a href="{{ route($rolePrefix . 'stok-opname.show', $so->id) }}"
+                                                            class="btn btn-outline-info btn-sm" data-bs-toggle="tooltip"
+                                                            title="Lihat Detail & Proses">
+                                                            <i class="fas fa-eye"></i>
+                                                        </a>
+                                                    @endcan
+                                                    {{-- Tombol Edit hanya muncul jika status masih DRAFT --}}
+                                                    @if ($so->status === App\Models\StokOpname::STATUS_DRAFT)
+                                                        @can('update', $so)
+                                                            <a href="{{ route($rolePrefix . 'stok-opname.edit', $so->id) }}"
+                                                                class="btn btn-outline-warning btn-sm"
+                                                                data-bs-toggle="tooltip" title="Edit Sesi">
+                                                                <i class="fas fa-edit"></i>
+                                                            </a>
+                                                        @endcan
+                                                    @endif
                                                 @endif
+
+                                                {{-- Tombol Arsipkan/Hapus (logikanya tetap sama) --}}
                                                 @can('delete', $so)
                                                     @if (in_array($so->status, [App\Models\StokOpname::STATUS_DRAFT, App\Models\StokOpname::STATUS_DIBATALKAN]))
                                                         <button type="button"
