@@ -115,6 +115,9 @@
                                 <li><a href="{{ route($role_prefix . 'laporan.pemeliharaan') }}">Laporan Pemeliharaan</a>
                                 </li>
                             @endcan
+                            @can('view-laporan-mutasi')
+                                <li><a href="{{ route($role_prefix . 'laporan.mutasi') }}">Laporan Mutasi Barang</a></li>
+                            @endcan
                         </ul>
                     </li>
                 @endif

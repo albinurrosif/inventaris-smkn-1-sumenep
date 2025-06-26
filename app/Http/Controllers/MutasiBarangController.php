@@ -19,35 +19,25 @@ class MutasiBarangController extends Controller
     /**
      * Menampilkan daftar riwayat mutasi barang.
      */
-    public function index(Request $request): View
+
+    public function index(Request $request)
     {
-        // PERUBAHAN: Menggunakan Policy untuk otorisasi
         $this->authorize('viewAny', MutasiBarang::class);
-        $user = Auth::user();
 
-        // PENYEMPURNAAN: Eager load dengan nama relasi yang benar dari model
-        $query = MutasiBarang::with(['barangQrCode.barang', 'ruanganAsal', 'ruanganTujuan', 'admin']);
+        // Ambil semua input filter dari request
+        $filters = $request->only(['search', 'jenis_mutasi', 'id_user_pencatat', 'tanggal_mulai', 'tanggal_selesai']);
 
-        // PENYEMPURNAAN: Logika filter untuk Operator yang lebih rapi
-        if ($user->hasRole(User::ROLE_OPERATOR)) {
-            // Menggunakan relasi yang sudah ada di model User
-            $ruanganYangDiKelolaIds = $user->ruanganYangDiKelola()->pluck('id');
+        $query = MutasiBarang::with(['barangQrCode.barang', 'ruanganAsal', 'ruanganTujuan', 'pemegangAsal', 'pemegangTujuan', 'admin'])
+            ->filter($request) // <-- Menggunakan scope filter kita
+            ->latest('tanggal_mutasi');
 
-            $query->where(function (Builder $q) use ($ruanganYangDiKelolaIds) {
-                $q->whereIn('id_ruangan_asal', $ruanganYangDiKelolaIds)
-                    ->orWhereIn('id_ruangan_tujuan', $ruanganYangDiKelolaIds);
-            });
-        }
+        $riwayatMutasi = $query->paginate(15)->withQueryString();
 
-        // Filter berdasarkan id barang qr code jika diberikan
-        if ($request->has('id_barang_qr_code')) {
-            $query->where('id_barang_qr_code', $request->id_barang_qr_code);
-        }
+        // Data untuk dropdown filter
+        $adminList = User::where('role', User::ROLE_ADMIN)->orWhere('role', User::ROLE_OPERATOR)->orderBy('username')->get();
+        $jenisMutasiList = MutasiBarang::select('jenis_mutasi')->distinct()->pluck('jenis_mutasi');
 
-        $riwayatMutasi = $query->latest('tanggal_mutasi')->paginate(20)->withQueryString();
-
-        // PERUBAHAN: Mengarahkan ke satu view terpadu
-        return view('pages.mutasi.index', compact('riwayatMutasi', 'request'));
+        return view('pages.mutasi-barang.index', compact('riwayatMutasi', 'adminList', 'jenisMutasiList', 'filters'));
     }
 
     /**

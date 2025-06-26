@@ -42,16 +42,28 @@
                             <div class="mb-3">
                                 <label for="id_barang_qr_code" class="form-label">Unit Barang yang Rusak <span
                                         class="text-danger">*</span></label>
-                                <select name="id_barang_qr_code" id="id_barang_qr_code" class="form-select select2-barang"
-                                    required>
+                                <select name="id_barang_qr_code" id="id_barang_qr_code_select"
+                                    class="form-select select2-barang" required>
                                     <option value="">-- Cari Kode atau Nama Barang --</option>
                                     @foreach ($barangList as $barang)
+                                        @php
+                                            // Logika cerdas:
+                                            // 1. Gunakan data lama (old) jika ada (terjadi saat validasi gagal).
+                                            // 2. Jika tidak ada data lama, gunakan data dari tombol ($barangToSelect).
+                                            $selectedId = old('id_barang_qr_code', optional($barangToSelect)->id);
+                                        @endphp
                                         <option value="{{ $barang->id }}"
-                                            {{ old('id_barang_qr_code') == $barang->id ? 'selected' : '' }}>
+                                            {{ $selectedId == $barang->id ? 'selected' : '' }}>
                                             {{ $barang->barang->nama_barang }} ({{ $barang->kode_inventaris_sekolah }})
                                         </option>
                                     @endforeach
                                 </select>
+                                {{-- PASTIKAN BLOK INI ADA --}}
+                                @error('id_barang_qr_code')
+                                    <div class="invalid-feedback d-block">
+                                        {{ $message }}
+                                    </div>
+                                @enderror
                             </div>
                         </div>
                         <div class="col-md-4">
@@ -75,6 +87,16 @@
                     </div>
 
                     {{-- Anda bisa tambahkan input untuk upload foto di sini jika perlu --}}
+                    {{-- TAMBAHKAN BLOK INI --}}
+                    <div class="mb-3">
+                        <label for="foto_kerusakan_path" class="form-label">Unggah Foto Kerusakan (Opsional)</label>
+                        <input class="form-control @error('foto_kerusakan_path') is-invalid @enderror" type="file"
+                            id="foto_kerusakan_path" name="foto_kerusakan_path" accept="image/*">
+                        <small class="form-text text-muted">Format: JPG, PNG, WEBP. Maks: 2MB.</small>
+                        @error('foto_kerusakan_path')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
 
                     <div class="text-end">
                         <a href="{{ route(Auth::user()->getRolePrefix() . 'pemeliharaan.index') }}"

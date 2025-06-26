@@ -11,12 +11,14 @@ use App\Models\KategoriBarang;
 use App\Models\User;
 use App\Models\Peminjaman;
 use App\Models\Pemeliharaan;
+use App\Models\MutasiBarang;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Database\Eloquent\Builder;
 use App\Exports\InventarisReportExport;
 use App\Exports\PeminjamanReportExport;
 use App\Exports\PemeliharaanReportExport;
+use App\Exports\MutasiReportExport;
 use Maatwebsite\Excel\Facades\Excel;
 
 class LaporanController extends Controller
@@ -457,5 +459,65 @@ class LaporanController extends Controller
 
         $namaFile = 'laporan-pemeliharaan-' . now()->format('Ymd-His') . '.xlsx';
         return Excel::download(new PemeliharaanReportExport($pemeliharaanList), $namaFile);
+    }
+
+
+    // Di dalam LaporanController.php
+
+    private function getMutasiQuery(Request $request)
+    {
+        // Pindahkan semua logika query ke sini
+        return MutasiBarang::with(['barangQrCode.barang', 'ruanganAsal', 'ruanganTujuan', 'pemegangAsal', 'pemegangTujuan', 'admin'])
+            ->filter($request) // Menggunakan scope filter dari Model
+            ->latest('tanggal_mutasi');
+    }
+    /**
+     * Menampilkan halaman laporan mutasi barang dengan filter.
+     */
+    public function mutasi(Request $request): View
+    {
+        // $this->authorize('view-laporan-mutasi');
+
+        $filters = $request->only(['search', 'jenis_mutasi', 'id_user_pencatat', 'tanggal_mulai', 'tanggal_selesai']);
+
+        // Panggil method query kita yang baru, lalu paginasi hasilnya
+        $riwayatMutasi = $this->getMutasiQuery($request)->paginate(20)->withQueryString();
+
+        $adminList = User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_OPERATOR])->orderBy('username')->get();
+        $jenisMutasiList = MutasiBarang::select('jenis_mutasi')->distinct()->pluck('jenis_mutasi');
+
+        return view('pages.Laporan.mutasi', compact('riwayatMutasi', 'adminList', 'jenisMutasiList', 'filters'));
+    }
+
+    // Di dalam LaporanController.php
+
+    public function exportMutasiPdf(Request $request)
+    {
+        // $this->authorize('view-laporan-mutasi');
+
+        // Gunakan kembali method query kita, tapi ambil semua data dengan ->get()
+        $riwayatMutasi = $this->getMutasiQuery($request)->get();
+
+        if ($riwayatMutasi->isEmpty()) {
+            return redirect()->back()->with('error', 'Tidak ada data untuk di-export berdasarkan filter yang dipilih.');
+        }
+
+        $pdf = PDF::loadView('pages.Laporan.pdf.mutasi_pdf', compact('riwayatMutasi'))
+            ->setPaper('a4', 'landscape');
+
+        return $pdf->download('laporan-mutasi-' . now()->format('Ymd-His') . '.pdf');
+    }
+
+    public function exportMutasiExcel(Request $request)
+    {
+        // $this->authorize('view-laporan-mutasi');
+
+        $riwayatMutasi = $this->getMutasiQuery($request)->get();
+
+        if ($riwayatMutasi->isEmpty()) {
+            return redirect()->back()->with('error', 'Tidak ada data untuk di-export.');
+        }
+
+        return Excel::download(new MutasiReportExport($riwayatMutasi), 'laporan-mutasi-' . now()->format('Ymd-His') . '.xlsx');
     }
 }

@@ -107,6 +107,11 @@ class AuthServiceProvider extends ServiceProvider
         // Gate ini akan memanggil method 'viewPemeliharaan' di dalam LaporanPolicy
         Gate::define('view-laporan-pemeliharaan', [LaporanPolicy::class, 'viewPemeliharaan']);
 
+        Gate::define('view-laporan-mutasi', function (User $user) {
+            // Hanya Admin dan Operator yang bisa melihat laporan ini
+            return $user->hasAnyRole([User::ROLE_ADMIN, User::ROLE_OPERATOR]);
+        });
+
         /**
          * Mendefinisikan hak akses untuk melihat halaman "Aktivitas Saya".
          * Hanya relevan untuk Operator dan Guru.

@@ -1,11 +1,8 @@
-{{-- resources/views/admin/barang_qr_code/partials/modal_assign_personal.blade.php --}}
-{{-- Variabel $usersForAssignForm dan $barangQrCodeInstance diharapkan dari parent view --}}
 <div class="modal fade" id="modalAssignPersonal" tabindex="-1" aria-labelledby="modalAssignPersonalLabel"
     aria-hidden="true">
     <div class="modal-dialog modal-lg">
-        <form id="formAssignPersonalAction" action="" method="POST"> {{-- Action akan di-set oleh JavaScript --}}
+        <form id="formAssignPersonalAction" action="" method="POST">
             @csrf
-            @method('POST')
             <div class="modal-content">
                 <div class="modal-header bg-info text-white">
                     <h5 class="modal-title" id="modalAssignPersonalLabel">Formulir Serah Terima Unit ke Pemegang
@@ -14,10 +11,8 @@
                         aria-label="Tutup"></button>
                 </div>
                 <div class="modal-body">
-                    <p>Anda akan menyerahkan unit barang dengan Kode Inventaris:
-                        <strong id="assignUnitKodeDisplay" class="text-primary"></strong>.
-                    </p>
-                    <input type="hidden" name="id_barang_qr_code_assign_hidden" id="assignUnitIdHidden">
+                    <p>Anda akan menyerahkan unit barang: <strong id="assignUnitKodeDisplay"
+                            class="text-primary"></strong>.</p>
 
                     <div class="mb-3">
                         <label for="assignIdPemegangPersonal" class="form-label">Pilih Pemegang Personal <span
@@ -25,32 +20,24 @@
                         <select name="id_pemegang_personal" id="assignIdPemegangPersonal"
                             class="form-select select2-basic" required style="width: 100%;">
                             <option value="">-- Pilih Pengguna --</option>
-                            {{-- Variabel $usersForAssignForm dikirim dari view show.blade.php --}}
-                            @if (isset($usersForAssignForm) && $usersForAssignForm->count() > 0)
-                                @foreach ($usersForAssignForm as $user)
+                            @if (isset($eligibleUsersForAssign) && $eligibleUsersForAssign->count() > 0)
+                                @foreach ($eligibleUsersForAssign as $user)
                                     <option value="{{ $user->id }}">{{ $user->username }} ({{ $user->role }})
                                     </option>
                                 @endforeach
-                            @else
-                                <option value="" disabled>Tidak ada pengguna eligible.</option>
                             @endif
                         </select>
-                        {{-- Error handling bisa ditambahkan di sini oleh JavaScript jika diperlukan --}}
                     </div>
 
-                    {{-- Input Tanggal Penyerahan (opsi A: otomatis, tidak ada di form) --}}
-                    {{-- Jika menggunakan Opsi B (readonly display):
+                    {{-- ================== PERUBAHAN DI SINI ================== --}}
                     <div class="mb-3">
-                        <label for="assignTanggalPenyerahanDisplay" class="form-label">Tanggal Penyerahan</label>
-                        <input type="date" id="assignTanggalPenyerahanDisplay" class="form-control" value="{{ now()->toDateString() }}" readonly>
+                        <label for="assign_alasan_pemindahan" class="form-label">Alasan Penyerahan <span
+                                class="text-danger">*</span></label>
+                        <textarea class="form-control" name="alasan_pemindahan" id="assign_alasan_pemindahan" rows="3" required
+                            placeholder="Contoh: Untuk keperluan dinas luar kota..."></textarea>
                     </div>
-                    --}}
+                    {{-- ======================================================= --}}
 
-                    <div class="mb-3">
-                        <label for="assignCatatanPenyerahan" class="form-label">Catatan (Opsional)</label>
-                        <textarea class="form-control" name="catatan_penyerahan_personal" id="assignCatatanPenyerahan" rows="3"
-                            placeholder="Catatan terkait penyerahan unit ini."></textarea>
-                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>

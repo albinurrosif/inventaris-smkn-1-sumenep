@@ -222,6 +222,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('pemeliharaan/{pemeliharaan}/reject', [PemeliharaanController::class, 'reject'])->name('pemeliharaan.reject');
         Route::post('pemeliharaan/{pemeliharaan}/start-work', [PemeliharaanController::class, 'startWork'])->name('pemeliharaan.startWork');
         Route::post('pemeliharaan/{pemeliharaan}/complete-work', [PemeliharaanController::class, 'completeWork'])->name('pemeliharaan.completeWork');
+        Route::post('pemeliharaan/{pemeliharaan}/confirm-handover', [PemeliharaanController::class, 'confirmHandover'])->name('pemeliharaan.confirmHandover');
+
 
 
 
@@ -279,6 +281,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/pemeliharaan', [App\Http\Controllers\LaporanController::class, 'pemeliharaan'])->name('pemeliharaan');
             Route::get('/pemeliharaan/pdf', [App\Http\Controllers\LaporanController::class, 'exportPemeliharaanPdf'])->name('pemeliharaan.pdf');
             Route::get('/pemeliharaan/excel', [App\Http\Controllers\LaporanController::class, 'exportPemeliharaanExcel'])->name('pemeliharaan.excel');
+
+            Route::get('/mutasi', [App\Http\Controllers\LaporanController::class, 'mutasi'])->name('mutasi');
+            Route::get('/mutasi/pdf', [App\Http\Controllers\LaporanController::class, 'exportMutasiPdf'])->name('mutasi.pdf');
+            Route::get('/mutasi/excel', [App\Http\Controllers\LaporanController::class, 'exportMutasiExcel'])->name('mutasi.excel');
         });
 
         Route::resource('mutasi-barang', App\Http\Controllers\MutasiBarangController::class)->only(['index', 'show']);
@@ -335,6 +341,8 @@ Route::middleware(['auth'])->group(function () {
         ]);
         Route::post('pemeliharaan/{pemeliharaan}/start-work', [PemeliharaanController::class, 'startWork'])->name('pemeliharaan.startWork');
         Route::post('pemeliharaan/{pemeliharaan}/complete-work', [PemeliharaanController::class, 'completeWork'])->name('pemeliharaan.completeWork');
+        Route::post('pemeliharaan/{pemeliharaan}/confirm-handover', [PemeliharaanController::class, 'confirmHandover'])->name('pemeliharaan.confirmHandover');
+
 
 
         // PEMINJAMAN (OPERATOR)
@@ -386,6 +394,10 @@ Route::middleware(['auth'])->group(function () {
             Route::get('/pemeliharaan', [App\Http\Controllers\LaporanController::class, 'pemeliharaan'])->name('pemeliharaan');
             Route::get('/pemeliharaan/pdf', [App\Http\Controllers\LaporanController::class, 'exportPemeliharaanPdf'])->name('pemeliharaan.pdf');
             Route::get('/pemeliharaan/excel', [App\Http\Controllers\LaporanController::class, 'exportPemeliharaanExcel'])->name('pemeliharaan.excel');
+
+            Route::get('/mutasi', [App\Http\Controllers\LaporanController::class, 'mutasi'])->name('mutasi');
+            Route::get('/mutasi/pdf', [App\Http\Controllers\LaporanController::class, 'exportMutasiPdf'])->name('mutasi.pdf');
+            Route::get('/mutasi/excel', [App\Http\Controllers\LaporanController::class, 'exportMutasiExcel'])->name('mutasi.excel');
         });
 
         Route::resource('mutasi-barang', App\Http\Controllers\MutasiBarangController::class)->only(['index', 'show']);

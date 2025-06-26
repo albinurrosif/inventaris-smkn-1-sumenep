@@ -3,57 +3,43 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use App\Models\Pemeliharaan;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
-    public function up(): void
+    public function up()
     {
         Schema::create('pemeliharaans', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('id_barang_qr_code');
-
-            // Kolom untuk alur pengajuan pemeliharaan
+            $table->foreignId('id_barang_qr_code')->constrained('barang_qr_codes')->onDelete('cascade');
             $table->foreignId('id_user_pengaju')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('tanggal_pengajuan')->nullable()->useCurrent();
-            $table->enum('status_pengajuan', Pemeliharaan::getValidStatusPengajuan(false))->default(Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN);
-            $table->text('catatan_pengajuan')->nullable()->comment('Deskripsi kerusakan atau keluhan awal');
-
-            // Kolom untuk persetujuan pemeliharaan
+            $table->enum('status_pengajuan', ['Diajukan', 'Disetujui', 'Ditolak', 'Dibatalkan'])->default('Diajukan');
+            $table->text('catatan_pengajuan')->nullable();
             $table->foreignId('id_user_penyetuju')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('tanggal_persetujuan')->nullable();
             $table->text('catatan_persetujuan')->nullable();
-            $table->string('foto_kerusakan_path')->nullable()->comment('Path foto bukti kerusakan');
-
-            // Kolom untuk pelaksanaan pemeliharaan
+            $table->string('foto_kerusakan_path')->nullable();
             $table->foreignId('id_operator_pengerjaan')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('tanggal_mulai_pengerjaan')->nullable();
             $table->timestamp('tanggal_selesai_pengerjaan')->nullable();
-            $table->text('deskripsi_pekerjaan')->nullable()->comment('Deskripsi pekerjaan yang dilakukan');
+            $table->timestamp('tanggal_tuntas')->nullable();
+            $table->string('foto_tuntas_path')->nullable();
+            $table->text('deskripsi_pekerjaan')->nullable();
             $table->decimal('biaya', 15, 2)->nullable();
-            $table->enum('status_pengerjaan', Pemeliharaan::getValidStatusPengerjaan(false))->default(Pemeliharaan::STATUS_PENGERJAAN_BELUM_DIKERJAKAN);
-
-            // Kolom tambahan
-            $table->enum('prioritas', Pemeliharaan::getValidPrioritas(false))->default(Pemeliharaan::PRIORITAS_SEDANG)->comment('Prioritas pemeliharaan');
-            $table->text('hasil_pemeliharaan')->nullable()->comment('Hasil dari pemeliharaan');
-            $table->string('kondisi_barang_setelah_pemeliharaan')->nullable()->comment('Kondisi barang setelah pemeliharaan selesai');
-            $table->text('catatan_pengerjaan')->nullable()->comment('Catatan tambahan dari teknisi/operator');
-            $table->string('foto_perbaikan_path')->nullable()->comment('Path foto bukti setelah perbaikan');
-
+            $table->enum('status_pengerjaan', ['Belum Dikerjakan', 'Sedang Dilakukan', 'Selesai', 'Gagal', 'Tidak Dapat Diperbaiki', 'Ditunda'])->default('Belum Dikerjakan');
+            $table->enum('prioritas', ['rendah', 'sedang', 'tinggi'])->default('sedang');
+            $table->string('kondisi_saat_lapor')->nullable();
+            $table->string('status_saat_lapor')->nullable();
+            $table->text('hasil_pemeliharaan')->nullable();
+            $table->string('kondisi_barang_setelah_pemeliharaan')->nullable();
+            $table->text('catatan_pengerjaan')->nullable();
+            $table->string('foto_perbaikan_path')->nullable();
             $table->timestamps();
             $table->softDeletes();
-
-            $table->foreign('id_barang_qr_code')->references('id')->on('barang_qr_codes')->onDelete('cascade');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
-    public function down(): void
+    public function down()
     {
         Schema::dropIfExists('pemeliharaans');
     }

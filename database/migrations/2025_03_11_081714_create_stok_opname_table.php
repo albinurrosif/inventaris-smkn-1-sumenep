@@ -14,6 +14,9 @@ return new class extends Migration
             $table->foreignId('id_operator')->nullable()->constrained('users')->onDelete('set null');
             $table->date('tanggal_opname');
             $table->text('catatan')->nullable();
+            $table->text('catatan_pengerjaan')->nullable();
+            $table->timestamp('tanggal_mulai_pengerjaan')->nullable();
+            $table->timestamp('tanggal_selesai_pengerjaan')->nullable();
             $table->enum('status', ['Draft', 'Selesai', 'Dibatalkan'])->default('Draft');
             $table->timestamps();
             $table->softDeletes();
@@ -24,9 +27,10 @@ return new class extends Migration
             $table->foreignId('id_stok_opname')->constrained('stok_opname')->onDelete('cascade');
             $table->foreignId('id_barang_qr_code')->constrained('barang_qr_codes')->onDelete('cascade');
             $table->enum('kondisi_tercatat', ['Baik', 'Kurang Baik', 'Rusak Berat', 'Hilang', 'Diarsipkan'])->default('Baik');
-            // Memastikan 'Ditemukan' ada di enum kondisi_fisik
             $table->enum('kondisi_fisik', ['Baik', 'Kurang Baik', 'Rusak Berat', 'Hilang', 'Ditemukan'])->nullable();
             $table->text('catatan_fisik')->nullable();
+            $table->timestamp('waktu_pertama_diperiksa')->nullable();
+            $table->timestamp('waktu_terakhir_diperiksa')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

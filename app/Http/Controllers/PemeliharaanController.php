@@ -331,58 +331,153 @@ class PemeliharaanController extends Controller
     // }
 
     // Di dalam PemeliharaanController.php
-    public function create()
+    public function create(Request $request) // <-- Tambahkan Request $request
     {
         $this->authorize('create', Pemeliharaan::class);
 
-        // 1. Definisikan status-status yang dianggap "final" atau "selesai"
+        // --- (Logika filter barang Anda tetap sama persis) ---
         $finalStatuses = [
             Pemeliharaan::STATUS_SELESAI,
-            Pemeliharaan::STATUS_TUNTAS, // Jika Anda sudah menambahkannya
+            Pemeliharaan::STATUS_TUNTAS,
             Pemeliharaan::STATUS_DITOLAK,
         ];
-
-        // 2. Ambil semua ID barang yang memiliki laporan pemeliharaan AKTIF (statusnya BUKAN final)
         $activeMaintenanceBarangIds = Pemeliharaan::whereHas('barangQrCode', function ($query) {
-            $query->whereNull('deleted_at'); // Pastikan barangnya tidak diarsip
+            $query->whereNull('deleted_at');
         })
-            ->whereNotIn('status_pengajuan', [$finalStatuses[2]]) // Bukan ditolak
-            ->whereNotIn('status_pengerjaan', [$finalStatuses[0]]) // Bukan selesai
+            ->whereNotIn('status_pengajuan', [$finalStatuses[2]])
+            ->whereNotIn('status_pengerjaan', [$finalStatuses[0]])
             ->pluck('id_barang_qr_code');
-
-        // 3. Ambil daftar barang yang TIDAK TERMASUK dalam daftar aktif di atas
         $barangList = \App\Models\BarangQrCode::whereNotIn('id', $activeMaintenanceBarangIds)
             ->whereNull('deleted_at')
             ->with('barang')
             ->orderBy('kode_inventaris_sekolah', 'asc')
             ->get();
-
         $prioritasList = Pemeliharaan::getValidPrioritas();
+        // --- (Akhir logika filter barang) ---
 
-        return view('pages.pemeliharaan.create', compact('barangList', 'prioritasList'));
+
+        // ================== AWAL LOGIKA BARU ==================
+
+        // 1. Ambil ID barang dari URL (jika ada)
+        $idFromRequest = $request->input('id_barang_qr_code');
+        $barangToSelect = null;
+
+        // 2. Cari barang tersebut di dalam daftar yang sudah kita filter
+        if ($idFromRequest) {
+            $barangToSelect = $barangList->firstWhere('id', $idFromRequest);
+        }
+
+        // 3. Kirim variabel $barangToSelect ke view
+        return view('pages.pemeliharaan.create', compact('barangList', 'prioritasList', 'barangToSelect'));
+
+        // =================== AKHIR LOGIKA BARU ===================
     }
+
+    // Di dalam file: app/Http/Controllers/PemeliharaanController.php
 
     public function store(Request $request)
     {
         $this->authorize('create', Pemeliharaan::class);
 
+        // Tetap menggunakan 'foto_kerusakan' untuk konsistensi
         $validated = $request->validate([
-            'id_barang_qr_code' => ['required', 'exists:barang_qr_codes,id', new NoActiveMaintenance],
+            'id_barang_qr_code' => ['required', 'exists:barang_qr_codes,id', new \App\Rules\NoActiveMaintenance],
             'catatan_pengajuan' => 'required|string|max:2000',
-            'prioritas' => ['required', \Illuminate\Validation\Rule::in(array_keys(Pemeliharaan::getValidPrioritas()))],
-            // 'foto_kerusakan_path' => 'nullable|image|max:2048', // Jika Anda menggunakan upload foto
+            'prioritas' => ['required', \Illuminate\Validation\Rule::in(array_keys(\App\Models\Pemeliharaan::getValidPrioritas()))],
+            'foto_kerusakan' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
-        // Menambahkan data yang diisi otomatis oleh sistem
-        $validated['id_user_pengaju'] = Auth::id();
-        $validated['tanggal_pengajuan'] = now();
-        $validated['status_pengajuan'] = Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN;
-        $validated['status_pengerjaan'] = Pemeliharaan::STATUS_PENGERJAAN_BELUM_DIKERJAKAN;
+        $barang = \App\Models\BarangQrCode::find($validated['id_barang_qr_code']);
 
-        $pemeliharaan = Pemeliharaan::create($validated);
+        // ================== AWAL PERBAIKAN ==================
 
-        return redirect()->route(Auth::user()->getRolePrefix() . 'pemeliharaan.show', $pemeliharaan->id)
-            ->with('success', 'Laporan kerusakan berhasil dibuat dan sedang menunggu persetujuan.');
+        // 1. Definisikan variabel untuk log riwayat SEBELUM transaksi
+        $kondisiSebelum = $barang->kondisi;
+        $statusSebelum = $barang->status;
+
+        DB::beginTransaction();
+        try {
+            // 2. Siapkan data untuk disimpan
+            $dataToCreate = $validated;
+
+            // Hapus key file agar tidak error saat create
+            unset($dataToCreate['foto_kerusakan']);
+
+            // 3. Tambahkan "snapshot" ke data yang akan dibuat
+            $dataToCreate['kondisi_saat_lapor'] = $kondisiSebelum;
+            $dataToCreate['status_saat_lapor'] = $statusSebelum;
+
+            // Tambahkan data sistem lainnya
+            $dataToCreate['id_user_pengaju'] = Auth::id();
+            $dataToCreate['tanggal_pengajuan'] = now();
+            $dataToCreate['status_pengajuan'] = Pemeliharaan::STATUS_PENGAJUAN_DIAJUKAN;
+            $dataToCreate['status_pengerjaan'] = Pemeliharaan::STATUS_PENGERJAAN_BELUM_DIKERJAKAN;
+
+            // Proses upload foto jika ada
+            if ($request->hasFile('foto_kerusakan')) {
+                $dataToCreate['foto_kerusakan_path'] = $request->file('foto_kerusakan')->store('pemeliharaan/kerusakan', 'public');
+            }
+
+            $pemeliharaan = Pemeliharaan::create($dataToCreate);
+
+            // Ubah status barang menjadi "Dalam Pemeliharaan"
+            $barang->status = \App\Models\BarangQrCode::STATUS_DALAM_PEMELIHARAAN;
+            $barang->save();
+
+            // Buat log status barang (sekarang variabelnya sudah ada)
+            \App\Models\BarangStatus::create([
+                'id_barang_qr_code' => $barang->id,
+                'id_user_pencatat' => Auth::id(),
+                'kondisi_sebelumnya' => $kondisiSebelum, // <-- Sekarang sudah aman
+                'kondisi_sesudahnya' => $barang->kondisi,
+                'status_ketersediaan_sebelumnya' => $statusSebelum, // <-- Sekarang sudah aman
+                'status_ketersediaan_sesudahnya' => $barang->status,
+                'deskripsi_kejadian' => "Dilaporkan untuk pemeliharaan ID: {$pemeliharaan->id}",
+                'id_pemeliharaan_trigger' => $pemeliharaan->id,
+            ]);
+
+            LogAktivitas::create([
+                'id_user' => Auth::id(),
+                'aktivitas' => 'Membuat Laporan Pemeliharaan',
+                'deskripsi' => "Membuat laporan pemeliharaan #{$pemeliharaan->id} untuk barang: {$barang->barang->nama_barang} ({$barang->kode_inventaris_sekolah})",
+                'model_terkait' => Pemeliharaan::class,
+                'id_model_terkait' => $pemeliharaan->id,
+                'data_baru' => $pemeliharaan->toJson(),
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            // ================== TAMBAHKAN BLOK NOTIFIKASI INI ==================
+
+            // Muat relasi yang dibutuhkan agar data di notifikasi lengkap
+            $pemeliharaan->load('pengaju', 'barangQrCode.barang');
+
+            // 1. Kirim notifikasi ke semua Admin
+            $admins = User::where('role', User::ROLE_ADMIN)->get();
+            \Illuminate\Support\Facades\Notification::send($admins, new NewPemeliharaanRequest($pemeliharaan));
+
+            // 2. Kirim notifikasi ke Operator yang relevan
+            if (!$pemeliharaan->pengaju->hasRole(User::ROLE_OPERATOR)) {
+                if ($pemeliharaan->barangQrCode && $pemeliharaan->barangQrCode->id_ruangan) {
+                    $operators = User::where('role', User::ROLE_OPERATOR)
+                        ->whereHas('ruanganYangDiKelola', function ($query) use ($pemeliharaan) {
+                            // PERBAIKAN: Gunakan nama tabel dan nama kolom yang benar ('ruangans.id')
+                            $query->where('ruangans.id', $pemeliharaan->barangQrCode->id_ruangan);
+                        })->get();
+                    \Illuminate\Support\Facades\Notification::send($operators, new NewPemeliharaanRequest($pemeliharaan));
+                }
+            }
+            // ====================================================================
+
+            DB::commit();
+
+            return redirect()->route(Auth::user()->getRolePrefix() . 'pemeliharaan.show', $pemeliharaan->id)
+                ->with('success', 'Laporan kerusakan berhasil dibuat.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Gagal menyimpan laporan pemeliharaan: " . $e->getMessage(), ['exception' => $e]);
+            return redirect()->back()->with('error', 'Terjadi kesalahan saat membuat laporan.')->withInput();
+        }
     }
 
     // Di dalam PemeliharaanController
@@ -396,22 +491,33 @@ class PemeliharaanController extends Controller
             'penyetuju',
             'operatorPengerjaan'
         ])->findOrFail($id);
-
+        //dd($pemeliharaan);
         $this->authorize('view', $pemeliharaan);
 
-        // Ambil daftar user yang bisa menjadi PIC (Operator atau Admin)
-        $picList = User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_OPERATOR])
-            ->orderBy('username')->get();
+        // 1. Ambil log status pertama yang terkait dengan pemeliharaan ini
+        $logStatusAwal = \App\Models\BarangStatus::where('id_pemeliharaan_trigger', $pemeliharaan->id)
+            ->orderBy('tanggal_pencatatan', 'asc')
+            ->first();
 
-        // ===== PERUBAHAN DI SINI =====
-        // Gunakan method private yang sudah kita buat sebelumnya
+        // 2. Tentukan variabel untuk kondisi & status awal.
+        // Jika log ditemukan, gunakan data dari log. Jika tidak, gunakan data barang saat ini sebagai fallback.
+        $kondisiSaatLapor = optional($logStatusAwal)->kondisi_sebelumnya ?? optional($pemeliharaan->barangQrCode)->getOriginal('kondisi');
+        $statusSaatLapor = optional($logStatusAwal)->status_ketersediaan_sebelumnya ?? optional($pemeliharaan->barangQrCode)->getOriginal('status');
+
+        $picList = User::whereIn('role', [User::ROLE_ADMIN, User::ROLE_OPERATOR])->orderBy('username')->get();
         $rolePrefix = $this->getRolePrefix();
 
-        $viewPath = 'pages.pemeliharaan.show';
+        //dd($pemeliharaan->toArray());
 
-        // Kirim semua variabel yang dibutuhkan oleh view, termasuk rolePrefix
-        return view($viewPath, compact('pemeliharaan', 'picList', 'rolePrefix'));
-        // ============================
+
+        // 3. Kirim variabel baru ini ke view
+        return view('pages.pemeliharaan.show', compact(
+            'pemeliharaan',
+            'picList',
+            'rolePrefix',
+            'kondisiSaatLapor', // <-- Variabel baru
+            'statusSaatLapor'   // <-- Variabel baru
+        ));
     }
 
     /**
@@ -439,6 +545,24 @@ class PemeliharaanController extends Controller
                 $pemeliharaan->barangQrCode->update(['status' => \App\Models\BarangQrCode::STATUS_DALAM_PEMELIHARAAN]);
             }
             // (Logika logging bisa ditambahkan di sini)
+            LogAktivitas::create([
+                'id_user' => Auth::id(),
+                'aktivitas' => 'Menyetujui Laporan Pemeliharaan',
+                'deskripsi' => "Menyetujui laporan #{$pemeliharaan->id} dan menugaskan ke PIC: " . User::find($request->id_operator_pengerjaan)->username,
+                'model_terkait' => Pemeliharaan::class,
+                'id_model_terkait' => $pemeliharaan->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            // ================== TAMBAHKAN BLOK NOTIFIKASI INI ==================
+            $pic = User::find($request->id_operator_pengerjaan);
+            if ($pic) {
+                // Gunakan class PemeliharaanAssigned yang sudah Anda buat
+                $pic->notify(new PemeliharaanAssigned($pemeliharaan));
+            }
+            // ====================================================================
+
         });
 
         return redirect()->route(Auth::user()->getRolePrefix() . 'pemeliharaan.show', $pemeliharaan->id)
@@ -452,17 +576,38 @@ class PemeliharaanController extends Controller
     {
         $this->authorize('approveOrReject', $pemeliharaan);
 
+        // Validasi sekarang menggunakan 'catatan_persetujuan'
         $request->validate(
-            ['catatan_penolakan' => 'required|string|max:1000'],
-            ['catatan_penolakan.required' => 'Alasan penolakan wajib diisi.']
+            ['catatan_persetujuan' => 'required|string|max:1000'],
+            ['catatan_persetujuan.required' => 'Alasan penolakan wajib diisi pada kolom catatan.']
         );
 
         $pemeliharaan->update([
             'status_pengajuan' => Pemeliharaan::STATUS_PENGAJUAN_DITOLAK,
             'id_user_penyetuju' => Auth::id(),
-            'tanggal_persetujuan' => now(),
-            'catatan_penolakan' => $request->catatan_penolakan,
+            'tanggal_persetujuan' => now(), // Tetap catat tanggal penolakan
+            // Simpan alasan penolakan ke kolom 'catatan_persetujuan'
+            'catatan_persetujuan' => $request->catatan_persetujuan,
         ]);
+
+        LogAktivitas::create([
+            'id_user' => Auth::id(),
+            'aktivitas' => 'Menolak Laporan Pemeliharaan',
+            'deskripsi' => "Menolak laporan pemeliharaan #{$pemeliharaan->id} dengan alasan: " . Str::limit($request->catatan_persetujuan, 100),
+            'model_terkait' => Pemeliharaan::class,
+            'id_model_terkait' => $pemeliharaan->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        // ================== TAMBAHKAN BLOK NOTIFIKASI INI ==================
+        if ($pemeliharaan->pengaju) {
+            $alasanPenolakan = $request->catatan_persetujuan;
+            // Gunakan class PemeliharaanStatusUpdated
+            $pemeliharaan->pengaju->notify(new PemeliharaanStatusUpdated($pemeliharaan, $alasanPenolakan));
+        }
+        // ====================================================================
+
 
         return redirect()->route(Auth::user()->getRolePrefix() . 'pemeliharaan.show', $pemeliharaan->id)
             ->with('success', 'Laporan pemeliharaan telah ditolak.');
@@ -471,13 +616,23 @@ class PemeliharaanController extends Controller
     /**
      * Memulai proses pengerjaan pemeliharaan.
      */
-    public function startWork(Pemeliharaan $pemeliharaan): RedirectResponse
+    public function startWork(Request $request, Pemeliharaan $pemeliharaan): RedirectResponse
     {
         $this->authorize('startWork', $pemeliharaan);
 
         $pemeliharaan->update([
             'status_pengerjaan' => Pemeliharaan::STATUS_PENGERJAAN_SEDANG_DILAKUKAN,
             'tanggal_mulai_pengerjaan' => now(),
+        ]);
+
+        LogAktivitas::create([
+            'id_user' => Auth::id(),
+            'aktivitas' => 'Memulai Pengerjaan Pemeliharaan',
+            'deskripsi' => "PIC memulai pengerjaan untuk laporan pemeliharaan #{$pemeliharaan->id} pada barang: {$pemeliharaan->barangQrCode->barang->nama_barang}",
+            'model_terkait' => Pemeliharaan::class,
+            'id_model_terkait' => $pemeliharaan->id,
+            'ip_address' => $request->ip(), // <-- Perlu menambahkan Request $request di parameter method
+            'user_agent' => $request->userAgent(),
         ]);
 
         return redirect()->route(Auth::user()->getRolePrefix() . 'pemeliharaan.show', $pemeliharaan->id)
@@ -487,37 +642,118 @@ class PemeliharaanController extends Controller
     /**
      * Menyelesaikan proses pengerjaan pemeliharaan.
      */
+    // Di dalam file: app/Http/Controllers/PemeliharaanController.php
+
     public function completeWork(Request $request, Pemeliharaan $pemeliharaan): RedirectResponse
     {
         $this->authorize('completeWork', $pemeliharaan);
 
         $validated = $request->validate([
-            'tindakan_yang_dilakukan' => 'required|string|max:2000',
+            'deskripsi_pekerjaan' => 'required|string|max:2000',
             'hasil_pemeliharaan' => 'required|string|max:1000',
             'biaya' => 'nullable|numeric|min:0',
             'kondisi_barang_setelah_pemeliharaan' => ['required', \Illuminate\Validation\Rule::in(\App\Models\BarangQrCode::getValidKondisi())],
+            'foto_perbaikan' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
-        DB::transaction(function () use ($validated, $pemeliharaan) {
-            $pemeliharaan->update([
-                'status_pengerjaan' => Pemeliharaan::STATUS_PENGERJAAN_SELESAI,
-                'tanggal_selesai_pengerjaan' => now(),
-                'tindakan_yang_dilakukan' => $validated['tindakan_yang_dilakukan'],
-                'hasil_pemeliharaan' => $validated['hasil_pemeliharaan'],
-                'biaya' => $validated['biaya'] ?? 0,
-                'kondisi_barang_setelah_pemeliharaan' => $validated['kondisi_barang_setelah_pemeliharaan'],
-            ]);
+        // ================== AWAL LOGIKA BARU YANG KONSISTEN ==================
 
+        $dataToUpdate = $validated;
+        unset($dataToUpdate['foto_perbaikan']); // Hapus key file agar tidak error saat mass assignment
+
+        // Proses upload foto jika ada
+        if ($request->hasFile('foto_perbaikan')) {
+            // Hapus foto lama jika ada
+            if ($pemeliharaan->foto_perbaikan_path) {
+                Storage::disk('public')->delete($pemeliharaan->foto_perbaikan_path);
+            }
+            // Simpan yang baru dan tambahkan path ke data update
+            $dataToUpdate['foto_perbaikan_path'] = $request->file('foto_perbaikan')->store('pemeliharaan/perbaikan', 'public');
+        }
+
+        // Tambahkan data status dan tanggal
+        $dataToUpdate['status_pengerjaan'] = Pemeliharaan::STATUS_PENGERJAAN_SELESAI;
+        $dataToUpdate['tanggal_selesai_pengerjaan'] = now();
+
+        DB::transaction(function () use ($dataToUpdate, $pemeliharaan, $request) {
+            // 1. Update data pemeliharaan
+
+            $pemeliharaan->update($dataToUpdate);
+
+            // 2. Update data barang terkait
             if ($pemeliharaan->barangQrCode) {
+                // Kita tidak perlu menyimpan kondisi/status sebelumnya di sini karena event di Model sudah menanganinya
                 $pemeliharaan->barangQrCode->update([
                     'status' => \App\Models\BarangQrCode::STATUS_TERSEDIA,
-                    'kondisi' => $validated['kondisi_barang_setelah_pemeliharaan'],
+                    'kondisi' => $pemeliharaan->kondisi_barang_setelah_pemeliharaan,
                 ]);
             }
+
+            LogAktivitas::create([
+                'id_user' => Auth::id(),
+                'aktivitas' => 'Menyelesaikan Pekerjaan Pemeliharaan',
+                'deskripsi' => "Menyelesaikan pekerjaan untuk laporan #{$pemeliharaan->id}. Hasil: " . Str::limit($pemeliharaan->hasil_pemeliharaan, 100),
+                'model_terkait' => Pemeliharaan::class,
+                'id_model_terkait' => $pemeliharaan->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            // ================== TAMBAHKAN BLOK NOTIFIKASI INI ==================
+            if ($pemeliharaan->pengaju) {
+                $hasil = $request->hasil_pemeliharaan;
+                $pemeliharaan->pengaju->notify(new PemeliharaanStatusUpdated($pemeliharaan, "Perbaikan selesai. Hasil: " . $hasil));
+            }
+            // ====================================================================
+
         });
+
+        // =================== AKHIR LOGIKA BARU YANG KONSISTEN ===================
 
         return redirect()->route(Auth::user()->getRolePrefix() . 'pemeliharaan.show', $pemeliharaan->id)
             ->with('success', 'Pekerjaan perbaikan telah selesai dan data barang diperbarui.');
+    }
+
+    public function confirmHandover(Request $request, Pemeliharaan $pemeliharaan): \Illuminate\Http\RedirectResponse
+    {
+        $this->authorize('confirmHandover', $pemeliharaan);
+
+        // Tambahkan validasi untuk file foto
+        $request->validate(
+            ['foto_tuntas' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048'],
+            ['foto_tuntas.required' => 'Foto bukti serah terima wajib diunggah.']
+        );
+
+        $pathTuntas = null;
+        if ($request->hasFile('foto_tuntas')) {
+            // Simpan file ke storage/app/public/pemeliharaan/tuntas
+            $pathTuntas = $request->file('foto_tuntas')->store('pemeliharaan/tuntas', 'public');
+        }
+
+        $pemeliharaan->update([
+            'tanggal_tuntas' => now(),
+            'foto_tuntas_path' => $pathTuntas
+        ]);
+
+        LogAktivitas::create([
+            'id_user' => Auth::id(),
+            'aktivitas' => 'Menuntaskan Pemeliharaan',
+            'deskripsi' => "Konfirmasi serah terima untuk laporan #{$pemeliharaan->id}. Proses pemeliharaan tuntas.",
+            'model_terkait' => Pemeliharaan::class,
+            'id_model_terkait' => $pemeliharaan->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        // ================== TAMBAHKAN BLOK NOTIFIKASI INI ==================
+        if ($pemeliharaan->pengaju) {
+            $pemeliharaan->pengaju->notify(new PemeliharaanStatusUpdated($pemeliharaan, "Barang telah diterima kembali."));
+        }
+        // ====================================================================
+
+
+        return redirect()->route(Auth::user()->getRolePrefix() . 'pemeliharaan.show', $pemeliharaan->id)
+            ->with('success', 'Konfirmasi serah terima berhasil. Proses pemeliharaan kini telah tuntas.');
     }
 
 

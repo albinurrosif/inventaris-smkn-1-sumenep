@@ -52,7 +52,8 @@ class PemeliharaanStatusUpdated extends Notification
         $pengajuUsername = optional($this->pemeliharaan->pengaju)->username ?? 'N/A';
         $namaBarang = optional($this->pemeliharaan->barangQrCode->barang)->nama_barang ?? 'N/A';
         $kodeInventaris = optional($this->pemeliharaan->barangQrCode)->kode_inventaris_sekolah ?? 'N/A';
-        $currentStatus = $this->pemeliharaan->status_pemeliharaan; // Menggunakan accessor
+        // KODE BARU YANG LEBIH BAIK
+        $currentStatus = $this->pemeliharaan->status; // Otomatis menggunakan accessor baru getStatusAttribute()
 
         $message = 'Status laporan pemeliharaan Anda untuk barang ' . $namaBarang . ' (' . $kodeInventaris . ') telah diperbarui menjadi "' . $currentStatus . '".';
 
@@ -60,8 +61,9 @@ class PemeliharaanStatusUpdated extends Notification
             $message .= ' Catatan: ' . $this->reason;
         }
 
-        $link = route('guru.pemeliharaan.show', $this->pemeliharaan->id); // Link ke detail pemeliharaan
-
+        // KODE BARU YANG LEBIH BAIK
+        $rolePrefix = $notifiable->getRolePrefix(); // 'admin.', 'operator.', atau 'guru.'
+        $link = route($rolePrefix . 'pemeliharaan.show', $this->pemeliharaan->id);
         return [
             'pemeliharaan_id' => $this->pemeliharaan->id,
             'status_baru_pemeliharaan' => $currentStatus,

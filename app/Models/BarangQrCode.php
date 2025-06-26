@@ -118,6 +118,10 @@ class BarangQrCode extends Model
     // Di App\Models\BarangQrCode.php
     public static function getKondisiColor(string $kondisi): string
     {
+        // Tambahkan pengecekan jika $kondisi null di awal
+        if (is_null($kondisi)) {
+            return 'text-bg-secondary';
+        }
         return match (strtolower($kondisi)) {
             strtolower(self::KONDISI_BAIK) => 'text-bg-success',
             strtolower(self::KONDISI_KURANG_BAIK) => 'text-bg-warning text-dark',
@@ -129,6 +133,10 @@ class BarangQrCode extends Model
 
     public static function getStatusColor(string $status): string
     {
+        // Tambahkan pengecekan jika $status null di awal
+        if (is_null($status)) {
+            return 'text-bg-secondary';
+        }
         return match (strtolower($status)) {
             strtolower(self::STATUS_TERSEDIA) => 'text-bg-success',
             strtolower(self::STATUS_DIPINJAM) => 'text-bg-primary',

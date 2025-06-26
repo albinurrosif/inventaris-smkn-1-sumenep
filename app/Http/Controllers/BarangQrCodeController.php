@@ -541,253 +541,313 @@ class BarangQrCodeController extends Controller
     }
 
 
+    /**
+     * Memproses mutasi (perpindahan) unit barang dari satu ruangan ke ruangan lain.
+     */
+    public function mutasi(Request $request, BarangQrCode $barangQrCode): RedirectResponse
+    {
+        $this->authorize('mutasi', $barangQrCode);
 
+        if ($barangQrCode->trashed() || $barangQrCode->status === BarangQrCode::STATUS_DIPINJAM || $barangQrCode->id_pemegang_personal !== null) {
+            return back()->with('error', 'Aksi tidak diizinkan. Barang mungkin diarsipkan, dipinjam, atau sedang dipegang personal.');
+        }
+
+        $validated = $request->validate([
+            'id_ruangan_tujuan' => ['required', 'exists:ruangans,id', Rule::notIn([$barangQrCode->id_ruangan])],
+            'alasan_pemindahan' => 'required|string|max:1000',
+            'surat_pemindahan_path' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:2048',
+        ], [
+            'id_ruangan_tujuan.not_in' => 'Ruangan tujuan tidak boleh sama dengan ruangan saat ini.',
+            'alasan_pemindahan.required' => 'Alasan pemindahan wajib diisi.',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $userPencatat = Auth::user();
+            $ruanganTujuan = Ruangan::find($validated['id_ruangan_tujuan']);
+
+            $snapshot = ['id_ruangan' => $barangQrCode->id_ruangan, 'nama_ruangan' => optional($barangQrCode->ruangan)->nama_ruangan, 'kondisi' => $barangQrCode->kondisi, 'status' => $barangQrCode->status];
+            $ruanganAsal = Ruangan::find($snapshot['id_ruangan']);
+
+            $suratPath = $request->hasFile('surat_pemindahan_path') ? $request->file('surat_pemindahan_path')->store('mutasi/dokumen', 'public') : null;
+
+            $mutasi = MutasiBarang::create([
+                'id_barang_qr_code' => $barangQrCode->id,
+                'jenis_mutasi' => 'Antar Ruangan',
+                'id_ruangan_asal' => $snapshot['id_ruangan'],
+                'id_pemegang_asal' => null, // Eksplisit set null
+                'id_ruangan_tujuan' => $ruanganTujuan->id,
+                'id_pemegang_tujuan' => null, // Eksplisit set null
+                'alasan_pemindahan' => $validated['alasan_pemindahan'],
+                'id_user_admin' => $userPencatat->id,
+                'surat_pemindahan_path' => $suratPath,
+                'tanggal_mutasi' => now(),
+            ]);
+
+            $barangQrCode->update(['id_ruangan' => $ruanganTujuan->id]);
+
+            BarangStatus::create([
+                'id_barang_qr_code' => $barangQrCode->id,
+                'id_user_pencatat' => $userPencatat->id,
+                'tanggal_pencatatan' => now(),
+                'id_ruangan_sebelumnya' => $snapshot['id_ruangan'],
+                'id_ruangan_sesudahnya' => $barangQrCode->id_ruangan,
+                'kondisi_sebelumnya' => $snapshot['kondisi'],
+                'kondisi_sesudahnya' => $barangQrCode->kondisi,
+                'status_ketersediaan_sebelumnya' => $snapshot['status'],
+                'status_ketersediaan_sesudahnya' => $barangQrCode->status,
+                'deskripsi_kejadian' => "Mutasi dari '{$snapshot['nama_ruangan']}' ke '{$ruanganTujuan->nama_ruangan}'",
+                'id_mutasi_barang_trigger' => $mutasi->id,
+            ]);
+
+            LogAktivitas::create([
+                'id_user' => $userPencatat->id,
+                'aktivitas' => 'Mutasi Unit Barang',
+                'deskripsi' => "Memutasi unit {$barangQrCode->kode_inventaris_sekolah} dari '{$snapshot['nama_ruangan']}' ke '{$ruanganTujuan->nama_ruangan}'.",
+                'model_terkait' => MutasiBarang::class,
+                'id_model_terkait' => $mutasi->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+
+            if (optional($ruanganAsal)->operator && optional($ruanganAsal->operator)->id !== $userPencatat->id) {
+                $ruanganAsal->operator->notify(new BarangMutated($mutasi, $userPencatat));
+            }
+            if (optional($ruanganTujuan->operator)->id && optional($ruanganTujuan->operator)->id !== $userPencatat->id && optional($ruanganTujuan->operator)->id !== optional($ruanganAsal->operator)->id) {
+                $ruanganTujuan->operator->notify(new BarangMutated($mutasi, $userPencatat));
+            }
+
+            DB::commit();
+            return redirect()->route($this->getRolePrefix() . 'barang-qr-code.show', $barangQrCode->id)->with('success', "Unit barang berhasil dipindahkan ke: {$ruanganTujuan->nama_ruangan}");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error mutating BarangQrCode (ID: {$barangQrCode->id}): {$e->getMessage()}");
+            return back()->with('error', 'Gagal memproses perpindahan unit.')->withInput();
+        }
+    }
 
     /**
      * Memproses penyerahan unit barang ke pemegang personal.
      */
-    public function assignPersonal(Request $request, BarangQrCode $barangQrCode): RedirectResponse|JsonResponse
+    public function assignPersonal(Request $request, BarangQrCode $barangQrCode): RedirectResponse
     {
         $this->authorize('assignPersonal', $barangQrCode);
 
-        // PENYESUAIAN: Tambahkan penjaga untuk item yang diarsipkan
-        if ($barangQrCode->trashed()) {
-            return back()->with('error', 'Barang yang sudah diarsipkan tidak dapat diserahkan.');
-        }
-
-        // PENAMBAHAN: Penjaga Status
-        if ($barangQrCode->status === \App\Models\BarangQrCode::STATUS_DIPINJAM) {
-            return back()->with('error', 'Gagal menyerahkan: barang sedang dipinjam.');
-        }
-        if ($barangQrCode->status !== \App\Models\BarangQrCode::STATUS_TERSEDIA) {
+        if ($barangQrCode->trashed() || $barangQrCode->status !== BarangQrCode::STATUS_TERSEDIA) {
             return back()->with('error', 'Hanya barang dengan status "Tersedia" yang dapat diserahkan.');
         }
 
         $validated = $request->validate([
-            'id_pemegang_personal' => [
-                'required',
-                'exists:users,id',
-                Rule::notIn([$barangQrCode->id_pemegang_personal])
-            ],
-            'catatan_penyerahan_personal' => 'nullable|string|max:1000',
-        ], ['id_pemegang_personal.not_in' => 'Pemegang personal yang dipilih sama dengan pemegang saat ini.']);
+            'id_pemegang_personal' => ['required', 'exists:users,id', Rule::notIn([$barangQrCode->id_pemegang_personal])],
+            'alasan_pemindahan' => 'required|string|max:1000',
+        ], ['id_pemegang_personal.not_in' => 'Pemegang baru tidak boleh sama.', 'alasan_pemindahan.required' => 'Alasan penyerahan wajib diisi.']);
 
-        $userPenerima = User::find($validated['id_pemegang_personal']);
-        $catatanPenyerahan = $validated['catatan_penyerahan_personal'] ?? null;
-        $userActor = Auth::user(); // User yang melakukan penyerahan
+        DB::beginTransaction();
+        try {
+            $userPencatat = Auth::user();
+            $userPenerima = User::find($validated['id_pemegang_personal']);
 
-        // Tanggal penyerahan akan dicatat sebagai now() di dalam model/BarangStatus
-        if ($barangQrCode->assignToPersonal($validated['id_pemegang_personal'], Auth::id())) {
-            $deskripsiLog = "Menyerahkan unit: {$barangQrCode->kode_inventaris_sekolah} ke {$userPenerima->username}.";
-            if ($catatanPenyerahan) {
-                $deskripsiLog .= " Catatan: " . $catatanPenyerahan;
-            }
+            $snapshot = ['id_ruangan' => $barangQrCode->id_ruangan, 'nama_ruangan' => optional($barangQrCode->ruangan)->nama_ruangan, 'kondisi' => $barangQrCode->kondisi, 'status' => $barangQrCode->status];
 
-            LogAktivitas::create([
-                'id_user' => Auth::id(),
-                'aktivitas' => 'Serah Terima ke Personal',
-                'deskripsi' => $deskripsiLog,
-                'model_terkait' => BarangQrCode::class,
-                'id_model_terkait' => $barangQrCode->id,
-                'data_baru' => $barangQrCode->fresh()->toJson(), // Ambil data terbaru
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
+            $mutasi = MutasiBarang::create([
+                'id_barang_qr_code' => $barangQrCode->id,
+                'jenis_mutasi' => 'Ruangan ke Personal',
+                'id_ruangan_asal' => $snapshot['id_ruangan'],
+                'id_pemegang_asal' => null, // Eksplisit set null
+                'id_ruangan_tujuan' => null, // Eksplisit set null
+                'id_pemegang_tujuan' => $userPenerima->id,
+                'alasan_pemindahan' => $validated['alasan_pemindahan'],
+                'id_user_admin' => $userPencatat->id,
+                'tanggal_mutasi' => now(),
             ]);
 
-            // --- TAMBAHKAN KODE INI UNTUK MENGIRIM NOTIFIKASI ---
-            // Kirim notifikasi ke user penerima
-            if ($userPenerima) {
-                $userPenerima->notify(new BarangAssignedToPersonal($barangQrCode, $userActor));
-            }
-            // --- AKHIR KODE NOTIFIKASI ---
+            $barangQrCode->update(['id_pemegang_personal' => $userPenerima->id, 'id_ruangan' => null]);
 
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Barang berhasil diserahkan ke: ' . $userPenerima->username,
-                    'redirect_url' => route($this->getRolePrefix() . 'barang-qr-code.show', $barangQrCode->id) // Opsional, untuk JS redirect
-                ]);
-            }
-            return redirect()->route($this->getRolePrefix() . 'barang-qr-code.show', $barangQrCode->id)->with('success', 'Barang berhasil diserahkan ke: ' . $userPenerima->username);
-        }
+            BarangStatus::create([
+                'id_barang_qr_code' => $barangQrCode->id,
+                'id_user_pencatat' => $userPencatat->id,
+                'tanggal_pencatatan' => now(),
+                'id_ruangan_sebelumnya' => $snapshot['id_ruangan'],
+                'id_pemegang_personal_sesudahnya' => $userPenerima->id,
+                'kondisi_sebelumnya' => $snapshot['kondisi'],
+                'kondisi_sesudahnya' => $barangQrCode->kondisi,
+                'status_ketersediaan_sebelumnya' => $snapshot['status'],
+                'status_ketersediaan_sesudahnya' => $barangQrCode->status,
+                'deskripsi_kejadian' => "Diserahkan dari ruangan '{$snapshot['nama_ruangan']}' ke {$userPenerima->username}",
+                'id_mutasi_barang_trigger' => $mutasi->id
+            ]);
 
-        if ($request->ajax() || $request->wantsJson()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal menyerahkan barang.'
-            ], 500); // Kode status error server
+            LogAktivitas::create([
+                'id_user' => $userPencatat->id,
+                'aktivitas' => 'Serah Terima ke Personal',
+                'deskripsi' => "Menyerahkan unit: {$barangQrCode->kode_inventaris_sekolah} ke {$userPenerima->username}.",
+                'model_terkait' => MutasiBarang::class,
+                'id_model_terkait' => $mutasi->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+
+            // KODE YANG BENAR
+            $userPenerima->notify(new BarangAssignedToPersonal($barangQrCode, $userPencatat));
+            DB::commit();
+            return redirect()->route($this->getRolePrefix() . 'barang-qr-code.show', $barangQrCode->id)->with('success', "Barang berhasil diserahkan ke {$userPenerima->username}.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error assigning personal BarangQrCode (ID: {$barangQrCode->id}): {$e->getMessage()}");
+            return back()->with('error', 'Gagal menyerahkan barang.')->withInput();
         }
-        return back()->with('error', 'Gagal menyerahkan barang.')->withInput();
     }
 
     /**
      * Memproses pengembalian barang dari pemegang personal ke ruangan.
      */
-    public function returnFromPersonal(Request $request, BarangQrCode $barangQrCode): RedirectResponse|JsonResponse
+    public function returnFromPersonal(Request $request, BarangQrCode $barangQrCode): RedirectResponse
     {
         $this->authorize('returnPersonal', $barangQrCode);
 
-        // PENYESUAIAN: Tambahkan penjaga untuk item yang diarsipkan
-        if ($barangQrCode->trashed()) {
-            return back()->with('error', 'Barang yang sudah diarsipkan tidak dapat diserahkan.');
-        }
-
-        // PENAMBAHAN: Penjaga Status
-        if ($barangQrCode->status === \App\Models\BarangQrCode::STATUS_DIPINJAM) {
-            return back()->with('error', 'Gagal mengembalikan: barang sedang dipinjam oleh pihak lain.');
+        if ($barangQrCode->id_pemegang_personal === null || $barangQrCode->trashed() || $barangQrCode->status === BarangQrCode::STATUS_DIPINJAM) {
+            return back()->with('error', 'Aksi tidak diizinkan. Barang tidak dipegang personal, diarsipkan, atau sedang dipinjam.');
         }
 
         $validated = $request->validate([
             'id_ruangan_tujuan' => 'required|exists:ruangans,id',
-            'catatan_pengembalian_ruangan' => 'nullable|string|max:1000',
-        ]);
+            'alasan_pemindahan' => 'required|string|max:1000',
+        ], ['alasan_pemindahan.required' => 'Alasan pengembalian wajib diisi.']);
 
-        $ruanganTujuan = Ruangan::find($validated['id_ruangan_tujuan']);
-        $pemegangLama = $barangQrCode->pemegangPersonal; // Bisa null jika tidak ada relasi atau tidak dimuat
-        $namaPemegangLama = $pemegangLama ? $pemegangLama->username : 'N/A';
+        DB::beginTransaction();
+        try {
+            $userPencatat = Auth::user();
+            $ruanganTujuan = Ruangan::find($validated['id_ruangan_tujuan']);
 
+            $snapshot = ['id_pemegang' => $barangQrCode->id_pemegang_personal, 'nama_pemegang' => optional($barangQrCode->pemegangPersonal)->username, 'kondisi' => $barangQrCode->kondisi, 'status' => $barangQrCode->status];
+            $pemegangLama = User::find($snapshot['id_pemegang']);
 
-
-        $userPencatat = Auth::user();
-        /** @var \App\Models\User $userPencatat */
-
-        if ($userPencatat->hasRole(User::ROLE_OPERATOR)) {
-            if (!$userPencatat->ruanganYangDiKelola()->where('id', $ruanganTujuan->id)->exists()) {
-                if ($request->ajax() || $request->wantsJson()) {
-                    return response()->json(['success' => false, 'message' => 'Anda tidak diizinkan mengembalikan barang ke ruangan yang dipilih.'], 403);
-                }
-                return back()->with('error', 'Anda tidak diizinkan mengembalikan barang ke ruangan yang dipilih.')->withInput();
-            }
-        }
-
-        $catatanPengembalian = $validated['catatan_pengembalian_ruangan'] ?? null;
-        // Tanggal pengembalian akan dicatat sebagai now() di dalam model/BarangStatus
-
-        if ($barangQrCode->returnFromPersonalToRoom($validated['id_ruangan_tujuan'], Auth::id())) {
-            $deskripsiLog = "Mengembalikan unit: {$barangQrCode->kode_inventaris_sekolah} dari {$namaPemegangLama} ke ruangan {$ruanganTujuan->nama_ruangan}.";
-            if ($catatanPengembalian) {
-                $deskripsiLog .= " Catatan: " . $catatanPengembalian;
-            }
-
-            LogAktivitas::create([
-                'id_user' => Auth::id(),
-                'aktivitas' => 'Pengembalian dari Personal ke Ruangan',
-                'deskripsi' => $deskripsiLog,
-                'model_terkait' => BarangQrCode::class,
-                'id_model_terkait' => $barangQrCode->id,
-                'data_baru' => $barangQrCode->fresh()->toJson(),
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
+            $mutasi = MutasiBarang::create([
+                'id_barang_qr_code' => $barangQrCode->id,
+                'jenis_mutasi' => 'Personal ke Ruangan',
+                'id_pemegang_asal' => $snapshot['id_pemegang'],
+                'id_ruangan_asal' => null, // Eksplisit set null
+                'id_ruangan_tujuan' => $ruanganTujuan->id,
+                'id_pemegang_tujuan' => null, // Eksplisit set null
+                'alasan_pemindahan' => $validated['alasan_pemindahan'],
+                'id_user_admin' => $userPencatat->id,
+                'tanggal_mutasi' => now(),
             ]);
 
-            // --- TAMBAHKAN KODE INI UNTUK MENGIRIM NOTIFIKASI ---
-            // Kirim notifikasi ke Operator yang mengelola ruangan tujuan
-            $operatorRuanganTujuan = $ruanganTujuan->operator; // Relasi 'operator' di model Ruangan
-            if ($operatorRuanganTujuan) {
-                // Cek jika operator ruangan tujuan berbeda dengan operator yang melakukan aksi
-                // dan kirim notifikasi
-                if ($operatorRuanganTujuan->id !== Auth::id()) {
-                    $operatorRuanganTujuan->notify(new BarangReturnedFromPersonal($barangQrCode, $ruanganTujuan, $pemegangLama));
-                }
+            $barangQrCode->update(['id_ruangan' => $ruanganTujuan->id, 'id_pemegang_personal' => null]);
+
+            BarangStatus::create([
+                'id_barang_qr_code' => $barangQrCode->id,
+                'id_user_pencatat' => $userPencatat->id,
+                'tanggal_pencatatan' => now(),
+                'id_ruangan_sesudahnya' => $ruanganTujuan->id,
+                'id_pemegang_personal_sebelumnya' => $snapshot['id_pemegang'],
+                'kondisi_sebelumnya' => $snapshot['kondisi'],
+                'kondisi_sesudahnya' => $barangQrCode->kondisi,
+                'status_ketersediaan_sebelumnya' => $snapshot['status'],
+                'status_ketersediaan_sesudahnya' => $barangQrCode->status,
+                'deskripsi_kejadian' => "Dikembalikan dari {$snapshot['nama_pemegang']} ke ruangan {$ruanganTujuan->nama_ruangan}",
+                'id_mutasi_barang_trigger' => $mutasi->id,
+            ]);
+
+            LogAktivitas::create([
+                'id_user' => $userPencatat->id,
+                'aktivitas' => 'Pengembalian dari Personal',
+                'deskripsi' => "Mengembalikan unit {$barangQrCode->kode_inventaris_sekolah} dari {$snapshot['nama_pemegang']} ke ruangan {$ruanganTujuan->nama_ruangan}.",
+                'model_terkait' => MutasiBarang::class,
+                'id_model_terkait' => $mutasi->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+
+            if (optional($ruanganTujuan->operator)->id && $ruanganTujuan->operator->id !== $userPencatat->id) {
+                $ruanganTujuan->operator->notify(new BarangReturnedFromPersonal($barangQrCode, $ruanganTujuan, $pemegangLama));
             }
-            // --- AKHIR KODE NOTIFIKASI ---
 
-
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Barang berhasil dikembalikan ke ruangan: ' . $ruanganTujuan->nama_ruangan,
-                    'redirect_url' => route($this->getRolePrefix() . 'barang-qr-code.show', $barangQrCode->id)
-                ]);
-            }
-            return redirect()->route($this->getRolePrefix() . 'barang-qr-code.show', $barangQrCode->id)->with('success', 'Barang berhasil dikembalikan ke ruangan: ' . $ruanganTujuan->nama_ruangan);
+            DB::commit();
+            return redirect()->route($this->getRolePrefix() . 'barang-qr-code.show', $barangQrCode->id)->with('success', "Barang berhasil dikembalikan ke ruangan {$ruanganTujuan->nama_ruangan}.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error returning from personal (BarangQrCode ID: {$barangQrCode->id}): {$e->getMessage()}");
+            return back()->with('error', 'Gagal mengembalikan barang.')->withInput();
         }
-
-        if ($request->ajax() || $request->wantsJson()) {
-            return response()->json(['success' => false, 'message' => 'Gagal mengembalikan barang.'], 500);
-        }
-        return back()->with('error', 'Gagal mengembalikan barang.')->withInput();
     }
 
     /**
      * Memproses transfer barang antar pemegang personal.
      */
-    public function transferPersonal(Request $request, BarangQrCode $barangQrCode): RedirectResponse|JsonResponse
+    public function transferPersonal(Request $request, BarangQrCode $barangQrCode): RedirectResponse
     {
         $this->authorize('transferPersonal', $barangQrCode);
 
-        // PENYESUAIAN: Tambahkan penjaga untuk item yang diarsipkan
-        if ($barangQrCode->trashed()) {
-            return back()->with('error', 'Barang yang sudah diarsipkan tidak dapat diserahkan.');
-        }
-
-        // PENAMBAHAN: Penjaga Status
-        if ($barangQrCode->status === \App\Models\BarangQrCode::STATUS_DIPINJAM) {
-            return back()->with('error', 'Gagal mentransfer: barang sedang dipinjam oleh pihak lain.');
+        if ($barangQrCode->id_pemegang_personal === null || $barangQrCode->trashed()) {
+            return back()->with('error', 'Barang ini tidak sedang dipegang oleh personal untuk ditransfer.');
         }
 
         $validated = $request->validate([
-            'new_id_pemegang_personal' => [
-                'required',
-                'exists:users,id',
-                Rule::notIn([$barangQrCode->id_pemegang_personal])
-            ],
-            'catatan_transfer_personal' => 'nullable|string|max:1000',
-        ], ['new_id_pemegang_personal.not_in' => 'Pemegang personal baru tidak boleh sama dengan pemegang saat ini.']);
+            'new_id_pemegang_personal' => ['required', 'exists:users,id', Rule::notIn([$barangQrCode->id_pemegang_personal])],
+            'alasan_pemindahan' => 'required|string|max:1000',
+        ], ['new_id_pemegang_personal.not_in' => 'Pemegang baru tidak boleh sama.', 'alasan_pemindahan.required' => 'Alasan transfer wajib diisi.']);
 
-        $pemegangBaru = User::find($validated['new_id_pemegang_personal']);
-        $pemegangLama = $barangQrCode->pemegangPersonal; // Bisa null jika tidak ada relasi atau tidak dimuat
-        $namaPemegangLama = $pemegangLama ? $pemegangLama->username : 'N/A';
+        DB::beginTransaction();
+        try {
+            $userPencatat = Auth::user();
+            $pemegangBaru = User::find($validated['new_id_pemegang_personal']);
 
-        $catatanTransfer = $validated['catatan_transfer_personal'] ?? null;
-        // Tanggal transfer akan dicatat sebagai now() di dalam model/BarangStatus
-        $userActor = Auth::user(); // User yang melakukan transfer
+            $snapshot = ['id_pemegang' => $barangQrCode->id_pemegang_personal, 'nama_pemegang' => optional($barangQrCode->pemegangPersonal)->username, 'kondisi' => $barangQrCode->kondisi, 'status' => $barangQrCode->status];
+            $pemegangLama = User::find($snapshot['id_pemegang']);
 
-        if ($barangQrCode->transferPersonalHolder($validated['new_id_pemegang_personal'], Auth::id())) {
-            $deskripsiLog = "Transfer unit: {$barangQrCode->kode_inventaris_sekolah} dari {$namaPemegangLama} ke {$pemegangBaru->username}.";
-            if ($catatanTransfer) {
-                $deskripsiLog .= " Catatan: " . $catatanTransfer;
-            }
-
-            LogAktivitas::create([
-                'id_user' => Auth::id(),
-                'aktivitas' => 'Transfer Pemegang Personal',
-                'deskripsi' => $deskripsiLog,
-                'model_terkait' => BarangQrCode::class,
-                'id_model_terkait' => $barangQrCode->id,
-                'data_lama' => json_encode(['id_pemegang_personal' => $pemegangLama->id ?? null, 'username_pemegang_lama' => $namaPemegangLama]),
-                'data_baru' => $barangQrCode->fresh()->toJson(),
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
+            $mutasi = MutasiBarang::create([
+                'id_barang_qr_code' => $barangQrCode->id,
+                'jenis_mutasi' => 'Antar Personal',
+                'id_pemegang_asal' => $snapshot['id_pemegang'],
+                'id_ruangan_asal' => null, // Eksplisit set null
+                'id_pemegang_tujuan' => $pemegangBaru->id,
+                'id_ruangan_tujuan' => null, // Eksplisit set null
+                'alasan_pemindahan' => $validated['alasan_pemindahan'],
+                'id_user_admin' => $userPencatat->id,
+                'tanggal_mutasi' => now(),
             ]);
 
-            // Kirim notifikasi ke pemegang baru
-            if ($pemegangBaru) {
-                $pemegangBaru->notify(new BarangTransferredPersonal($barangQrCode, $pemegangLama, $userActor));
-            }
-            // Kirim notifikasi ke pemegang lama (opsional, tapi disarankan)
-            if ($pemegangLama && $pemegangLama->id !== $pemegangBaru->id) { // Pastikan pemegang lama ada dan berbeda dari yang baru
-                $pemegangLama->notify(new BarangTransferredPersonal($barangQrCode, $pemegangLama, $userActor));
-            }
-            // --- AKHIR KODE NOTIFIKASI ---
+            $barangQrCode->update(['id_pemegang_personal' => $pemegangBaru->id]);
 
+            BarangStatus::create([
+                'id_barang_qr_code' => $barangQrCode->id,
+                'id_user_pencatat' => $userPencatat->id,
+                'tanggal_pencatatan' => now(),
+                'id_pemegang_personal_sebelumnya' => $snapshot['id_pemegang'],
+                'id_pemegang_personal_sesudahnya' => $pemegangBaru->id,
+                'kondisi_sebelumnya' => $snapshot['kondisi'],
+                'kondisi_sesudahnya' => $barangQrCode->kondisi,
+                'status_ketersediaan_sebelumnya' => $snapshot['status'],
+                'status_ketersediaan_sesudahnya' => $barangQrCode->status,
+                'deskripsi_kejadian' => "Transfer dari {$snapshot['nama_pemegang']} ke {$pemegangBaru->username}",
+                'id_mutasi_barang_trigger' => $mutasi->id,
+            ]);
 
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Barang berhasil ditransfer ke: ' . $pemegangBaru->username,
-                    'redirect_url' => route($this->getRolePrefix() . 'barang-qr-code.show', $barangQrCode->id)
-                ]);
+            LogAktivitas::create([
+                'id_user' => $userPencatat->id,
+                'aktivitas' => 'Transfer Pemegang Personal',
+                'deskripsi' => "Mentransfer unit {$barangQrCode->kode_inventaris_sekolah} dari {$snapshot['nama_pemegang']} ke {$pemegangBaru->username}.",
+                'model_terkait' => MutasiBarang::class,
+                'id_model_terkait' => $mutasi->id,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+
+            $pemegangBaru->notify(new BarangTransferredPersonal($barangQrCode, $pemegangLama, $userPencatat));
+            if ($pemegangLama) {
+                $pemegangLama->notify(new BarangTransferredPersonal($barangQrCode, $pemegangLama, $userPencatat));
             }
-            return redirect()->route($this->getRolePrefix() . 'barang-qr-code.show', $barangQrCode->id)->with('success', 'Barang berhasil ditransfer ke: ' . $pemegangBaru->username);
+
+            DB::commit();
+            return redirect()->route($this->getRolePrefix() . 'barang-qr-code.show', $barangQrCode->id)->with('success', "Barang berhasil ditransfer ke {$pemegangBaru->username}.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Error transferring personal holder (BarangQrCode ID: {$barangQrCode->id}): {$e->getMessage()}");
+            return back()->with('error', 'Gagal mentransfer pemegang personal.')->withInput();
         }
-
-        if ($request->ajax() || $request->wantsJson()) {
-            return response()->json(['success' => false, 'message' => 'Gagal mentransfer pemegang personal.'], 500);
-        }
-        return back()->with('error', 'Gagal mentransfer pemegang personal.')->withInput();
     }
-
 
     public function archive(Request $request, BarangQrCode $barangQrCode): RedirectResponse
     {
@@ -947,131 +1007,6 @@ class BarangQrCodeController extends Controller
             return back()->with('error', 'Gagal memulihkan dari arsip: ' . (config('app.debug') ? $e->getMessage() : 'Kesalahan sistem.'))->withInput();
         }
     }
-
-    /**
-     * Memproses mutasi (perpindahan) unit BarangQrCode ke ruangan lain.
-     * Metode ini HANYA untuk perpindahan Ruangan -> Ruangan.
-     * Untuk Personal -> Ruangan, gunakan returnFromPersonal().
-     */
-    /**
-     * Memproses penempatan atau mutasi unit BarangQrCode ke ruangan lain.
-     */
-    public function mutasi(Request $request, BarangQrCode $barangQrCode): RedirectResponse
-    {
-        $this->authorize('mutasi', $barangQrCode);
-        $userPencatat = Auth::user();
-
-        // Penjaga umum
-        if ($barangQrCode->trashed()) {
-            return back()->with('error', 'Barang yang sudah diarsipkan tidak dapat dipindahkan.');
-        }
-        if ($barangQrCode->status === BarangQrCode::STATUS_DIPINJAM) {
-            return back()->with('error', 'Unit sedang dipinjam dan tidak dapat dipindahkan.');
-        }
-        if ($barangQrCode->id_pemegang_personal !== null) {
-            return back()->with('error', 'Unit sedang dipegang personal. Gunakan fitur "Kembalikan ke Ruangan" terlebih dahulu.');
-        }
-
-        $validated = $request->validate([
-            'id_ruangan_tujuan' => ['required', 'exists:ruangans,id', \Illuminate\Validation\Rule::notIn([$barangQrCode->id_ruangan])],
-            'alasan_pemindahan' => 'required|string|max:1000',
-            'surat_pemindahan_path' => 'nullable|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:2048',
-        ], ['id_ruangan_tujuan.not_in' => 'Ruangan tujuan tidak boleh sama dengan ruangan saat ini.']);
-
-        DB::beginTransaction();
-        try {
-            $ruanganTujuan = Ruangan::find($validated['id_ruangan_tujuan']);
-            $ruanganAsalIdSebelum = $barangQrCode->id_ruangan;
-            $aktivitasLog = "";
-            $deskripsiLog = "";
-            $userActor = Auth::user(); // User yang melakukan mutasi
-
-            $mutasiRecord = null; // Inisialisasi variabel untuk objek MutasiBarang yang sebenarnya
-
-            // Logika untuk Penempatan (jika barang mengambang)
-            if ($ruanganAsalIdSebelum === null) {
-                $barangQrCode->id_ruangan = $ruanganTujuan->id;
-                $barangQrCode->save(); // Simpan perubahan lokasi
-                $aktivitasLog = 'Penempatan Unit Barang';
-                $deskripsiLog = "Menempatkan unit {$barangQrCode->kode_inventaris_sekolah} ke ruangan {$ruanganTujuan->nama_ruangan}.";
-
-                // Pada skenario penempatan awal, kita perlu membuat objek MutasiBarang "minimal"
-                // agar notifikasi BarangMutated bisa bekerja. Kita tidak menyimpannya ke DB.
-                $mutasiRecord = new MutasiBarang();
-                $mutasiRecord->id_barang_qr_code = $barangQrCode->id;
-                $mutasiRecord->id_ruangan_asal = null; // Asal null
-                $mutasiRecord->id_ruangan_tujuan = $ruanganTujuan->id;
-                $mutasiRecord->tanggal_mutasi = now();
-                $mutasiRecord->alasan_pemindahan = "Penempatan awal: {$validated['alasan_pemindahan']}";
-                $mutasiRecord->id_user_admin = $userActor->id;
-                // Tidak perlu $mutasiRecord->save() di sini, karena ini bukan record mutasi_barangs yang sebenarnya
-
-                // Kirim notifikasi ke operator ruangan tujuan
-                if (optional($ruanganTujuan->operator)->id) {
-                    $ruanganTujuan->operator->notify(new BarangMutated($mutasiRecord, $userActor));
-                }
-            }
-            // Logika untuk Mutasi Sejati (dari ruangan A ke ruangan B)
-            else {
-                $suratPath = $request->hasFile('surat_pemindahan_path') ?
-                    $request->file('surat_pemindahan_path')->store('mutasi/dokumen_unit', 'public') : null;
-
-                $mutasiRecord = MutasiBarang::create([ // Record MutasiBarang yang sebenarnya
-                    'id_barang_qr_code' => $barangQrCode->id,
-                    'id_ruangan_asal' => $ruanganAsalIdSebelum,
-                    'id_ruangan_tujuan' => $ruanganTujuan->id,
-                    'alasan_pemindahan' => $validated['alasan_pemindahan'],
-                    'surat_pemindahan_path' => $suratPath,
-                    'id_user_admin' => $userActor->id,
-                ]);
-                // Event 'created' di model MutasiBarang akan mengupdate lokasi BarangQrCode
-                $aktivitasLog = 'Mutasi Unit Barang';
-                $deskripsiLog = "Memutasi unit {$barangQrCode->kode_inventaris_sekolah} dari '{$mutasiRecord->ruanganAsal->nama_ruangan}' ke '{$ruanganTujuan->nama_ruangan}'.";
-
-                // --- TAMBAHKAN KODE INI UNTUK MENGIRIM NOTIFIKASI ---
-                // Kirim notifikasi ke operator ruangan asal (jika ada)
-                $ruanganAsal = Ruangan::find($ruanganAsalIdSebelum);
-                if (optional($ruanganAsal->operator)->id) {
-                    $ruanganAsal->operator->notify(new BarangMutated($mutasiRecord, $userActor));
-                }
-                // Kirim notifikasi ke operator ruangan tujuan (jika ada dan berbeda dari asal)
-                if (optional($ruanganTujuan->operator)->id && $ruanganTujuan->operator->id !== optional($ruanganAsal->operator)->id) {
-                    $ruanganTujuan->operator->notify(new BarangMutated($mutasiRecord, $userActor));
-                }
-                // Kirim notifikasi ke Admin (selalu, kecuali Admin yang melakukan mutasi itu sendiri)
-                $admins = User::where('role', User::ROLE_ADMIN)->get();
-                foreach ($admins as $admin) {
-                    if ($admin->id !== $userActor->id) { // Jangan notifikasi diri sendiri
-                        $admin->notify(new BarangMutated($mutasiRecord, $userActor));
-                    }
-                }
-                // --- AKHIR KODE NOTIFIKASI ---
-            }
-
-            // Log Aktivitas
-            LogAktivitas::create([
-                'id_user' => $userActor->id,
-                'aktivitas' => $aktivitasLog,
-                'deskripsi' => $deskripsiLog,
-                'model_terkait' => BarangQrCode::class, // Model terkait adalah BarangQrCode
-                'id_model_terkait' => $barangQrCode->id,
-                'data_lama' => json_encode(['id_ruangan' => $ruanganAsalIdSebelum]),
-                'data_baru' => json_encode(['id_ruangan' => $barangQrCode->id_ruangan]), // Setelah disimpan oleh MutasiBarang event atau langsung
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-            ]);
-            DB::commit();
-            return redirect($this->getRedirectUrl("barang-qr-code/{$barangQrCode->id}"))
-                ->with('success', "Unit barang berhasil ditempatkan/dipindahkan ke: {$ruanganTujuan->nama_ruangan}");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("Error mutating BarangQrCode (ID: {$barangQrCode->id}): {$e->getMessage()}");
-            return back()->with('error', 'Gagal memproses perpindahan unit.')->withInput();
-        }
-    }
-
-
-
 
     /**
      * Mengunduh file gambar QR Code.

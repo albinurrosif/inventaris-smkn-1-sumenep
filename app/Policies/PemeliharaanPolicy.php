@@ -99,6 +99,17 @@ class PemeliharaanPolicy
         return $user->hasRole(User::ROLE_ADMIN) || $user->id === $pemeliharaan->id_operator_pengerjaan;
     }
 
+    public function confirmHandover(User $user, Pemeliharaan $pemeliharaan): bool
+    {
+        // Syarat: Status harus 'Selesai'
+        if ($pemeliharaan->status !== Pemeliharaan::STATUS_SELESAI) {
+            return false;
+        }
+
+        // Syarat: User adalah Admin atau Operator yang ditugaskan (PIC)
+        return $user->hasRole(User::ROLE_ADMIN) || $user->id === $pemeliharaan->id_operator_pengerjaan;
+    }
+
     /**
      * PERUBAHAN: Logika update yang lebih detail.
      * Admin bisa selalu update (dari before).
@@ -174,6 +185,4 @@ class PemeliharaanPolicy
         // Hanya Admin
         return false;
     }
-
-
 }

@@ -316,17 +316,54 @@ class StokOpnameController extends Controller
             'catatan_fisik' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        // Ambil data sebelum diubah untuk logging
+        $barang = $detail->barangQrCode()->withTrashed()->first();
+        $kondisiSebelum = $barang->kondisi;
+        $statusSebelum = $barang->status;
+
+        // Catat waktu pemeriksaan
         if (is_null($detail->waktu_pertama_diperiksa)) {
             $validated['waktu_pertama_diperiksa'] = now();
         }
         $validated['waktu_terakhir_diperiksa'] = now();
 
+        // Update detail SO
         $detail->update($validated);
+
+        // ================== LOGIKA BARU DITAMBAHKAN ==================
+        $kondisiBaruBarang = $detail->kondisi_fisik;
+        $statusKetersediaanBaru = $barang->status; // Defaultnya tetap sama
+
+        // Logika khusus jika barang dinyatakan hilang
+        if ($kondisiBaruBarang === DetailStokOpname::KONDISI_HILANG) {
+            $kondisiBaruBarang = BarangQrCode::KONDISI_HILANG;
+            $statusKetersediaanBaru = BarangQrCode::STATUS_DIARSIPKAN; // Atau status lain yang sesuai
+        }
+
+        // Hanya update dan catat log jika ada perubahan pada barang itu sendiri
+        if ($kondisiSebelum !== $kondisiBaruBarang || $statusSebelum !== $statusKetersediaanBaru) {
+            $barang->kondisi = $kondisiBaruBarang;
+            $barang->status = $statusKetersediaanBaru;
+            $barang->save();
+
+            // Buat log di BarangStatus
+            BarangStatus::create([
+                'id_barang_qr_code' => $barang->id,
+                'id_user_pencatat' => Auth::id(),
+                'kondisi_sebelumnya' => $kondisiSebelum,
+                'kondisi_sesudahnya' => $barang->kondisi,
+                'status_ketersediaan_sebelumnya' => $statusSebelum,
+                'status_ketersediaan_sesudahnya' => $barang->status,
+                'deskripsi_kejadian' => "Pemeriksaan Stok Opname ID: {$detail->id_stok_opname}",
+                'id_detail_stok_opname_trigger' => $detail->id,
+            ]);
+        }
+        // ==========================================================
 
         return response()->json([
             'success' => true,
             'message' => 'Data unit berhasil diperbarui.',
-            'waktu_diperiksa' => \Carbon\Carbon::parse($validated['waktu_terakhir_diperiksa'])->isoFormat('HH:mm:ss')
+            'waktu_diperiksa' => Carbon::parse($validated['waktu_terakhir_diperiksa'])->isoFormat('HH:mm:ss')
         ]);
     }
 
@@ -522,6 +559,21 @@ class StokOpnameController extends Controller
             $stokOpname->tanggal_selesai_pengerjaan = now();
 
             $stokOpname->save();
+
+            // ================== LOGIKA BARU DITAMBAHKAN ==================
+            // Cari semua barang yang ditandai hilang dalam sesi ini dan arsipkan (soft delete)
+            $detailHilang = $stokOpname->detailStokOpname()
+                ->where('kondisi_fisik', DetailStokOpname::KONDISI_HILANG)
+                ->with('barangQrCode')
+                ->get();
+
+            foreach ($detailHilang as $detail) {
+                if ($detail->barangQrCode && is_null($detail->barangQrCode->deleted_at)) {
+                    $detail->barangQrCode->delete(); // Soft delete barang
+                }
+            }
+            // ==========================================================
+
 
             $dataBaru = $stokOpname->refresh()->toArray();
 

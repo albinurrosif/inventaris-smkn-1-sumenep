@@ -144,37 +144,127 @@
             {{-- Kolom Kiri: Detail Unit & Aksi Cepat --}}
             <div class="col-xl-4 col-lg-5">
 
-                {{-- CARD DETAIL UNIT BARANG (TIDAK BERUBAH) --}}
+                {{-- GANTI SELURUH CARD "DETAIL UNIT BARANG" ANDA DENGAN INI --}}
+
                 <div class="card mb-4">
                     <div class="card-header">
                         <h5 class="card-title mb-0"><i class="fas fa-box me-2"></i>Detail Unit Barang</h5>
                     </div>
-                    <div class="card-body">
-                        @if ($pemeliharaan->barangQrCode)
-                            @php $barangQr = $pemeliharaan->barangQrCode; @endphp
-                            <p class="mb-2"><span class="detail-label">Kode Inventaris:</span>
-                                <a href="{{ route($rolePrefix . 'barang-qr-code.show', $barangQr->id) }}" target="_blank">
-                                    <code>{{ $barangQr->kode_inventaris_sekolah }}</code>
-                                </a>
-                            </p>
-                            <p class="mb-2"><span class="detail-label">Nama Barang:</span>
-                                {{ optional($barangQr->barang)->nama_barang ?? 'N/A' }}</p>
-                            <p class="mb-2"><span class="detail-label">No. Seri:</span>
-                                {{ $barangQr->no_seri_pabrik ?: '-' }}</p>
-                            <p class="mb-2"><span class="detail-label">Kondisi Saat Lapor:</span>
-                                <span
-                                    class="badge bg-{{ \App\Models\BarangQrCode::getKondisiColor($barangQr->getOriginal('kondisi')) }}">{{ $barangQr->getOriginal('kondisi') }}</span>
-                            </p>
-                            <p class="mb-0"><span class="detail-label">Status Saat Lapor:</span>
-                                <span
-                                    class="badge bg-{{ \App\Models\BarangQrCode::getStatusColor($barangQr->getOriginal('status')) }}">{{ $barangQr->getOriginal('status') }}</span>
-                            </p>
-                        @else
-                            <p class="text-danger">Data unit barang tidak ditemukan.</p>
-                        @endif
+                    {{-- GANTI SELURUH CARD "DETAIL UNIT BARANG" DARI <div class="card..."> HINGGA </div> PENUTUPNYA --}}
+
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0"><i class="fas fa-box me-2"></i>Detail Unit Barang</h5>
+                        </div>
+                        <div class="card-body">
+                            @if ($pemeliharaan->barangQrCode)
+                                <p class="mb-2"><span class="detail-label">Kode Inventaris:</span>
+                                    <a href="{{ route($rolePrefix . 'barang-qr-code.show', $pemeliharaan->barangQrCode->id) }}"
+                                        target="_blank">
+                                        <code>{{ $pemeliharaan->barangQrCode->kode_inventaris_sekolah }}</code>
+                                    </a>
+                                </p>
+                                <p class="mb-2"><span class="detail-label">Nama Barang:</span>
+                                    {{ optional($pemeliharaan->barangQrCode->barang)->nama_barang ?? 'N/A' }}</p>
+                                <p class="mb-2"><span class="detail-label">No. Seri:</span>
+                                    {{ $pemeliharaan->barangQrCode->no_seri_pabrik ?: '-' }}</p>
+
+                                <hr class="my-3">
+
+                                <h6 class="text-muted">Snapshot Saat Laporan Dibuat</h6>
+                                <div class="p-3 card-item-detail mb-3">
+                                    <p class="mb-2"><span class="detail-label">Kondisi:</span>
+                                        @php
+                                            // Logika warna langsung di view untuk snapshot kondisi
+                                            $kondisiSaatLaporColor = 'secondary'; // Warna default
+                                            if ($pemeliharaan->kondisi_saat_lapor) {
+                                                $kondisiSaatLaporColor = match (
+                                                    strtolower($pemeliharaan->kondisi_saat_lapor)
+                                                ) {
+                                                    'baik' => 'success',
+                                                    'kurang baik' => 'warning',
+                                                    'rusak berat' => 'danger',
+                                                    'hilang' => 'dark',
+                                                    default => 'secondary',
+                                                };
+                                            }
+                                        @endphp
+                                        <span class="badge text-bg-{{ $kondisiSaatLaporColor }}">
+                                            {{ $pemeliharaan->kondisi_saat_lapor ?? 'N/A' }}
+                                        </span>
+                                    </p>
+                                    <p class="mb-0"><span class="detail-label">Status Ketersediaan:</span>
+                                        @php
+                                            // Logika warna langsung di view untuk snapshot status
+                                            $statusSaatLaporColor = 'secondary'; // Warna default
+                                            if ($pemeliharaan->status_saat_lapor) {
+                                                $statusSaatLaporColor = match (
+                                                    strtolower($pemeliharaan->status_saat_lapor)
+                                                ) {
+                                                    'tersedia' => 'success',
+                                                    'dipinjam' => 'primary',
+                                                    'dalam pemeliharaan' => 'info',
+                                                    'diarsipkan/dihapus' => 'dark',
+                                                    default => 'secondary',
+                                                };
+                                            }
+                                        @endphp
+                                        <span class="badge text-bg-{{ $statusSaatLaporColor }}">
+                                            {{ $pemeliharaan->status_saat_lapor ?? 'N/A' }}
+                                        </span>
+                                    </p>
+                                </div>
+
+                                <h6 class="text-muted">Data Live Barang Saat Ini</h6>
+                                <div class="p-3 card-item-detail">
+                                    <p class="mb-2"><span class="detail-label">Kondisi Terkini:</span>
+                                        @php
+                                            $kondisiTerkiniColor = 'secondary'; // Warna default
+                                            if (optional($pemeliharaan->barangQrCode)->kondisi) {
+                                                $kondisiTerkiniColor = match (
+                                                    strtolower($pemeliharaan->barangQrCode->kondisi)
+                                                ) {
+                                                    'baik' => 'success',
+                                                    'kurang baik' => 'warning',
+                                                    'rusak berat' => 'danger',
+                                                    'hilang' => 'dark',
+                                                    default => 'secondary',
+                                                };
+                                            }
+                                        @endphp
+                                        <span class="badge text-bg-{{ $kondisiTerkiniColor }}">
+                                            {{ optional($pemeliharaan->barangQrCode)->kondisi ?? 'N/A' }}
+                                        </span>
+                                    </p>
+                                    <p class="mb-0"><span class="detail-label">Status Terkini:</span>
+                                        @php
+                                            $statusTerkiniColor = 'secondary'; // Warna default
+                                            if (optional($pemeliharaan->barangQrCode)->status) {
+                                                $statusTerkiniColor = match (
+                                                    strtolower($pemeliharaan->barangQrCode->status)
+                                                ) {
+                                                    'tersedia' => 'success',
+                                                    'dipinjam' => 'primary',
+                                                    'dalam pemeliharaan' => 'info',
+                                                    'diarsipkan/dihapus' => 'dark',
+                                                    default => 'secondary',
+                                                };
+                                            }
+                                        @endphp
+                                        <span class="badge text-bg-{{ $statusTerkiniColor }}">
+                                            {{ optional($pemeliharaan->barangQrCode)->status ?? 'N/A' }}
+                                        </span>
+                                    </p>
+                                </div>
+                            @else
+                                <div class="alert alert-danger">
+                                    <strong>Data Error:</strong> Unit barang yang terkait dengan laporan ini tidak dapat
+                                    ditemukan.
+                                </div>
+                            @endif
+                        </div>
                     </div>
                 </div>
-
                 {{-- CARD AKSI DINAMIS --}}
                 @if (!$pemeliharaan->trashed())
                     <div class="card mb-4">
@@ -236,31 +326,54 @@
                             @elseif($pemeliharaan->status === 'Dalam Perbaikan')
                                 @can('completeWork', $pemeliharaan)
                                     <form action="{{ route($rolePrefix . 'pemeliharaan.completeWork', $pemeliharaan->id) }}"
-                                        method="POST">
+                                        method="POST" enctype="multipart/form-data">
                                         @csrf
                                         <div class="mb-3">
-                                            <label for="tindakan_yang_dilakukan" class="form-label fw-bold">Tindakan Yang
+                                            <label for="deskripsi_pekerjaan" class="form-label fw-bold">Deskripsi Pekerjaan Yang
                                                 Dilakukan <span class="text-danger">*</span></label>
-                                            <textarea name="tindakan_yang_dilakukan" class="form-control" rows="3" required></textarea>
+                                            <textarea name="deskripsi_pekerjaan" id="deskripsi_pekerjaan"
+                                                class="form-control @error('deskripsi_pekerjaan') is-invalid @enderror" rows="3" required>{{ old('deskripsi_pekerjaan') }}</textarea>
+                                            @error('deskripsi_pekerjaan')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
                                         </div>
                                         <div class="mb-3">
                                             <label for="hasil_pemeliharaan" class="form-label fw-bold">Hasil Akhir <span
                                                     class="text-danger">*</span></label>
-                                            <input type="text" name="hasil_pemeliharaan" class="form-control" required>
+                                            <input type="text" name="hasil_pemeliharaan" id="hasil_pemeliharaan"
+                                                class="form-control @error('hasil_pemeliharaan') is-invalid @enderror" required
+                                                value="{{ old('hasil_pemeliharaan') }}">
+                                            @error('hasil_pemeliharaan')
+                                                <div class="invalid-feedback">{{ $message }}</div>
+                                            @enderror
                                         </div>
                                         <div class="mb-3">
-                                            <label for="kondisi_barang_setelah_pemeliharaan" class="form-label fw-bold">Kondisi
+                                            <label for="kondisi_barang_setelah_pemeliharaan"
+                                                class="form-label fw-bold">Kondisi
                                                 Barang Setelah Perbaikan <span class="text-danger">*</span></label>
-                                            <select name="kondisi_barang_setelah_pemeliharaan" class="form-select" required>
+                                            <select name="kondisi_barang_setelah_pemeliharaan"
+                                                id="kondisi_barang_setelah_pemeliharaan" class="form-select" required>
                                                 @foreach (\App\Models\BarangQrCode::getValidKondisi() as $kondisi)
-                                                    <option value="{{ $kondisi }}">{{ $kondisi }}</option>
+                                                    <option value="{{ $kondisi }}"
+                                                        {{ old('kondisi_barang_setelah_pemeliharaan') == $kondisi ? 'selected' : '' }}>
+                                                        {{ $kondisi }}</option>
                                                 @endforeach
                                             </select>
                                         </div>
                                         <div class="mb-3">
                                             <label for="biaya" class="form-label fw-bold">Biaya Perbaikan (Rp)</label>
-                                            <input type="number" name="biaya" class="form-control" value="0"
-                                                min="0">
+                                            <input type="number" name="biaya" id="biaya" class="form-control"
+                                                value="{{ old('biaya', 0) }}" min="0">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="foto_perbaikan" class="form-label fw-bold">Unggah Foto Setelah
+                                                Perbaikan (Opsional)</label>
+                                            <input type="file" name="foto_perbaikan" id="foto_perbaikan"
+                                                class="form-control @error('foto_perbaikan') is-invalid @enderror"
+                                                accept="image/*">
+                                            @error('foto_perbaikan')
+                                                <div class="invalid-feedback d-block">{{ $message }}</div>
+                                            @enderror
                                         </div>
                                         <button type="submit" class="btn btn-success w-100"><i
                                                 class="fas fa-check-double me-1"></i> Selesaikan Pekerjaan</button>
@@ -268,6 +381,32 @@
                                 @else
                                     <p class="text-muted fst-italic">Barang sedang dalam proses perbaikan oleh PIC.</p>
                                 @endcan
+                            @elseif($pemeliharaan->status === 'Selesai')
+                                @can('confirmHandover', $pemeliharaan)
+                                    <form
+                                        action="{{ route($rolePrefix . 'pemeliharaan.confirmHandover', $pemeliharaan->id) }}"
+                                        method="POST" id="form-confirm-handover" enctype="multipart/form-data">
+                                        @csrf
+                                        <p class="text-muted mb-2">Perbaikan telah selesai. Unggah foto bukti serah terima
+                                            kepada pelapor untuk menyelesaikan laporan ini.</p>
+                                        <div class="mb-3">
+                                            <label for="foto_tuntas" class="form-label fw-bold">Bukti Foto Serah Terima <span
+                                                    class="text-danger">*</span></label>
+                                            <input type="file" name="foto_tuntas"
+                                                class="form-control @error('foto_tuntas') is-invalid @enderror" required
+                                                accept="image/*">
+                                            @error('foto_tuntas')
+                                                <div class="invalid-feedback d-block">{{ $message }}</div>
+                                            @enderror
+                                        </div>
+                                        <button class="btn btn-primary w-100" type="submit"><i
+                                                class="fas fa-camera me-1"></i> Unggah Bukti & Tuntaskan</button>
+                                    </form>
+                                @else
+                                    <p class="text-muted fst-italic">Perbaikan selesai. Menunggu konfirmasi serah terima dari
+                                        PIC atau Pelapor.</p>
+                                @endcan
+                                {{-- ======================================================= --}}
                             @else
                                 <p class="text-muted">Tidak ada aksi yang tersedia untuk status
                                     '{{ $pemeliharaan->status }}'.</p>
@@ -297,6 +436,7 @@
                                 \App\Models\Pemeliharaan::STATUS_DISETUJUI,
                                 \App\Models\Pemeliharaan::STATUS_DALAM_PERBAIKAN,
                                 \App\Models\Pemeliharaan::STATUS_SELESAI,
+                                \App\Models\Pemeliharaan::STATUS_TUNTAS,
                             ];
                             $currentStatus = $pemeliharaan->status;
                             $isRejected = $currentStatus === \App\Models\Pemeliharaan::STATUS_DITOLAK;
@@ -328,7 +468,22 @@
                                         @elseif($index < $currentStatusIndex || $currentStatus === \App\Models\Pemeliharaan::STATUS_SELESAI)
                                             <i class="fas fa-check"></i>
                                         @else
-                                            <i class="fas fa-flag"></i>
+                                            {{-- Disesuaikan agar ikon lebih relevan per tahap --}}
+                                            @if ($status === 'Diajukan')
+                                                <i class="fas fa-flag"></i>
+                                            @endif
+                                            @if ($status === 'Disetujui')
+                                                <i class="fas fa-user-check"></i>
+                                            @endif
+                                            @if ($status === 'Dalam Perbaikan')
+                                                <i class="fas fa-cogs"></i>
+                                            @endif
+                                            @if ($status === 'Selesai')
+                                                <i class="fas fa-check-double"></i>
+                                            @endif
+                                            @if ($status === 'Tuntas')
+                                                <i class="fas fa-handshake"></i>
+                                            @endif
                                         @endif
                                     </div>
                                     <div class="progress-label">
@@ -357,6 +512,17 @@
                                         <p class="detail-label mb-1">Deskripsi Kerusakan/Keluhan:</p>
                                         <p class="mb-0">{{ $pemeliharaan->catatan_pengajuan ?: '-' }}</p>
                                     </div>
+                                    @if ($pemeliharaan->foto_kerusakan_path)
+                                        <div class="mt-3">
+                                            <p class="detail-label mb-1">Foto Bukti Kerusakan:</p>
+                                            <a href="{{ asset('storage/' . $pemeliharaan->foto_kerusakan_path) }}"
+                                                target="_blank">
+                                                <img src="{{ asset('storage/' . $pemeliharaan->foto_kerusakan_path) }}"
+                                                    alt="Foto Kerusakan" class="img-fluid rounded"
+                                                    style="max-height: 200px;">
+                                            </a>
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
 
@@ -374,16 +540,18 @@
                                             pada
                                             {{ optional($pemeliharaan->tanggal_persetujuan)->isoFormat('DD MMM YYYY, HH:mm') ?? '...' }}
                                         </p>
-                                        @if ($isRejected && $pemeliharaan->catatan_penolakan)
-                                            <div class="p-3 card-item-detail border-danger">
-                                                <p class="detail-label text-danger mb-1">Alasan Penolakan:</p>
-                                                <p class="mb-0">{{ $pemeliharaan->catatan_penolakan }}</p>
-                                            </div>
-                                        @elseif($pemeliharaan->catatan_persetujuan)
-                                            <div class="p-3 card-item-detail">
-                                                <p class="detail-label mb-1">Catatan:</p>
-                                                <p class="mb-0">{{ $pemeliharaan->catatan_persetujuan }}</p>
-                                            </div>
+                                        @if ($pemeliharaan->catatan_persetujuan)
+                                            @if ($isRejected)
+                                                <div class="p-3 card-item-detail border-danger bg-light">
+                                                    <p class="detail-label text-danger mb-1">Alasan Penolakan:</p>
+                                                    <p class="mb-0">{{ $pemeliharaan->catatan_persetujuan }}</p>
+                                                </div>
+                                            @else
+                                                <div class="p-3 card-item-detail">
+                                                    <p class="detail-label mb-1">Catatan Persetujuan:</p>
+                                                    <p class="mb-0">{{ $pemeliharaan->catatan_persetujuan }}</p>
+                                                </div>
+                                            @endif
                                         @endif
                                     @else
                                         <p class="text-muted mb-0 fst-italic">Menunggu persetujuan.</p>
@@ -411,11 +579,25 @@
                                                 <p class="mb-2"><span class="detail-label">Hasil:</span>
                                                     {{ $pemeliharaan->hasil_pemeliharaan ?? '-' }}</p>
                                                 <p class="mb-2"><span class="detail-label">Kondisi Setelah
-                                                        Perbaikan:</span> <span
-                                                        class="badge bg-{{ \App\Models\BarangQrCode::getKondisiColor($pemeliharaan->kondisi_barang_setelah_pemeliharaan) }}">{{ $pemeliharaan->kondisi_barang_setelah_pemeliharaan }}</span>
+                                                        Perbaikan:</span>
+                                                    <span
+                                                        class="badge bg-{{ \App\Models\BarangQrCode::getKondisiColor($pemeliharaan->kondisi_barang_setelah_pemeliharaan) }}">
+                                                        {{ $pemeliharaan->kondisi_barang_setelah_pemeliharaan }}
+                                                    </span>
                                                 </p>
                                                 <p class="mb-0"><span class="detail-label">Biaya:</span> Rp
                                                     {{ number_format($pemeliharaan->biaya, 0, ',', '.') }}</p>
+                                            </div>
+                                        @endif
+                                        @if ($pemeliharaan->foto_perbaikan_path)
+                                            <div class="mt-3">
+                                                <p class="detail-label mb-1">Foto Bukti Perbaikan:</p>
+                                                <a href="{{ asset('storage/' . $pemeliharaan->foto_perbaikan_path) }}"
+                                                    target="_blank">
+                                                    <img src="{{ asset('storage/' . $pemeliharaan->foto_perbaikan_path) }}"
+                                                        alt="Foto Perbaikan" class="img-fluid rounded"
+                                                        style="max-height: 200px;">
+                                                </a>
                                             </div>
                                         @endif
                                     @else
@@ -424,6 +606,36 @@
                                     @endif
                                 </div>
                             </div>
+                            {{-- ======================================================= --}}
+                            {{--           TAMBAHAN BARU UNTUK BUKTI TUNTAS            --}}
+                            {{-- ======================================================= --}}
+                            @if ($pemeliharaan->status === 'Tuntas')
+                                <hr>
+                                <div class="d-flex">
+                                    <div class="flex-shrink-0 text-center me-3" style="width: 2.5rem;">
+                                        <i class="fas fa-handshake text-primary fs-3"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1">Telah Tuntas & Diserahkan</h6>
+                                        <p class="text-muted mb-2">Proses ditutup pada
+                                            {{ $pemeliharaan->tanggal_tuntas->isoFormat('dddd, DD MMMM YYYY - HH:mm') }}
+                                        </p>
+                                        @if ($pemeliharaan->foto_tuntas_path)
+                                            <div class="p-3 card-item-detail">
+                                                <p class="detail-label mb-1">Bukti Foto Serah Terima:</p>
+                                                <a href="{{ asset('storage/' . $pemeliharaan->foto_tuntas_path) }}"
+                                                    target="_blank">
+                                                    <img src="{{ asset('storage/' . $pemeliharaan->foto_tuntas_path) }}"
+                                                        class="img-fluid rounded" style="max-height: 200px;"
+                                                        alt="Bukti Tuntas">
+                                                </a>
+                                            </div>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endif
+                            {{-- ======================================================= --}}
+
                         </div>
 
                     </div>
@@ -510,7 +722,7 @@
                         confirmButtonColor: '#d33',
                     }).then((result) => {
                         if (result.isConfirmed) {
-                            $('#catatan-approval').attr('name', 'catatan_penolakan');
+                            $('#catatan-approval').attr('name', 'catatan_persetujuan');
 
                             // ==========================================================
                             // KODE INI HANYA AKAN ADA JIKA USER ADALAH ADMIN
@@ -535,6 +747,23 @@
                     icon: 'info',
                     showCancelButton: true,
                     confirmButtonText: 'Ya, Mulai!',
+                    cancelButtonText: 'Batal'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        form.submit();
+                    }
+                });
+            });
+            // TAMBAHAN BARU UNTUK KONFIRMASI TUNTAS
+            $('#form-confirm-handover').on('submit', function(e) {
+                e.preventDefault();
+                const form = this;
+                Swal.fire({
+                    title: 'Konfirmasi Serah Terima?',
+                    text: "Pastikan Anda sudah mengunggah foto bukti yang benar.",
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Ya, Tuntaskan!',
                     cancelButtonText: 'Batal'
                 }).then((result) => {
                     if (result.isConfirmed) {

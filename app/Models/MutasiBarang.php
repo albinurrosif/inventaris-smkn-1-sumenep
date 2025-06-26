@@ -1,128 +1,84 @@
 <?php
 
-// File: app/Models/MutasiBarang.php
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 
 /**
- * Model MutasiBarang merepresentasikan histori perpindahan unit barang antar ruangan.
+ * Model MutasiBarang merepresentasikan histori perpindahan unit barang.
  */
 class MutasiBarang extends Model
 {
     use HasFactory, SoftDeletes;
 
-    /**
-     * Atribut tanggal yang harus diperlakukan sebagai instance Carbon.
-     * Digunakan untuk SoftDeletes.
-     *
-     * @var array
-     */
+    protected $table = 'mutasi_barangs';
     protected $dates = ['deleted_at'];
 
     /**
-     * Nama tabel database yang terkait dengan model.
-     *
-     * @var string
-     */
-    protected $table = 'mutasi_barangs';
-
-    /**
-     * Kunci utama tabel.
-     *
-     * @var string
-     */
-    protected $primaryKey = 'id';
-
-    /**
-     * Menunjukkan apakah ID model otomatis bertambah (incrementing).
-     *
-     * @var bool
-     */
-    public $incrementing = true;
-
-    /**
-     * Tipe data dari kunci utama.
-     *
-     * @var string
-     */
-    protected $keyType = 'int';
-
-    /**
-     * Menunjukkan apakah model harus menggunakan timestamps (created_at, updated_at).
-     *
-     * @var bool
-     */
-    public $timestamps = true;
-
-    /**
      * Atribut yang dapat diisi secara massal (mass assignable).
-     *
-     * @var array<int, string>
+     * Ini adalah "daftar izin" kolom yang boleh diisi melalui create() atau update().
      */
     protected $fillable = [
-        'id_barang_qr_code',    // FK ke unit barang yang dimutasi
-        'id_ruangan_asal',      // FK ke ruangan asal
-        'id_ruangan_tujuan',    // FK ke ruangan tujuan
-        'tanggal_mutasi',       // Tanggal terjadinya mutasi
-        'alasan_pemindahan',   // Alasan mengapa barang dipindahkan
-        'id_user_admin',        // User (admin/operator) yang melakukan mutasi
-        'surat_pemindahan_path', // Path ke file dokumen surat pemindahan (jika ada)
+        'id_barang_qr_code',
+        'jenis_mutasi',
+        'id_ruangan_asal',
+        'id_pemegang_asal',      // <-- Kolom baru
+        'id_ruangan_tujuan',
+        'id_pemegang_tujuan',    // <-- Kolom baru
+        'tanggal_mutasi',
+        'alasan_pemindahan',
+        'id_user_admin',         // <-- Menggunakan nama kolom asli Anda
+        'surat_pemindahan_path',
     ];
 
     /**
      * Atribut yang harus di-cast ke tipe data tertentu.
-     *
-     * @var array<string, string>
      */
     protected $casts = [
         'tanggal_mutasi' => 'datetime',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-        'deleted_at' => 'datetime',
     ];
 
-    /**
-     * Mendefinisikan relasi BelongsTo ke model BarangQrCode.
-     * Satu catatan mutasi terkait dengan satu unit barang.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
-     */
+    // --- Method Relasi ---
+
     public function barangQrCode(): BelongsTo
     {
-        return $this->belongsTo(BarangQrCode::class, 'id_barang_qr_code');
+        return $this->belongsTo(BarangQrCode::class, 'id_barang_qr_code')->withTrashed();
     }
 
-    /**
-     * Mendefinisikan relasi BelongsTo ke model Ruangan (sebagai ruangan asal).
-     * Satu catatan mutasi memiliki satu ruangan asal.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
-     */
     public function ruanganAsal(): BelongsTo
     {
         return $this->belongsTo(Ruangan::class, 'id_ruangan_asal');
     }
 
-    /**
-     * Mendefinisikan relasi BelongsTo ke model Ruangan (sebagai ruangan tujuan).
-     * Satu catatan mutasi memiliki satu ruangan tujuan.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
-     */
     public function ruanganTujuan(): BelongsTo
     {
         return $this->belongsTo(Ruangan::class, 'id_ruangan_tujuan');
     }
 
     /**
-     * Mendefinisikan relasi BelongsTo ke model User (admin/operator yang melakukan mutasi).
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     * Mendapatkan data pemegang personal asal mutasi.
+     */
+    public function pemegangAsal(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'id_pemegang_asal');
+    }
+
+    /**
+     * Mendapatkan data pemegang personal tujuan mutasi.
+     */
+    public function pemegangTujuan(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'id_pemegang_tujuan');
+    }
+
+    /**
+     * Mendefinisikan relasi ke User yang melakukan mutasi.
+     * Menggunakan foreign key 'id_user_admin' sesuai tabel asli Anda.
      */
     public function admin(): BelongsTo
     {
@@ -130,38 +86,42 @@ class MutasiBarang extends Model
     }
 
     /**
-     * Metode boot model untuk mendaftarkan event listener.
-     *
-     * @return void
+     * Scope untuk memfilter riwayat mutasi berdasarkan request.
+     */
+    public function scopeFilter(Builder $query, Request $request): Builder
+    {
+        return $query->when($request->input('search'), function ($q, $term) {
+            $q->where(function ($q2) use ($term) {
+                $q2->where('alasan_pemindahan', 'like', '%' . $term . '%')
+                    ->orWhereHas('barangQrCode.barang', function ($qBarang) use ($term) {
+                        $qBarang->where('nama_barang', 'like', '%' . $term . '%');
+                    })
+                    ->orWhereHas('barangQrCode', function ($qKode) use ($term) {
+                        $qKode->where('kode_inventaris_sekolah', 'like', '%' . $term . '%');
+                    });
+            });
+        })
+            ->when($request->input('jenis_mutasi'), function ($q, $jenis) {
+                $q->where('jenis_mutasi', $jenis);
+            })
+            ->when($request->input('id_user_pencatat'), function ($q, $userId) {
+                // Menggunakan foreign key yang benar
+                $q->where('id_user_admin', $userId);
+            })
+            ->when($request->input('tanggal_mulai'), function ($q, $tanggal) {
+                $q->whereDate('tanggal_mutasi', '>=', $tanggal);
+            })
+            ->when($request->input('tanggal_selesai'), function ($q, $tanggal) {
+                $q->whereDate('tanggal_mutasi', '<=', $tanggal);
+            });
+    }
+
+    /**
+     * Metode boot model.
+     * Kita nonaktifkan event 'created' agar semua logika terpusat di Controller.
      */
     protected static function boot()
     {
         parent::boot();
-
-        // Setelah catatan mutasi baru dibuat, update lokasi (id_ruangan)
-        // dan status pemegang personal pada BarangQrCode yang terkait.
-        static::created(function ($mutasi) {
-            if ($mutasi->barangQrCode) {
-                $barangQr = $mutasi->barangQrCode;
-                $barangQr->id_ruangan = $mutasi->id_ruangan_tujuan;
-                // Jika barang dimutasi ke sebuah ruangan, maka tidak lagi dipegang personal.
-                $barangQr->id_pemegang_personal = null;
-                $barangQr->save();
-
-                // Mencatat perubahan ini di BarangStatus
-                BarangStatus::create([
-                    'id_barang_qr_code' => $barangQr->id,
-                    'id_user_pencatat' => $mutasi->id_user_admin, // User yang melakukan mutasi
-                    'tanggal_pencatatan' => now(),
-                    'id_ruangan_sebelumnya' => $mutasi->id_ruangan_asal,
-                    'id_ruangan_sesudahnya' => $mutasi->id_ruangan_tujuan,
-                    // Jika sebelumnya dipegang personal, catat juga perubahan pemegang personal
-                    // 'id_pemegang_personal_sebelumnya' => ID pemegang sebelumnya jika ada,
-                    'id_pemegang_personal_sesudahnya' => null,
-                    'deskripsi_kejadian' => 'Mutasi barang dari ' . ($mutasi->ruanganAsal->nama_ruangan ?? 'N/A') . ' ke ' . ($mutasi->ruanganTujuan->nama_ruangan ?? 'N/A') . '. Mutasi ID: ' . $mutasi->id,
-                    'id_mutasi_barang_trigger' => $mutasi->id,
-                ]);
-            }
-        });
     }
 }
