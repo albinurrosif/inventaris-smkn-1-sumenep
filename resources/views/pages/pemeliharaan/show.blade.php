@@ -580,9 +580,22 @@
                                                     {{ $pemeliharaan->hasil_pemeliharaan ?? '-' }}</p>
                                                 <p class="mb-2"><span class="detail-label">Kondisi Setelah
                                                         Perbaikan:</span>
-                                                    <span
-                                                        class="badge bg-{{ \App\Models\BarangQrCode::getKondisiColor($pemeliharaan->kondisi_barang_setelah_pemeliharaan) }}">
-                                                        {{ $pemeliharaan->kondisi_barang_setelah_pemeliharaan }}
+                                                        @php
+                                                        // Logika warna untuk kondisi barang setelah pemeliharaan
+                                                        $kondisiSetelahColor = 'secondary'; // Warna default jika null atau tidak cocok
+                                                        if ($pemeliharaan->kondisi_barang_setelah_pemeliharaan) {
+                                                            $kondisiSetelahColor = match (strtolower($pemeliharaan->kondisi_barang_setelah_pemeliharaan)) {
+                                                                'baik' => 'success',
+                                                                'kurang baik' => 'warning',
+                                                                'rusak berat' => 'danger',
+                                                                'hilang' => 'dark',
+                                                                default => 'secondary',
+                                                            };
+                                                        }
+                                                    @endphp
+                                                    
+                                                    <span class="badge text-bg-{{ $kondisiSetelahColor }}">
+                                                        {{ $pemeliharaan->kondisi_barang_setelah_pemeliharaan ?? 'N/A' }}
                                                     </span>
                                                 </p>
                                                 <p class="mb-0"><span class="detail-label">Biaya:</span> Rp
