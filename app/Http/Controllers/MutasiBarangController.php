@@ -37,7 +37,7 @@ class MutasiBarangController extends Controller
         $adminList = User::where('role', User::ROLE_ADMIN)->orWhere('role', User::ROLE_OPERATOR)->orderBy('username')->get();
         $jenisMutasiList = MutasiBarang::select('jenis_mutasi')->distinct()->pluck('jenis_mutasi');
 
-        return view('pages.mutasi-barang.index', compact('riwayatMutasi', 'adminList', 'jenisMutasiList', 'filters'));
+        return view('pages.mutasi.index', compact('riwayatMutasi', 'adminList', 'jenisMutasiList', 'filters'));
     }
 
     /**

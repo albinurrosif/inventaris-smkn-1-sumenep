@@ -150,7 +150,7 @@
                                             value="{{ $unit->id }}"></td>
 
                                     <td><a
-                                            href="{{ route($rolePrefix . 'barang-qr-code.show', $unit->id) }}">{{ $unit->kode_inventaris_sekolah }}</a>
+                                            href="{{ route($rolePrefix . 'barang-qr-code.show', $unit->kode_inventaris_sekolah) }}">{{ $unit->kode_inventaris_sekolah }}</a>
                                     </td>
                                     <td>{{ $unit->no_seri_pabrik ?? '-' }}</td>
                                     <td>

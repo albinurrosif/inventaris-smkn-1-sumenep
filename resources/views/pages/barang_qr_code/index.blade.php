@@ -207,7 +207,7 @@
                                         <td class="text-center"><input class="form-check-input unit-checkbox"
                                                 type="checkbox" name="qr_code_ids[]" value="{{ $unit->id }}"></td>
                                         <td>
-                                            <a href="{{ route($rolePrefix . 'barang-qr-code.show', $unit->id) }}"
+                                            <a href="{{ route($rolePrefix . 'barang-qr-code.show', $unit->kode_inventaris_sekolah) }}"
                                                 class="fw-medium">{{ $unit->kode_inventaris_sekolah ?? 'N/A' }}</a>
                                         </td>
                                         <td>

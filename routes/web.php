@@ -70,6 +70,11 @@ Route::get('/', function () {
     return view('auth.login'); // Pastikan view login Anda ada di auth/login.blade.php
 
 });
+// RUTE BARU: Ini adalah "pintu gerbang" untuk semua hasil pemindaian QR Code
+// Rute ini akan menangani pengalihan berdasarkan peran pengguna yang login.
+Route::get('/scan/{barangQrCode:kode_inventaris_sekolah}', [BarangQrCodeController::class, 'handleScan'])
+    ->name('public.scan.detail');
+
 
 
 

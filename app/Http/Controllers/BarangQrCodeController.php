@@ -1191,6 +1191,51 @@ class BarangQrCodeController extends Controller
         }
     }
 
+    // =====================================================================
+    //      METHOD BARU UNTUK MENANGANI PEMINDAIAN QR CODE
+    // =====================================================================
+
+    /**
+     * Menangani permintaan dari hasil pemindaian QR Code.
+     * Metode ini akan memeriksa status login pengguna dan mengarahkannya
+     * ke halaman yang sesuai.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @param \App\Models\BarangQrCode $barangQrCode Instance model yang ditemukan oleh Route Model Binding.
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function handleScan(Request $request, BarangQrCode $barangQrCode): RedirectResponse
+    {
+        // Cek apakah pengguna sudah login
+        if (Auth::check()) {
+            $user = Auth::user();
+            /** @var \App\Models\User $user */
+
+            // Dapatkan prefix rute berdasarkan peran pengguna (misal: 'admin.', 'guru.')
+            $rolePrefix = $user->getRolePrefix();
+
+            // Buat nama rute yang dinamis
+            $routeName = $rolePrefix . 'barang-qr-code.show';
+
+            // Cek apakah rute tersebut ada untuk peran pengguna
+            if (\Illuminate\Support\Facades\Route::has($routeName)) {
+                // Arahkan ke halaman detail sesuai dengan peran pengguna
+                return redirect()->route($routeName, ['barangQrCode' => $barangQrCode->kode_inventaris_sekolah]);
+            } else {
+                // Fallback jika peran tidak memiliki rute detail (misal: peran baru)
+                // Arahkan ke dashboard mereka dengan pesan info.
+                Log::warning("Rute '{$routeName}' tidak ditemukan untuk peran '{$user->role}'.");
+                return redirect()->route('redirect-dashboard')->with('info', 'Anda tidak memiliki akses ke halaman detail barang.');
+            }
+        }
+
+        // Jika pengguna BELUM login:
+        // Arahkan ke halaman login. Setelah login berhasil, Laravel akan otomatis
+        // mengarahkan pengguna ke URL yang mereka tuju sebelumnya (URL scan ini).
+        return redirect()->intended(route('public.scan.detail', ['barangQrCode' => $barangQrCode->kode_inventaris_sekolah]))
+            ->with('info', 'Silakan login untuk melihat detail aset.');
+    }
+
 
     // ==========================================================
     // HELPER METHODS

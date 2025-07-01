@@ -159,7 +159,7 @@
                         <div class="card-body">
                             @if ($pemeliharaan->barangQrCode)
                                 <p class="mb-2"><span class="detail-label">Kode Inventaris:</span>
-                                    <a href="{{ route($rolePrefix . 'barang-qr-code.show', $pemeliharaan->barangQrCode->id) }}"
+                                    <a href="{{ route($rolePrefix . 'barang-qr-code.show', $pemeliharaan->barangQrCode->kode_inventaris_sekolah) }}"
                                         target="_blank">
                                         <code>{{ $pemeliharaan->barangQrCode->kode_inventaris_sekolah }}</code>
                                     </a>
