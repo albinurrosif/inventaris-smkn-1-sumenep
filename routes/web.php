@@ -110,6 +110,13 @@ Route::middleware(['auth'])->group(function () {
     // Rute logout standar menggunakan metode POST
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 
+// =====================================================================
+    //      PERBAIKAN KUNCI: Rute /scan dipindahkan ke dalam grup 'auth'
+    // =====================================================================
+    // Middleware 'auth' akan secara otomatis menangani pengguna yang belum login
+    // dan mengarahkannya ke halaman login, lalu kembali ke sini setelah berhasil.
+    Route::get('/scan/{barangQrCode:kode_inventaris_sekolah}', [BarangQrCodeController::class, 'redirectFromScan'])
+        ->name('scan.redirect');
 
 
     // =====================================================================

@@ -248,7 +248,7 @@ class BarangQrCode extends Model
     {
         // Menghasilkan URL absolut ke rute publik yang baru kita buat.
         // Contoh: https://sima.smkn1sumenep.sch.id/scan/SMKN1-PC-AIO-01-001
-        return route('public.scan.detail', ['barangQrCode' => $this->kode_inventaris_sekolah]);
+        return route('scan.redirect', ['barangQrCode' => $this->kode_inventaris_sekolah]);
     }
     /**
      * Menghasilkan kode inventaris sekolah yang unik untuk unit barang.
