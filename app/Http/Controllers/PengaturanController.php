@@ -29,7 +29,7 @@ class PengaturanController extends Controller
     /**
      * Menyimpan perubahan pengaturan.
      */
-    public function update(Request $raequest): RedirectResponse
+    public function update(Request $request): RedirectResponse
     {
         $this->authorize('update-pengaturan');
 
