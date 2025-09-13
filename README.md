@@ -17,9 +17,7 @@ Sistem Manajemen Inventaris ini dikembangkan menggunakan Laravel untuk membantu 
 
 -   **Laravel** – Framework PHP untuk backend.
 -   **Blade** – Template engine bawaan Laravel.
--   **AdminLTE/CoreUI/Tailwind Dashboard** – Untuk tampilan admin yang responsif.
 -   **MySQL** – Basis data untuk menyimpan informasi inventaris.
--   **JavaScript (optional)** – Untuk fitur interaktif.
 
 ## 📖 Cara Menjalankan Proyek
 
@@ -42,16 +40,3 @@ Sistem Manajemen Inventaris ini dikembangkan menggunakan Laravel untuk membantu 
 6. Jalankan aplikasi:
    php artisan serve
 
-## 🚀 Deployment
-
-Proyek dapat di-deploy ke VPS, Shared Hosting (menggunakan Laravel Shared Hosting Guide), atau layanan seperti Laravel Forge/Vercel.
-
-Pastikan konfigurasi .env sudah sesuai dengan server produksi.
-
-## 📌 Kontribusi
-
-Jika ingin berkontribusi, fork repository ini dan buat Pull Request dengan perubahan yang jelas.
-
-## 📜 Lisensi
-
-Proyek ini dikembangkan untuk kebutuhan internal SMKN 1 Sumenep. Lisensi akan disesuaikan jika diperlukan.
