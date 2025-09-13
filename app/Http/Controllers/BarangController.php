@@ -162,7 +162,9 @@ class BarangController extends Controller
         $rules = [
             // Step 1: Jenis Barang
             'nama_barang' => 'required|string|max:255',
-            'kode_barang' => ['required', 'string', 'max:50', Rule::unique('barangs', 'kode_barang')->whereNull('deleted_at')],
+            'kode_barang' => 'required',
+            'string',
+            'max:50',
             'id_kategori' => 'required|exists:kategori_barangs,id',
             'merk_model' => 'nullable|string|max:255',
             'ukuran' => 'nullable|string|max:100',

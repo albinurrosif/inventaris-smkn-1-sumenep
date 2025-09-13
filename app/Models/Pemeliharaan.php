@@ -216,11 +216,16 @@ class Pemeliharaan extends Model
     /**
      * Menentukan kelas warna badge Bootstrap berdasarkan status.
      */
-    public static function statusColor(string $status): string
+    public static function statusColor(?string $status): string
     {
+        if (!$status) {
+            return 'text-bg-light text-dark'; // Default untuk status null
+        }
+
         if (strtolower($status) === 'diarsipkan') {
             return 'dark';
         }
+
         return match (strtolower($status)) {
             strtolower(self::STATUS_PENGAJUAN_DIAJUKAN) => 'text-bg-info',
             strtolower(self::STATUS_PENGAJUAN_DISETUJUI) => 'text-bg-primary',
@@ -246,9 +251,9 @@ class Pemeliharaan extends Model
             self::STATUS_DISETUJUI => 'info',
             self::STATUS_DALAM_PERBAIKAN => 'warning',
             self::STATUS_SELESAI => 'success',
-            self::STATUS_TUNTAS => 'primary', // <-- TAMBAHKAN WARNA UNTUK TUNTAS
+            self::STATUS_TUNTAS => 'primary',
             self::STATUS_DITOLAK => 'danger',
-            default => 'light',
+            default => 'light', // Default untuk status null atau tidak dikenal
         };
     }
 

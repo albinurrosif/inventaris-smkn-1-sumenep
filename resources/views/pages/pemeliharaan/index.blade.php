@@ -225,7 +225,7 @@
                                     <td>
                                         {{-- ===== AWAL PERUBAHAN KOLOM NAMA BARANG & KODE UNIT ===== --}}
                                         @if ($item->barangQrCode)
-                                            <a href="{{ route($rolePrefix . 'barang-qr-code.show', $item->kode_inventaris_sekolah) }}"
+                                            <a href="{{ route($rolePrefix . 'barang-qr-code.show', $item->barangQrCode->kode_inventaris_sekolah) }}"
                                                 target="_blank" class="fw-bold" data-bs-toggle="tooltip"
                                                 title="Lihat Detail Unit: {{ $item->barangQrCode->kode_inventaris_sekolah }}">
                                                 {{ optional($item->barangQrCode->barang)->nama_barang ?? 'N/A' }}
